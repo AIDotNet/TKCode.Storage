@@ -115,6 +115,10 @@ public sealed class PluginsPage : Panel
     {
         var state = _host.GetState(package.Id);
         var (label, _) = StateBadge(state);
+        if (MissingRequirements(package).FirstOrDefault() is { } missing)
+        {
+            label = $"需启用{missing.Manifest.Name}";
+        }
         var toggle = new ArcSwitch { IsChecked = true, VerticalAlignment = VerticalAlignment.Center };
         AutomationProperties.SetName(toggle, $"启用{package.Manifest.Name}");
         toggle.IsCheckedChanged += (_, _) =>
@@ -193,6 +197,14 @@ public sealed class PluginsPage : Panel
         if (package.Manifest.Description is { } description)
         {
             body.Children.Add(Text(description, ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.TextSecondary, wrap: true));
+        }
+        // A plugin that only feeds another (a usage provider, a calendar source) shows nothing while that one is off.
+        foreach (var required in MissingRequirements(package))
+        {
+            var enable = new ArcButton { Content = "启用", Variant = ButtonVariant.Primary, Size = ControlSize.Small, VerticalAlignment = VerticalAlignment.Center };
+            enable.Click += (_, _) => _host.SetEnabled(required.Id, true);
+            body.Children.Add(ActionRow(TKCode.Arc.Icons.Lucide.LucideIconKind.TriangleAlert, $"需要「{required.Manifest.Name}」",
+                $"{package.Manifest.Name}只提供数据，岛上的显示来自「{required.Manifest.Name}」，它现在是关闭的。", enable));
         }
 
         if (permissions.Declared.Count > 0)
@@ -371,6 +383,13 @@ public sealed class PluginsPage : Panel
         }));
         _addDialog.Content = new ScrollViewer { Content = body, MaxHeight = 480 };
     }
+
+    /// <summary>Installed plugins this one requires that are turned off.</summary>
+    private IEnumerable<PluginPackage> MissingRequirements(PluginPackage package) =>
+        package.Manifest.Requires
+            .Select(id => _host.Packages.FirstOrDefault(p => p.Id == id))
+            .OfType<PluginPackage>()
+            .Where(p => !_host.IsEnabled(p.Id));
 
     private static Control ActionRow(TKCode.Arc.Icons.Lucide.LucideIconKind kind, string title, string description, Control button)
     {

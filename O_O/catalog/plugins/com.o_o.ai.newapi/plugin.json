@@ -1,10 +1,11 @@
 {
   "id": "com.o_o.ai.newapi",
   "name": "NewAPI 余额",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "查询 NewAPI / OneAPI 中转站令牌的剩余额度",
   "icon": "Wallet",
   "main": "main.js",
+  "requires": ["com.o_o.ai-usage"],
   "permissions": [
     "network:@baseUrl"
   ],

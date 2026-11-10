@@ -188,7 +188,11 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
         }
     }
 
-    /// <summary>Turns a plugin on (it starts, or asks for permission) or off (it stops; its data stays).</summary>
+    /// <summary>
+    /// Turns a plugin on (it starts, or asks for permission) or off (it stops; its data stays). Turning one on also turns
+    /// on the installed plugins it <see cref="PluginManifest.Requires"/>: a usage provider shows nothing without the
+    /// AI 用量 plugin, a calendar source nothing without 日历.
+    /// </summary>
     public void SetEnabled(string pluginId, bool enabled)
     {
         var package = Package(pluginId);
@@ -196,17 +200,44 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
         {
             _enabled ??= LoadEnabled();
             _enabled[pluginId] = enabled;
+            if (enabled)
+            {
+                EnableRequirementsLocked(package, []);
+            }
             SaveEnabled();
-            if (_runners.TryRemove(pluginId, out var old))
-            {
-                old.Dispose();
-            }
-            if (_started)
-            {
-                StartLocked(package);
-            }
+            Restart(package);
         }
         RefreshProviders();
+    }
+
+    private void Restart(PluginPackage package)
+    {
+        if (_runners.TryRemove(package.Id, out var old))
+        {
+            old.Dispose();
+        }
+        if (_started)
+        {
+            StartLocked(package);
+        }
+    }
+
+    /// <summary>Turns on (and starts) the installed requirements of <paramref name="package"/> that are off, depth first.</summary>
+    private void EnableRequirementsLocked(PluginPackage package, HashSet<string> seen)
+    {
+        foreach (var id in package.Manifest.Requires)
+        {
+            if (!seen.Add(id) || _packages.FirstOrDefault(p => p.Id == id) is not { } required)
+            {
+                continue; // a cycle, or not installed (the catalog installs requirements first)
+            }
+            EnableRequirementsLocked(required, seen);
+            if (!IsEnabled(id))
+            {
+                _enabled![id] = true;
+                Restart(required);
+            }
+        }
     }
 
     /// <summary>
@@ -250,6 +281,7 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
                 }
                 _enabled ??= LoadEnabled();
                 _enabled[manifest.Id] = true;
+                EnableRequirementsLocked(package, []);
                 SaveEnabled();
                 if (_started)
                 {

@@ -5,6 +5,7 @@
   "description": "读取本机 Codex 登录的套餐用量",
   "icon": "logo:codex",
   "main": "main.js",
+  "requires": ["com.o_o.ai-usage"],
   "permissions": [
     "localAuth:codex-cli",
     "network:chatgpt.com"

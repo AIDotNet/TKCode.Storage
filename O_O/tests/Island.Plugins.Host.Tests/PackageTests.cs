@@ -105,4 +105,27 @@ public sealed partial class PluginHostTests
         var impostor = PackSample("com.example.core");
         Assert.Contains("内置插件", Assert.Throws<InvalidDataException>(() => _host.Install(impostor, UserPlugins)).Message);
     }
+    [Fact]
+    public void Turning_a_plugin_on_turns_on_what_it_requires()
+    {
+        WritePluginWithManifest("com.example.display", "", "", "export function activate() { console.info('display on'); }");
+        WritePluginWithManifest("com.example.feed", """, "requires": ["com.example.display", "com.example.absent"]""", "",
+            "export function activate() { console.info('feed on'); }");
+        StartDiscovered();
+        WaitFor(() => _logs.FirstOrDefault(l => l.Message == "display on"), "display runs");
+        _host!.SetEnabled("com.example.display", false);
+        _host.SetEnabled("com.example.feed", false);
+        WaitFor(() => _host.GetState("com.example.display") == PluginState.Stopped ? "ok" : null, "display off");
+        _logs.Clear();
+
+        _host.SetEnabled("com.example.feed", true);
+        Assert.True(_host.IsEnabled("com.example.display"));
+        WaitFor(() => _logs.FirstOrDefault(l => l.Message == "display on"), "the requirement starts again");
+        WaitFor(() => _logs.FirstOrDefault(l => l.Message == "feed on"), "the plugin itself runs");
+
+        // Turning the requirement off later is still the user's choice.
+        _host.SetEnabled("com.example.display", false);
+        Assert.False(_host.IsEnabled("com.example.display"));
+        Assert.True(_host.IsEnabled("com.example.feed"));
+    }
 }

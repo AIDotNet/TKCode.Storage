@@ -1,10 +1,11 @@
 {
   "id": "com.o_o.ai.deepseek",
   "name": "DeepSeek 余额",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "用 API Key 查询 DeepSeek 余额",
   "icon": "Wallet",
   "main": "main.js",
+  "requires": ["com.o_o.ai-usage"],
   "permissions": [
     "network:api.deepseek.com"
   ],

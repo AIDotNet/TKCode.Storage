@@ -5,6 +5,7 @@
   "description": "读取本机 Claude Code 的套餐用量（通过状态栏，不读取登录凭据）",
   "icon": "logo:claude",
   "main": "main.js",
+  "requires": ["com.o_o.ai-usage"],
   "permissions": [
     "localAuth:claude-code"
   ],
