@@ -70,11 +70,12 @@ export async function activate() {
         if (known) {
           if (!known.sources.includes(source)) known.sources.push(source);
           known.location ??= e.location;
+          known.color ??= e.color;
           continue;
         }
         byKey.set(key, {
           key, title: String(e.title ?? '（无标题）'), startMs, endMs, allDay: !!e.allDay,
-          location: e.location, meetingUrl: e.meetingUrl, url: e.url, sources: [source],
+          location: e.location, meetingUrl: e.meetingUrl, url: e.url, color: /^#[0-9a-f]{6}$/i.test(e.color ?? '') ? e.color : undefined, sources: [source],
         });
       }
     }
@@ -271,10 +272,17 @@ export async function activate() {
     const lead = (new Date(first).getDay() + 6) % 7; // weeks start on Monday
     const days = new Date(new Date(first).getFullYear(), new Date(first).getMonth() + 1, 0).getDate();
     const weeks = Math.ceil((lead + days) / 7);
-    const busy = new Set();
+    const busy = new Map(); // day → colours of the calendars that have something on it ('' = no colour)
     for (const e of events) {
-      for (let d = startOfDay(e.startMs); d < Math.max(e.endMs, e.startMs + 1); d += DAY) busy.add(d);
+      for (let d = startOfDay(e.startMs); d < Math.max(e.endMs, e.startMs + 1); d += DAY) {
+        if (!busy.has(d)) busy.set(d, new Set());
+        busy.get(d).add(e.color ?? '');
+      }
     }
+    // One dot per distinct calendar colour (at most three); the accent colour for calendars without one.
+    const dots = (colors) => (colors
+      ? ui.row({ gap: 'xs', align: 'center' }, [...colors].slice(0, 3).map((c, i) => ui.text('•', { size: 'xs', tone: 'accent', color: c || undefined, key: `c${i}` })))
+      : ui.text(' ', { size: 'xs' }));
     const cell = (d) => {
       if (d == null) return ui.text(' ', { width: 34 });
       const ms = new Date(new Date(first).getFullYear(), new Date(first).getMonth(), d).getTime();
@@ -283,7 +291,7 @@ export async function activate() {
         ui.stack({ gap: 'xs', align: 'center' }, [
           isPicked ? ui.badge(String(d), { tone: 'info', small: true })
             : ui.text(String(d), { size: 'sm', tabular: true, align: 'center', weight: ms === today ? 'bold' : 'regular', tone: ms === today ? 'accent' : ms < today ? 'secondary' : undefined }),
-          ui.text(busy.has(ms) ? '•' : ' ', { size: 'xs', tone: 'accent', align: 'center' }),
+          dots(busy.get(ms)),
         ]),
       ]);
     };

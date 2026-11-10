@@ -43,7 +43,7 @@ export const ui = Object.freeze({
   /** Takes the remaining space in a row or stack. */
   spacer: () => node('spacer'),
   /** props: size ('xs'|'sm'|'base'|'lg'|'xl'|'2xl'|'3xl'|'4xl'), weight ('regular'|'medium'|'semibold'|'bold'),
-   *  tone ('primary'|'secondary'|'accent'), tabular (bool), wrap (bool), lines (wrap to at most n lines, then "…"),
+   *  tone ('primary'|'secondary'|'accent'), color ('#RRGGBB', overrides tone), tabular (bool), wrap (bool), lines (wrap to at most n lines, then "…"),
    *  align ('center') */
   text: (text, props) => node('text', { ...props, text: String(text) }),
   /** A Lucide icon by name, e.g. 'Clock'. props: size (px), tone */
@@ -74,8 +74,6 @@ export const ui = Object.freeze({
   swap: (props, children) => node('swap', props, children),
   /** A brand mark the host knows, drawn in the foreground colour. name: 'claude' | 'codex'. props: size (px) */
   logo: (name, props) => node('logo', { ...props, name: String(name) }),
-  /** A month calendar (Arc Calendar). props: value ('YYYY-MM-DD', the picked day), onChange('YYYY-MM-DD') */
-  calendar: (props) => node('calendar', props),
   /** A page indicator. props: count, index */
   dots: (props) => node('dots', props),
   /** props: tone ('neutral'|'success'|'info'|'warning'|'danger'), small */

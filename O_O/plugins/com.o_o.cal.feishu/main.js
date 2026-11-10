@@ -32,6 +32,9 @@ const utcStamp = (ms) => {
 // A Feishu time: { timestamp: "<unix seconds>", timezone } for timed events, { date: "YYYY-MM-DD" } for all-day.
 const timeOf = (t) => (t?.date ? { date: t.date } : t?.timestamp ? { ms: Number(t.timestamp) * 1000 } : null);
 
+// Feishu's calendar colour is a signed 32-bit ARGB integer; the marker wants #RRGGBB.
+const hexOf = (c) => (Number.isInteger(c) ? `#${((c >>> 0) & 0xffffff).toString(16).padStart(6, '0')}` : undefined);
+
 const meetingOf = (e) => e.vchat?.meeting_url || undefined;
 
 const toEvent = (e, calendarId) => {
@@ -95,7 +98,7 @@ export function activate() {
       for (const c of data.calendar_list ?? []) {
         // The user's own and subscribed calendars; a free/busy-only view has no event details.
         if (!['primary', 'shared'].includes(c.type) || c.role === 'free_busy_reader' || c.is_deleted) continue;
-        list.push({ id: c.calendar_id, name: c.summary || (c.type === 'primary' ? '我的日历' : '日历'), primary: c.type === 'primary' });
+        list.push({ id: c.calendar_id, color: hexOf(c.color), name: c.summary || (c.type === 'primary' ? '我的日历' : '日历'), primary: c.type === 'primary' });
       }
       if (!data.has_more || !data.page_token) break;
       pageToken = data.page_token;
@@ -154,6 +157,7 @@ export function activate() {
       // The calendars are read side by side: the 月历 tab asks for about seven weeks at once.
       const one = async (cal) => {
         const out = [];
+        const tint = (list) => list.map((x) => ({ ...x, color: cal.color }));
         let pageToken = '';
         for (let i = 0; i < 10; i++) {
           const q = `start_time=${Math.floor(fromMs / 1000)}&end_time=${Math.ceil(toMs / 1000)}&page_size=500` +
@@ -170,7 +174,7 @@ export function activate() {
           if (!data.has_more || !data.page_token) break;
           pageToken = data.page_token;
         }
-        return out;
+        return tint(out);
       };
       const out = (await Promise.all((await calendars(account)).map(one))).flat();
       return out;
