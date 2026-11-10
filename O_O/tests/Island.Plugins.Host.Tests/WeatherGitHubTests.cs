@@ -1,3 +1,5 @@
+using Island.Platform;
+
 namespace Island.Plugins.Host.Tests;
 
 /// <summary>The shipped weather and GitHub plugins against local fake APIs.</summary>
@@ -52,5 +54,35 @@ public sealed partial class PluginHostTests
         var chip = WaitFor(() => _chipViews.LastOrDefault(c => c.Key == "com.o_o.github/unread" && c.View is not null), "count chip");
         Assert.Contains("2", Texts(chip.View).ToList());
         Assert.Contains(api.Requests, r => r.Contains("auth=Bearer ghp_test", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void NetEase_shows_the_music_bars_on_a_chip_and_the_song_with_its_lyric_on_the_page()
+    {
+        using var api = new FakeCalendarApi((path, _) =>
+            path.StartsWith("/api/search/get/web", StringComparison.Ordinal) ? """{ "result": { "songs": [{ "id": 186016, "name": "晴天", "duration": 269000 }] } }"""
+            : path.StartsWith("/api/song/lyric", StringComparison.Ordinal) ? """{ "lrc": { "lyric": "[ti:晴天]\n[00:00.00]故事的小黄花\n[00:30.50]从出生那年就飘着" } }"""
+            : path.StartsWith("/api/playlist/detail", StringComparison.Ordinal) ? """{ "result": { "tracks": [{ "id": 1, "name": "七里香", "artists": [{ "name": "周杰伦" }] }] } }"""
+            : null);
+        CopyProviderTo("com.o_o.netease", "https://music.163.com", api.Url);
+        var media = new FakeMedia();
+        StartOAuthHost(OAuthServices(api) with { Media = media });
+        EnableOptional();
+        _host!.StartAll();
+        WaitForPage(s => s.PluginId == "com.o_o.netease" && Texts(s.View.Expanded).Contains("网易云音乐没有在播放"), "idle page");
+
+        media.Play(new NowPlaying("NeteaseMusic", "晴天", "周杰伦", null, true));
+        var page = WaitForPage(s => s.PluginId == "com.o_o.netease" && Texts(s.View.Expanded).Contains("故事的小黄花"), "the lyric line");
+        Assert.Contains("晴天", Texts(page.View.Expanded).ToList());
+        Assert.Contains("周杰伦", Texts(page.View.Expanded).ToList());
+        var chip = WaitFor(() => _chipViews.LastOrDefault(c => c.Key == "com.o_o.netease/wave" && c.View is not null), "bars chip");
+        var bars = Assert.Single(Nodes(chip.View!), n => n.Type == "spectrum");
+        Assert.Equal("NeteaseMusic", bars.GetString("source"));
+        Assert.Contains(api.Requests, r => r.Contains("/api/search/get/web", StringComparison.Ordinal) && r.Contains("%E6%99%B4%E5%A4%A9", StringComparison.Ordinal));
+
+        media.Play(new NowPlaying("NeteaseMusic", "晴天", "周杰伦", null, false));      // paused: the chip goes
+        WaitFor(() => _chipViews.LastOrDefault(c => c.Key == "com.o_o.netease/wave" && c.View is null), "chip removed");
+        media.Play(new NowPlaying("Spotify", "Other", "Someone", null, true));          // another player: not ours
+        WaitForPage(s => s.PluginId == "com.o_o.netease" && Texts(s.View.Expanded).Contains("网易云音乐没有在播放"), "idle again");
     }
 }

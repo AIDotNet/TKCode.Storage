@@ -1,0 +1,23 @@
+{
+  "id": "com.o_o.netease",
+  "name": "网易云音乐",
+  "version": "0.1.0",
+  "description": "收起的岛右侧显示跟着音乐跳动的律动条；页面显示正在播放、滚动歌词和榜单（非官方公开接口，无需登录）",
+  "icon": "Music2",
+  "optional": true,
+  "engines": { "island": "^1.0.0" },
+  "main": "main.js",
+  "permissions": ["media", "network:music.163.com", "shell.openUrl"],
+  "contributes": {
+    "pages": [{ "id": "now", "title": "网易云", "icon": "Music2" }],
+    "chips": [{ "id": "wave", "title": "律动条", "side": "right" }],
+    "activities": [{ "id": "playing", "title": "网易云播放中" }],
+    "settings": {
+      "properties": {
+        "bars": { "type": "integer", "title": "律动条数量", "minimum": 3, "maximum": 9, "default": 5 },
+        "lyrics": { "type": "boolean", "title": "显示滚动歌词", "description": "按歌名和歌手在网易云查询歌词（只发送歌名和歌手）。", "default": true },
+        "chipLyric": { "type": "boolean", "title": "收起时在律动条旁显示当前这句歌词", "default": false }
+      }
+    }
+  }
+}

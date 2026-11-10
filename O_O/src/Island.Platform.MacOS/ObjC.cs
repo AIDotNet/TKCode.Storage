@@ -43,6 +43,9 @@ internal static partial class ObjC
     public static partial void SendVoid(nint receiver, nint selector, byte arg);
 
     [LibraryImport(Lib, EntryPoint = "objc_msgSend")]
+    public static partial void SendVoid2(nint receiver, nint selector, nint arg1, nint arg2);
+
+    [LibraryImport(Lib, EntryPoint = "objc_msgSend")]
     public static partial byte SendByte(nint receiver, nint selector, nint arg);
 
     [LibraryImport(Lib, EntryPoint = "objc_msgSend")]

@@ -140,11 +140,16 @@ public class App(IIslandPlatform platform) : Application
                 UserPluginDirectory = PluginDirectories[0],
                 // Music (docs 05 §1). MacMedia is created here, on the main thread, where its notifications arrive.
                 Media = new Island.Plugins.Host.Services.PlatformMedia(
-                    OperatingSystem.IsMacOS() ? new Island.Platform.MacOS.MacMedia()
+                    OperatingSystem.IsMacOS() ? new Island.Platform.MacOS.MacNetEaseMedia(new Island.Platform.MacOS.MacMedia())
                     : OperatingSystem.IsWindows() ? new Island.Platform.Windows.WindowsMedia()
                     : OperatingSystem.IsLinux() ? new Island.Platform.Linux.LinuxMedia()
                     : new Island.Platform.NullMediaPlatform()),
             });
+            // Real loudness for the island's music bars (macOS 14.4+ process tap); elsewhere the bars move by themselves.
+            if (OperatingSystem.IsMacOS())
+            {
+                Island.UI.Controls.AudioLevels.Source = new Island.Platform.MacOS.MacAudioLevels();
+            }
             var plugins = _plugins;
             var presenter = _island.CreatePresenter(
                 (plugin, handler, payload) => plugins.Dispatch(plugin, handler, payload),

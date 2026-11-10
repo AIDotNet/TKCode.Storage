@@ -35,6 +35,7 @@ public sealed class SpectrumBars : TemplatedControl
     private long _lastFrame;
     private double _time;
     private readonly Random _random = new(7);
+    private long _lastTry;
 
     static SpectrumBars()
     {
@@ -72,20 +73,25 @@ public sealed class SpectrumBars : TemplatedControl
     private void Refresh()
     {
         StopListening();
-        if (Active && Source is { Length: > 0 } source && VisualRoot is not null)
-        {
-            var bands = Math.Clamp(Bars, 1, 16);
-            _listening = AudioLevels.Source.Listen(source, bands, levels =>
-            {
-                _real = levels;
-                Interlocked.Exchange(ref _realAtTicks, Environment.TickCount64);
-            });
-        }
+        _lastTry = Environment.TickCount64;
+        TryListen();
         if (VisualRoot is not null && !_animating && (Active || _shown.Any(v => v > Rest + 0.01f)))
         {
             _animating = true;
             _lastFrame = Environment.TickCount64;
             TopLevel.GetTopLevel(this)?.RequestAnimationFrame(OnFrame);
+        }
+    }
+
+    private void TryListen()
+    {
+        if (Active && Source is { Length: > 0 } source && VisualRoot is not null)
+        {
+            _listening = AudioLevels.Source.Listen(source, Math.Clamp(Bars, 1, 16), levels =>
+            {
+                _real = levels;
+                Interlocked.Exchange(ref _realAtTicks, Environment.TickCount64);
+            });
         }
     }
 
@@ -104,6 +110,12 @@ public sealed class SpectrumBars : TemplatedControl
             return;
         }
         var now = Environment.TickCount64;
+        // The app may start (or the permission be given) after the island showed: look again every few seconds.
+        if (Active && _listening is null && Source is { Length: > 0 } && now - _lastTry > 3000)
+        {
+            _lastTry = now;
+            TryListen();
+        }
         var dt = Math.Clamp((now - _lastFrame) / 1000.0, 0.001, 0.1);
         _lastFrame = now;
         _time += dt;
@@ -124,10 +136,6 @@ public sealed class SpectrumBars : TemplatedControl
                 // The levels come in more bands than bars only if Bars changed meanwhile; stretch to fit.
                 target = real![Math.Min(real.Length - 1, i * real.Length / bars)];
                 target = (float)(Rest + (1 - Rest) * target);
-            }
-            else if (_listening is not null)
-            {
-                target = (float)Rest; // listening to a real source that is silent: resting bars, not made-up motion
             }
             else
             {

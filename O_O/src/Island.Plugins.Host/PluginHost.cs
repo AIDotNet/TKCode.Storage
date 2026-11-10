@@ -74,6 +74,7 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
                 var permissions = PluginPermissions.Parse(manifest.Permissions, manifestProblems);
                 var settings = SettingsSchema.Parse(manifest.Contributes.Settings, manifestProblems);
                 ThemeContribution.Validate(manifest.Contributes.Themes, manifestProblems);
+                LayoutContribution.Validate(manifest.Contributes.Layouts, manifestProblems);
                 foreach (var key in permissions?.HostSettings ?? [])
                 {
                     // network:@key names the site the user types into that setting: it must be a plain text setting.
@@ -91,7 +92,6 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
                 if (!File.Exists(package.EntryPath))
                 {
                     problems.Add($"{manifest.Id}: entry '{manifest.Main}' not found.");
-                LayoutContribution.Validate(manifest.Contributes.Layouts, manifestProblems);
                 }
                 else if (_packages.All(p => p.Id != manifest.Id))
                 {
