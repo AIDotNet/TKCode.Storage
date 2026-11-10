@@ -233,13 +233,13 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
                     tabs.SetItems(Options(node));
                     tabs.Selected = node.GetString("value");
                     break;
-                case (DropdownMenu picker, _):
                 case (Island.UI.Controls.SpectrumBars spectrum, "spectrum"):
                     spectrum.Bars = (int)Math.Clamp(node.GetNumber("bars") ?? 5, 1, 16);
                     spectrum.Source = node.GetString("source");
                     spectrum.Active = node.GetBool("active") ?? true;
                     ApplyTone(spectrum, Avalonia.Controls.Primitives.TemplatedControl.ForegroundProperty, node.GetString("tone") ?? "accent");
                     break;
+                case (DropdownMenu picker, _):
                     ApplyPicker(picker, node);
                     break;
                 case (StackPanel dots, "dots"):
