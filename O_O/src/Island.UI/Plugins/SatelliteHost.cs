@@ -301,7 +301,7 @@ public sealed class SatelliteHost
                 Dispatcher.UIThread.Post(() =>
                 {
                     pill.Opacity = 1;
-                    pill.RenderTransform = TransformOperations.Parse("translateX(0px)");
+                    pill.RenderTransform = Rest();
                 }, DispatcherPriority.Background);
             }
             window.Row.Children.RemoveAll(window.Row.Children.Where(c => !Notices.Any(n => n.Visible && n.Pill == c)).ToList());
@@ -370,11 +370,18 @@ public sealed class SatelliteHost
             var side = _host._prefs.SideOf(_key) ?? n.Snapshot.Side;
             var dir = SatellitePlacement.SlideDirection(side, anchor.SurfacePx, anchor.ScreenBoundsPx, anchor.Dock != Island.Core.Layout.IslandDock.Top,
                 (int)Math.Round(MaxNoticeWidth * anchor.Scale));
-            // Slide out of the island edge: start toward the island, end in place; downwards when docked on a side.
+            // Slide out of the island edge: start toward the island, end in place; downwards when docked on a side. As a
+            // droplet (a theme's choice, docs/design/09-island-v2.md §4) it also grows out of the island, from a third of its size.
+            var droplet = Island.UI.Themes.IslandTheme.Current.Split == "droplet";
+            var distance = (droplet ? 60 : 36).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var scale = droplet ? " scale(0.3)" : " scale(1)";
             return dir == 0
-                ? TransformOperations.Parse("translateY(-24px)")
-                : TransformOperations.Parse($"translateX({(-dir * 36).ToString(System.Globalization.CultureInfo.InvariantCulture)}px)");
+                ? TransformOperations.Parse($"translateY(-24px){scale}")
+                : TransformOperations.Parse($"translateX({(dir > 0 ? "-" : "")}{distance}px){scale}");
         }
+
+        /// <summary>A notice at rest: in place, full size (the same operations as <see cref="Offset"/>, so they animate).</summary>
+        private static TransformOperations Rest() => TransformOperations.Parse("translateX(0px) scale(1)");
 
         private void SlideOut(Notice n)
         {

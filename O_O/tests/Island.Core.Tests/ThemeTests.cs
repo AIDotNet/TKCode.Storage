@@ -25,7 +25,7 @@ public class ThemeTests
         var path = Path.Combine(Path.GetTempPath(), $"o_o-theme-{Guid.NewGuid():N}.json");
         try
         {
-            var prefs = new ThemePreferences("com.o_o.theme.aurora/aurora", true, new TimeOnly(6, 30), new TimeOnly(20, 15), true);
+            var prefs = new ThemePreferences("com.o_o.theme.aurora/aurora", true, new TimeOnly(6, 30), new TimeOnly(20, 15), true, AlertSounds: true);
             new ThemePreferencesStore(path).Set(prefs);
             Assert.Equal(prefs, new ThemePreferencesStore(path).Current);
             Assert.Equal(ThemePreferences.Default, new ThemePreferencesStore(path + ".missing").Current);

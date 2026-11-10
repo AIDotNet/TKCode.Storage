@@ -196,7 +196,15 @@ public sealed class AppearancePage : StackPanel
         var wallpaper = new ArcSwitch { Content = "从桌面壁纸取强调色", IsChecked = prefs.WallpaperAccent };
         var wallpaperNote = Text(WallpaperNote(themes), ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true);
         wallpaper.IsCheckedChanged += (_, _) => themes.SetWallpaperAccent(wallpaper.IsChecked == true);
-        void Note() => Dispatcher.UIThread.Post(() => wallpaperNote.Text = WallpaperNote(themes));
+        // A theme may ship an alert sound (docs/design/09-island-v2.md §4); it plays only once turned on here.
+        var sounds = new ArcSwitch { Content = "提醒时播放主题的提示音", IsChecked = prefs.AlertSounds };
+        var soundsNote = Text(SoundsNote(), ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true);
+        sounds.IsCheckedChanged += (_, _) => themes.SetAlertSounds(sounds.IsChecked == true);
+        void Note() => Dispatcher.UIThread.Post(() =>
+        {
+            wallpaperNote.Text = WallpaperNote(themes);
+            soundsNote.Text = SoundsNote();
+        });
         themes.Changed += Note;
         DetachedFromVisualTree += (_, _) => themes.Changed -= Note;
 
@@ -216,9 +224,14 @@ public sealed class AppearancePage : StackPanel
                     },
                 },
                 new StackPanel { Spacing = 6, Children = { wallpaper, wallpaperNote } },
+                new StackPanel { Spacing = 6, Children = { sounds, soundsNote } },
             },
         };
     }
+
+    private static string SoundsNote() => IslandTheme.Current.AlertSound is not null
+        ? "当前主题带有提示音：有提醒弹出时播放一次。"
+        : "当前主题没有提示音；换成带提示音的主题后才会播放。";
 
     private static string WallpaperNote(ThemeService themes) =>
         !themes.Preferences.WallpaperAccent ? "开启后取壁纸中最显眼的颜色作为强调色，每 10 分钟看一次壁纸是否变了。"

@@ -138,9 +138,19 @@ public sealed class IslandThemeSpec
     public IslandShapeSpec? Shape { get; init; }
     public IslandContentSpec? Content { get; init; }
     public IslandMotionSpec? Motion { get; init; }
+    public IslandMascotSpec? Mascot { get; init; }
+    public IslandSoundsSpec? Sounds { get; init; }
+    public IslandLayoutSpec? Layout { get; init; }
 
     public static readonly IReadOnlySet<string> Materials = new HashSet<string>(StringComparer.Ordinal) { "solid", "gradient", "translucent" };
     public static readonly IReadOnlySet<string> Springs = new HashSet<string>(StringComparer.Ordinal) { "calm", "default", "snappy", "bouncy" };
+    public static readonly IReadOnlySet<string> Splits = new HashSet<string>(StringComparer.Ordinal) { "slide", "droplet" };
+    public static readonly IReadOnlySet<string> MascotKinds = new HashSet<string>(StringComparer.Ordinal) { "classic", "pixel", "ghost", "cube" };
+    public static readonly IReadOnlySet<string> ExpandedLayouts = new HashSet<string>(StringComparer.Ordinal) { "standard", "stacked", "media" };
+    public static readonly IReadOnlySet<string> SoundTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".wav", ".mp3", ".aiff", ".aif" };
+
+    /// <summary>The largest sound file a theme may ship.</summary>
+    public const long MaxSoundBytes = 1024 * 1024;
 
     /// <summary>Accent names plugins use for activities; a theme may colour any of them (or others).</summary>
     public static readonly IReadOnlyList<string> AccentNames = ["music", "timer", "calendar", "message", "reminder", "warning"];
@@ -185,6 +195,43 @@ public sealed class IslandThemeSpec
         {
             problems.Add($"{where}: island.motion.spring must be calm, default, snappy or bouncy");
         }
+        if (Motion?.Split is { } split && !Splits.Contains(split))
+        {
+            problems.Add($"{where}: island.motion.split must be slide or droplet");
+        }
+        if (Mascot?.Kind is { } kind && !MascotKinds.Contains(kind))
+        {
+            problems.Add($"{where}: island.mascot.kind must be classic, pixel, ghost or cube");
+        }
+        if (Mascot?.Color is { } mascotColor && !ThemeContribution.IsHexColor(mascotColor))
+        {
+            problems.Add($"{where}: island.mascot.color must be #RRGGBB");
+        }
+        if (Layout?.Expanded is { } layout && !ExpandedLayouts.Contains(layout))
+        {
+            problems.Add($"{where}: island.layout.expanded must be standard, stacked or media");
+        }
+        if (Sounds?.Alert is { } alert && (alert.Contains("..", StringComparison.Ordinal) || Path.IsPathRooted(alert) || !SoundTypes.Contains(Path.GetExtension(alert))))
+        {
+            problems.Add($"{where}: island.sounds.alert must be a .wav, .mp3 or .aiff file inside the plugin folder");
+        }
+    }
+
+    /// <summary>Checks that the files the theme names exist in <paramref name="pluginDirectory"/> and are small enough.</summary>
+    public void ValidateFiles(string where, string pluginDirectory, List<string> problems)
+    {
+        if (Sounds?.Alert is { } alert && !alert.Contains("..", StringComparison.Ordinal) && !Path.IsPathRooted(alert))
+        {
+            var file = new FileInfo(Path.Combine(pluginDirectory, alert));
+            if (!file.Exists)
+            {
+                problems.Add($"{where}: island.sounds.alert '{alert}' is not in the plugin folder");
+            }
+            else if (file.Length > MaxSoundBytes)
+            {
+                problems.Add($"{where}: island.sounds.alert is larger than 1 MB");
+            }
+        }
     }
 }
 
@@ -223,6 +270,36 @@ public sealed class IslandMotionSpec
 {
     /// <summary>calm, default, snappy or bouncy: how the island's shape springs between sizes.</summary>
     public string? Spring { get; init; }
+
+    /// <summary>slide (default) or droplet: how the second activity's bubble leaves the island.</summary>
+    public string? Split { get; init; }
+}
+
+/// <summary>The mascot the theme suggests; applied when the theme is chosen, the user may change it afterwards.</summary>
+public sealed class IslandMascotSpec
+{
+    /// <summary>classic, pixel, ghost or cube.</summary>
+    public string? Kind { get; init; }
+
+    /// <summary>#RRGGBB; absent: the theme's accent.</summary>
+    public string? Color { get; init; }
+}
+
+/// <summary>Sounds the theme ships (played only when the user turns alert sounds on).</summary>
+public sealed class IslandSoundsSpec
+{
+    /// <summary>A .wav, .mp3 or .aiff file in the plugin folder, at most 1 MB, played when an alert opens the island.</summary>
+    public string? Alert { get; init; }
+}
+
+/// <summary>How the host lays out the regions plugins fill.</summary>
+public sealed class IslandLayoutSpec
+{
+    /// <summary>
+    /// The activity card: standard (leading | center | trailing, bottom underneath), stacked (one column), or media (a
+    /// large leading region on the left, the rest beside it).
+    /// </summary>
+    public string? Expanded { get; init; }
 }
 
 /// <summary>

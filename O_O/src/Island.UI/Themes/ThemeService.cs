@@ -17,7 +17,7 @@ namespace Island.UI.Themes;
 /// <param name="Key"><c>plugin/theme</c>.</param>
 public sealed record ThemeOption(string Key, string Title, string? Description, string Plugin, Color? Accent,
     ArcAppearance? Appearance, double? Corners, IReadOnlyDictionary<string, Color>? Tokens = null,
-    Island.Plugins.IslandThemeSpec? Island = null);
+    Island.Plugins.IslandThemeSpec? Island = null, string? Directory = null);
 
 /// <summary>
 /// Themes for every O_O window (docs/design/05-builtin-plugins.md §3): theme packs from plugins, chosen in the
@@ -63,7 +63,7 @@ public sealed class ThemeService
             ArcTheme.Apply(t => t.Corners(ArcCornerStyle.Scale(corners)));
         }
         ApplyTokens(service.Selected?.Tokens);
-        IslandTheme.Apply(service.Selected?.Island);
+        IslandTheme.Apply(service.Selected?.Island, service.Selected?.Directory);
         service.Evaluate();
         service._timer.Start();
         ThemeMenu.Refresh();
@@ -115,7 +115,20 @@ public sealed class ThemeService
             t.Corners(ArcCornerStyle.Scale(theme.Corners ?? 0.6));
         });
         ApplyTokens(theme.Tokens);
-        IslandTheme.Apply(theme.Island);
+        IslandTheme.Apply(theme.Island, theme.Directory);
+        // The theme's mascot, when it suggests one: chosen with the theme, changeable afterwards on the About page.
+        if (theme.Island?.Mascot is { } mascot)
+        {
+            var kind = mascot.Kind switch
+            {
+                "pixel" => MascotKind.Pixel,
+                "ghost" => MascotKind.Ghost,
+                "cube" => MascotKind.Cube,
+                "classic" => MascotKind.Classic,
+                _ => MascotStyle.Kind,
+            };
+            MascotStyle.Set(kind, mascot.Color is { } c && Color.TryParse(c, out var tint) ? tint : null);
+        }
         Changed?.Invoke();
     }
 
@@ -144,6 +157,13 @@ public sealed class ThemeService
                 OverriddenTokens.Add(key);
             }
         }
+    }
+
+    /// <summary>Turns the theme's alert sound on or off (off unless the user turns it on).</summary>
+    public void SetAlertSounds(bool on)
+    {
+        _store.Set(_store.Current with { AlertSounds = on });
+        Changed?.Invoke();
     }
 
     /// <summary>Light, dark or following the system, by hand (this turns the schedule off).</summary>
@@ -270,5 +290,6 @@ public sealed class ThemeService
         t.Appearance switch { "light" => ArcAppearance.Light, "dark" => ArcAppearance.Dark, "system" => ArcAppearance.System, _ => null },
         t.Corners,
         t.Tokens?.Where(kv => Color.TryParse(kv.Value, out _)).ToDictionary(kv => kv.Key, kv => Color.Parse(kv.Value)),
-        t.Island);
+        t.Island,
+        package.Directory);
 }

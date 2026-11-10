@@ -25,6 +25,7 @@ public sealed partial class IslandPresenter
     private readonly AlertQueue _alerts = new();
     private readonly Dictionary<string, LiveAlertSnapshot> _alertViews = new(StringComparer.Ordinal);
     private DispatcherTimer? _alertTick;
+    private bool _alertsWired;
     private ActivityPreferencesStore? _activityPreferences;
     private ActivityArrangement _arrangement = ActivityArrangement.Empty;
     private string? _front;
@@ -52,6 +53,9 @@ public sealed partial class IslandPresenter
 
     /// <summary>The activity shown as the bubble beside the island changed (null: no bubble).</summary>
     public event Action<LiveActivitySnapshot?>? BubbleChanged;
+
+    /// <summary>An alert came on the island (its turn in the queue), for the alert sound.</summary>
+    public event Action<IslandAlert>? AlertShown;
 
     /// <summary>The user asked to open an activity's source (⌘-click): the application, or a link.</summary>
     public event Action<LiveActivityOpen>? OpenRequested;
@@ -87,6 +91,17 @@ public sealed partial class IslandPresenter
     /// <summary>Shows an alert in its turn (09 §2, 提醒), unless the user turned its kind off.</summary>
     public void RaiseLiveAlert(LiveAlertSnapshot alert)
     {
+        if (!_alertsWired)
+        {
+            _alertsWired = true;
+            _alerts.CurrentChanged += shown =>
+            {
+                if (shown is not null)
+                {
+                    AlertShown?.Invoke(shown);
+                }
+            };
+        }
         if (_activityPreferences?.Current.MayAlert(alert.Kind) == false)
         {
             return;
@@ -361,21 +376,7 @@ public sealed partial class IslandPresenter
             _cardControls[i] = _cardRenderers[i].Render(nodes[i], _cardControls[i]);
         }
 
-        _card ??= new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 14, RowSpacing = 14 };
-        _card.Children.Clear();
-        Place(_cardControls[0], 0, 0, VerticalAlignment.Center);
-        Place(_cardControls[1], 0, 1, VerticalAlignment.Center);
-        Place(_cardControls[2], 0, 2, VerticalAlignment.Center);
-        if (_cardControls[3] is { } bottom)
-        {
-            Detach(bottom);
-            Grid.SetRow(bottom, 1);
-            Grid.SetColumn(bottom, 0);
-            Grid.SetColumnSpan(bottom, 3);
-            _card.Children.Add(bottom);
-        }
-        _card.RowDefinitions[1].Height = _cardControls[3] is null ? new GridLength(0) : GridLength.Auto;
-        _card.RowSpacing = _cardControls[3] is null ? 0 : 14;
+        _card = LayoutCard(Island.UI.Themes.IslandTheme.Current.ExpandedLayout, _cardControls[0], _cardControls[1], _cardControls[2], _cardControls[3]);
         _view.ExpandedContent.Content = _card;
 
         SetHomeChrome(false);
@@ -386,27 +387,63 @@ public sealed partial class IslandPresenter
         home.Click += (_, _) => ShowHome();
         _view.HeaderStatus.Content = home;
         ExpandedContentChanged?.Invoke();
+    }
 
-        void Place(Control? c, int row, int column, VerticalAlignment align)
+    /// <summary>
+    /// Lays the card's regions out as the theme asks (09 §4): standard (leading | center | trailing, bottom underneath),
+    /// stacked (one column, in that order) or media (a large leading region on the left, the rest beside it).
+    /// </summary>
+    public static Grid LayoutCard(string layout, Control? leading, Control? center, Control? trailing, Control? bottom)
+    {
+        var grid = layout switch
+        {
+            "stacked" => new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"), RowSpacing = 10 },
+            _ => new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 14, RowSpacing = 14 },
+        };
+        void Place(Control? c, int row, int column, int columnSpan = 1, int rowSpan = 1, VerticalAlignment align = VerticalAlignment.Center)
         {
             if (c is null)
             {
                 return;
             }
-            Detach(c);
-            c.VerticalAlignment = align;
-            Grid.SetRow(c, row);
-            Grid.SetColumn(c, column);
-            Grid.SetColumnSpan(c, 1);
-            _card!.Children.Add(c);
-        }
-
-        static void Detach(Control c)
-        {
             if (c.Parent is Panel p)
             {
                 p.Children.Remove(c);
             }
+            c.VerticalAlignment = align;
+            c.HorizontalAlignment = layout == "stacked" ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+            Grid.SetRow(c, row);
+            Grid.SetColumn(c, column);
+            Grid.SetColumnSpan(c, columnSpan);
+            Grid.SetRowSpan(c, rowSpan);
+            grid.Children.Add(c);
         }
+        switch (layout)
+        {
+            case "stacked":
+                Place(leading, 0, 0);
+                Place(center, 1, 0);
+                Place(trailing, 2, 0);
+                Place(bottom, 3, 0);
+                break;
+            case "media":
+                Place(leading, 0, 0, rowSpan: 2, align: VerticalAlignment.Top);
+                Place(center, 0, 1);
+                Place(trailing, 0, 2);
+                Place(bottom, 1, 1, columnSpan: 2);
+                break;
+            default:
+                Place(leading, 0, 0);
+                Place(center, 0, 1);
+                Place(trailing, 0, 2);
+                Place(bottom, 1, 0, columnSpan: 3);
+                break;
+        }
+        if (bottom is null && layout != "stacked")
+        {
+            grid.RowDefinitions[1].Height = new GridLength(0);
+            grid.RowSpacing = 0;
+        }
+        return grid;
     }
 }

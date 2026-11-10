@@ -89,6 +89,38 @@ public sealed partial class PluginHostTests
     }
 
     [Fact]
+    public void A_themes_mascot_sounds_layout_and_split_are_checked_and_its_sound_must_be_in_its_folder()
+    {
+        var dir = Path.Combine(_root, "com.example.chime");
+        Directory.CreateDirectory(Path.Combine(dir, "sounds"));
+        File.WriteAllBytes(Path.Combine(dir, "sounds", "ding.wav"), new byte[64]);
+        WritePluginWithManifest("com.example.chime", """
+            , "contributes": { "themes": [
+              { "id": "chime", "island": { "mascot": { "kind": "ghost", "color": "#7747FF" }, "sounds": { "alert": "sounds/ding.wav" },
+                "layout": { "expanded": "media" }, "motion": { "split": "droplet" } } }
+            ] }
+            """, "", "export function activate() {}");
+        WritePluginWithManifest("com.example.badchime", """
+            , "contributes": { "themes": [
+              { "id": "x", "island": { "mascot": { "kind": "dragon", "color": "red" }, "sounds": { "alert": "../../secret.wav" },
+                "layout": { "expanded": "grid" }, "motion": { "split": "explode" } } },
+              { "id": "y", "island": { "sounds": { "alert": "missing.mp3" } } }
+            ] }
+            """, "", "export function activate() {}");
+        _host = new PluginHost(Services, FastRestart);
+        var problem = Assert.Single(_host.Discover(_root, bundled: true));
+        Assert.Contains("island.mascot.kind must be classic, pixel, ghost or cube", problem);
+        Assert.Contains("island.mascot.color must be #RRGGBB", problem);
+        Assert.Contains("island.sounds.alert must be a .wav, .mp3 or .aiff file inside the plugin folder", problem);
+        Assert.Contains("island.layout.expanded must be standard, stacked or media", problem);
+        Assert.Contains("island.motion.split must be slide or droplet", problem);
+        Assert.Contains("island.sounds.alert 'missing.mp3' is not in the plugin folder", problem);
+
+        var island = Assert.Single(_host.Packages).Manifest.Contributes.Themes.Single().Island!;
+        Assert.Equal(("ghost", "media", "droplet"), (island.Mascot!.Kind, island.Layout!.Expanded, island.Motion!.Split));
+    }
+
+    [Fact]
     public void The_bundled_theme_packs_are_valid_and_only_the_default_is_on()
     {
         foreach (var dir in Directory.GetDirectories(Path.Combine(RepoRoot(), "plugins"), "com.o_o.theme.*"))

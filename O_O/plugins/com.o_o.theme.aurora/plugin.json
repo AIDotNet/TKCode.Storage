@@ -16,7 +16,9 @@
           "surface": { "material": "gradient", "colors": ["#140C29", "#2A1050"], "angle": 135 },
           "shape": { "radius": 1.15 },
           "content": { "accents": { "music": "#C77DFF", "timer": "#FFB86B", "calendar": "#7AA2FF", "message": "#6EE7B7", "reminder": "#FFB86B", "warning": "#FFD166" } },
-          "motion": { "spring": "calm" } } }
+          "motion": { "spring": "calm", "split": "droplet" },
+          "mascot": { "kind": "ghost", "color": "#9D7BFF" },
+          "sounds": { "alert": "sounds/chime.wav" } } }
     ]
   }
 }

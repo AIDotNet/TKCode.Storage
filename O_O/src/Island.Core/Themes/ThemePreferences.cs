@@ -10,12 +10,14 @@ namespace Island.Core.Themes;
 /// <param name="Theme">The chosen theme, <c>plugin/theme</c>; null: none chosen (the Apple default look).</param>
 /// <param name="LightAt">When the schedule switches to light.</param>
 /// <param name="DarkAt">When the schedule switches to dark.</param>
+/// <param name="AlertSounds">Whether the theme's alert sound plays when an alert opens the island (off unless turned on).</param>
 public sealed record ThemePreferences(
     string? Theme = null,
     bool Schedule = false,
     TimeOnly LightAt = default,
     TimeOnly DarkAt = default,
-    bool WallpaperAccent = false)
+    bool WallpaperAccent = false,
+    bool AlertSounds = false)
 {
     public static readonly TimeOnly DefaultLightAt = new(7, 0);
     public static readonly TimeOnly DefaultDarkAt = new(19, 0);
@@ -73,7 +75,8 @@ public sealed class ThemePreferencesStore
                 r.TryGetProperty("schedule", out var s) && s.ValueKind == JsonValueKind.True,
                 Time(Str(r, "lightAt")) ?? ThemePreferences.DefaultLightAt,
                 Time(Str(r, "darkAt")) ?? ThemePreferences.DefaultDarkAt,
-                r.TryGetProperty("wallpaperAccent", out var w) && w.ValueKind == JsonValueKind.True);
+                r.TryGetProperty("wallpaperAccent", out var w) && w.ValueKind == JsonValueKind.True,
+                r.TryGetProperty("alertSounds", out var a) && a.ValueKind == JsonValueKind.True);
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -97,6 +100,7 @@ public sealed class ThemePreferencesStore
                 w.WriteString("lightAt", Current.LightAt.ToString("HH:mm", CultureInfo.InvariantCulture));
                 w.WriteString("darkAt", Current.DarkAt.ToString("HH:mm", CultureInfo.InvariantCulture));
                 w.WriteBoolean("wallpaperAccent", Current.WallpaperAccent);
+                w.WriteBoolean("alertSounds", Current.AlertSounds);
                 w.WriteEndObject();
             }
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);

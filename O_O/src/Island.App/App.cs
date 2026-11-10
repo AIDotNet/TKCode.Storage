@@ -200,6 +200,15 @@ public class App(IIslandPlatform platform) : Application
             _plugins.LiveAlertRaised += a => IslandPresenter.Post(() => presenter.RaiseLiveAlert(a));
             _plugins.AmbientUpdated += a => IslandPresenter.Post(() => presenter.UpdateAmbient(a));
             presenter.OpenRequested += open => OpenSource(plugins, open);
+            // The theme's alert sound, when the user turned alert sounds on (docs/design/09-island-v2.md §4).
+            presenter.AlertShown += _ =>
+            {
+                if (Island.UI.Themes.ThemeService.Current?.Preferences.AlertSounds == true &&
+                    Island.UI.Themes.IslandTheme.Current.AlertSound is { } sound)
+                {
+                    Island.UI.Themes.SoundPlayer.Play(sound);
+                }
+            };
             // The satellite window beside the island: the second activity's bubble.
             VNodeRenderer.AppIconResolver = plugins.AppIcon;
             _satellites = new SatelliteHost(platform,

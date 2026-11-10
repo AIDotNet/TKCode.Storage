@@ -78,6 +78,10 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
                 var permissions = PluginPermissions.Parse(manifest.Permissions, manifestProblems);
                 var settings = SettingsSchema.Parse(manifest.Contributes.Settings, manifestProblems);
                 ThemeContribution.Validate(manifest.Contributes.Themes, manifestProblems);
+                foreach (var theme in manifest.Contributes.Themes)
+                {
+                    theme.Island?.ValidateFiles($"theme '{theme.Id}'", Path.GetDirectoryName(manifestPath)!, manifestProblems);
+                }
                 LayoutContribution.Validate(manifest.Contributes.Layouts, manifestProblems);
                 IslandContributions.Validate(manifest.Contributes, manifestProblems);
                 manifest.ValidateTargets(manifestProblems);

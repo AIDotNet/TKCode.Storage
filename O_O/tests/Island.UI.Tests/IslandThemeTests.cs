@@ -79,4 +79,45 @@ public sealed class IslandThemeTests
             IslandTheme.Apply(null);
         }
     });
+
+    [Fact]
+    public void A_themes_sound_is_found_only_inside_its_plugin_folder() => Headless.Run(() =>
+    {
+        var dir = Directory.CreateTempSubdirectory("o_o-theme-").FullName;
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir, "ding.wav"), new byte[8]);
+            IslandTheme.Apply(new IslandThemeSpec { Sounds = new IslandSoundsSpec { Alert = "ding.wav" } }, dir);
+            Assert.Equal(Path.Combine(dir, "ding.wav"), IslandTheme.Current.AlertSound);
+            IslandTheme.Apply(new IslandThemeSpec { Sounds = new IslandSoundsSpec { Alert = "../ding.wav" } }, dir);
+            Assert.Null(IslandTheme.Current.AlertSound);
+            IslandTheme.Apply(new IslandThemeSpec { Sounds = new IslandSoundsSpec { Alert = "ding.wav" } }, null);
+            Assert.Null(IslandTheme.Current.AlertSound);
+        }
+        finally
+        {
+            IslandTheme.Apply(null);
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Theory]
+    [InlineData("standard", 0, 0, 0, 1, 1, 0, 3)]
+    [InlineData("stacked", 0, 0, 1, 0, 3, 0, 1)]
+    [InlineData("media", 0, 0, 0, 1, 1, 1, 2)]
+    public void The_card_lays_its_regions_out_as_the_theme_asks(string layout, int leadRow, int leadCol, int centerRow, int centerCol, int bottomRow, int bottomCol, int bottomSpan) => Headless.Run(() =>
+    {
+        var lead = new TextBlock();
+        var center = new TextBlock();
+        var bottom = new TextBlock();
+        var grid = IslandPresenter.LayoutCard(layout, lead, center, null, bottom);
+        Assert.Equal((leadRow, leadCol), (Grid.GetRow(lead), Grid.GetColumn(lead)));
+        Assert.Equal((centerRow, centerCol), (Grid.GetRow(center), Grid.GetColumn(center)));
+        Assert.Equal((bottomRow, bottomCol, bottomSpan), (Grid.GetRow(bottom), Grid.GetColumn(bottom), Grid.GetColumnSpan(bottom)));
+        Assert.Equal(3, grid.Children.Count);
+        if (layout == "media")
+        {
+            Assert.Equal(2, Grid.GetRowSpan(lead));                    // the large leading region beside everything else
+        }
+    });
 }

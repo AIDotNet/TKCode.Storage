@@ -26,14 +26,32 @@ public sealed class IslandTheme
     /// <summary>The key the island surface's brush is published under; around a notch the surface ignores it.</summary>
     public const string SurfaceBrushKey = "IslandSurfaceBrush";
 
-    public static IslandTheme Current { get; private set; } = new(null);
+    public static IslandTheme Current { get; private set; } = new(null, null);
 
     /// <summary>Raised on the UI thread after <see cref="Current"/> changed.</summary>
     public static event Action? Changed;
 
     private readonly IslandThemeSpec? _spec;
+    private readonly string? _directory;
 
-    private IslandTheme(IslandThemeSpec? spec) => _spec = spec;
+    private IslandTheme(IslandThemeSpec? spec, string? directory)
+    {
+        _spec = spec;
+        _directory = directory;
+    }
+
+    /// <summary>The activity card's layout: standard, stacked or media.</summary>
+    public string ExpandedLayout => _spec?.Layout?.Expanded ?? "standard";
+
+    /// <summary>How the bubble leaves the island: slide or droplet.</summary>
+    public string Split => _spec?.Motion?.Split ?? "slide";
+
+    /// <summary>The theme's alert sound (a file in its plugin folder), or null.</summary>
+    public string? AlertSound =>
+        _spec?.Sounds?.Alert is { } alert && _directory is not null && Path.GetFullPath(Path.Combine(_directory, alert)) is var path &&
+        path.StartsWith(Path.GetFullPath(_directory) + Path.DirectorySeparatorChar, StringComparison.Ordinal) && File.Exists(path)
+            ? path
+            : null;
 
     /// <summary>The surface away from a notch; null: the default black.</summary>
     public IBrush? Surface => SurfaceOf(_spec?.Surface);
@@ -71,10 +89,10 @@ public sealed class IslandTheme
         return DefaultAccents.TryGetValue(accent, out var fallback) ? fallback : null;
     }
 
-    /// <summary>Makes <paramref name="spec"/> the island's look and publishes its surface brush.</summary>
-    public static void Apply(IslandThemeSpec? spec)
+    /// <summary>Makes <paramref name="spec"/> (from the plugin in <paramref name="directory"/>) the island's look and publishes its surface brush.</summary>
+    public static void Apply(IslandThemeSpec? spec, string? directory = null)
     {
-        Current = new IslandTheme(spec);
+        Current = new IslandTheme(spec, directory);
         if (Application.Current?.Resources is { } resources)
         {
             if (Current.Surface is { } brush)
