@@ -1,19 +1,19 @@
-# Builds O_O for macOS (Apple Silicon and Intel), signs it with the Developer ID, notarizes and staples the .dmg
-# installers, and attaches them to a GitHub Release.
+# Builds O_O installers for macOS, Windows and Linux and, for tags "o_o-v1.2.3", attaches them to a GitHub Release.
+# Start it by hand (Actions → O_O release → Run workflow) to get the installers as build artifacts only.
 #
-# Run: push a tag "o_o-v1.2.3" (creates the release), or start it by hand (Actions → O_O macOS release → Run
-# workflow) to get the .dmg files as build artifacts only.
+#   macOS    arm64 + x64   .dmg, signed with the Developer ID; notarized when the Apple ID secrets are set
+#   Windows  x64 + arm64   Inno Setup installer (.exe, per-user) and a portable .zip — unsigned for now
+#   Linux    x64 + arm64   .deb and .tar.gz (X11 / XWayland)
 #
-# Repository secrets (Settings → Secrets and variables → Actions):
+# macOS secrets (Settings → Secrets and variables → Actions):
 #   MACOS_CERTIFICATE              base64 of the Developer ID Application certificate (.p12, with private key)
 #   MACOS_CERTIFICATE_PASSWORD     the .p12 password
 #   APPLE_ID                       optional: the Apple ID used for notarization
 #   APPLE_APP_SPECIFIC_PASSWORD    optional: an app-specific password for that Apple ID (appleid.apple.com)
+# Variable: APPLE_TEAM_ID (42B564FHYL).
 # Without the two optional secrets the .dmg is signed but not notarized: it runs, but macOS asks the user to allow it
 # once (System Settings → Privacy & Security → Open Anyway) when it was downloaded with a browser.
-# Repository variable:
-#   APPLE_TEAM_ID                  the team id (42B564FHYL)
-name: O_O macOS release
+name: O_O release
 
 on:
   push:
@@ -29,8 +29,23 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      value: ${{ steps.version.outputs.value }}
+    steps:
+      - id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/o_o-v* ]]; then
+            echo "value=${GITHUB_REF#refs/tags/o_o-v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  macos:
     name: macOS ${{ matrix.arch }}
+    needs: version
     runs-on: macos-15
     strategy:
       matrix:
@@ -44,15 +59,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: O_O/global.json
-
-      - name: Version
-        id: version
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/o_o-v* ]]; then
-            echo "value=${GITHUB_REF#refs/tags/o_o-v}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Import the signing certificate
         env:
@@ -85,7 +91,7 @@ jobs:
           else
             echo "::warning::APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD not set: the .dmg is signed but not notarized."
           fi
-          build/macos/package.sh --arch "${{ matrix.arch }}" --version "${{ steps.version.outputs.value }}" \
+          build/macos/package.sh --arch "${{ matrix.arch }}" --version "${{ needs.version.outputs.value }}" \
             --identity "$SIGNING_IDENTITY" "${NOTARIZE[@]}"
 
       - uses: actions/upload-artifact@v4
@@ -98,9 +104,79 @@ jobs:
         if: always()
         run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
 
+  windows:
+    name: Windows ${{ matrix.arch }}
+    needs: version
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    defaults:
+      run:
+        working-directory: O_O
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: O_O/global.json
+
+      - name: Inno Setup
+        run: |
+          if (-not (Get-Command iscc.exe -ErrorAction SilentlyContinue) -and -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Build and package
+        run: build/windows/package.ps1 -Arch ${{ matrix.arch }} -Version "${{ needs.version.outputs.value }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: O_O-windows-${{ matrix.arch }}
+          path: |
+            O_O/build/out/*.exe
+            O_O/build/out/*.zip
+          if-no-files-found: error
+
+  linux:
+    name: Linux ${{ matrix.arch }}
+    needs: version
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: O_O
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: O_O/global.json
+
+      - name: NativeAOT prerequisites
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Build and package
+        run: build/linux/package.sh --arch ${{ matrix.arch }} --version "${{ needs.version.outputs.value }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: O_O-linux-${{ matrix.arch }}
+          path: |
+            O_O/build/out/*.deb
+            O_O/build/out/*.tar.gz
+          if-no-files-found: error
+
   release:
     name: GitHub release
-    needs: build
+    needs: [macos, windows, linux]
     if: startsWith(github.ref, 'refs/tags/o_o-v')
     runs-on: ubuntu-latest
     steps:
@@ -113,6 +189,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${GITHUB_REF#refs/tags/o_o-v}"
-          gh release create "${GITHUB_REF#refs/tags/}" dist/*.dmg --repo "$GITHUB_REPOSITORY" \
+          gh release create "${GITHUB_REF#refs/tags/}" dist/* --repo "$GITHUB_REPOSITORY" \
             --title "O_O $VERSION" \
-            --notes "O_O $VERSION for macOS 14+. Download O_O-$VERSION-macos-arm64.dmg for Apple Silicon or O_O-$VERSION-macos-x64.dmg for Intel, open it and drag O_O to Applications."
+            --notes "O_O $VERSION. macOS 14+: O_O-$VERSION-macos-arm64.dmg (Apple Silicon) or -x64.dmg (Intel), drag O_O to Applications. Windows: O_O-$VERSION-windows-x64-setup.exe (or arm64; a portable .zip is also attached). Linux: o-o_${VERSION}_amd64.deb / _arm64.deb, or the .tar.gz."

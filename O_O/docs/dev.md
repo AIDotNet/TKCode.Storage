@@ -88,8 +88,12 @@ dotnet build src/Island.App && src/Island.App/bin/Debug/net10.0/O_O --render-ico
 `APPLE_TEAM_ID` 公证并装订。不带 `--identity` 时为临时签名，只能本机试用（hardened runtime 下临时签名的库无法
 通过库校验，本机试运行时需去掉 `--options runtime`）。Intel 版在 Apple 芯片的机器上交叉编译即可。
 
-CI：仓库根目录 `.github/workflows/o_o-macos-release.yml`。推送标签 `o_o-v1.2.3` 会构建两个架构、签名、公证，
-并创建 GitHub Release 附上 `.dmg`；也可在 Actions 页手动运行（只产出构建产物）。需要的仓库 Secrets：
-`MACOS_CERTIFICATE`（Developer ID Application 证书 .p12 的 base64）、`MACOS_CERTIFICATE_PASSWORD`、`APPLE_ID`、
-`APPLE_APP_SPECIFIC_PASSWORD`；变量 `APPLE_TEAM_ID`。
+CI（仓库根目录 `.github/workflows/`，只在 `O_O/**` 变化时运行，仓库里的其他项目各有自己的工作流）：
+`o_o-ci.yml` 构建并运行全部测试；`o_o-release.yml` 构建三个平台的安装包——macOS arm64/x64 `.dmg`（Developer ID
+签名，配置了 Apple ID 时公证）、Windows x64/arm64 安装程序 `.exe`（Inno Setup，按用户安装，暂未签名）与便携 `.zip`、
+Linux x64/arm64 `.deb` 与 `.tar.gz`。推送标签 `o_o-v1.2.3` 会创建 GitHub Release 并附上全部安装包；也可在 Actions 页
+手动运行（只产出构建产物）。本地打包：`build/windows/package.ps1 -Arch x64 -Version 1.2.3`、
+`build/linux/package.sh --arch x64 --version 1.2.3`。
 
+macOS 需要的仓库 Secrets：`MACOS_CERTIFICATE`（Developer ID Application 证书 .p12 的 base64）、
+`MACOS_CERTIFICATE_PASSWORD`；可选 `APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`（公证）；变量 `APPLE_TEAM_ID`。

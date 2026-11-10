@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=O_O
+GenericName=Dynamic Island
+Comment=桌面灵动岛
+Exec=o-o
+Icon=o-o
+Terminal=false
+Categories=Utility;
+StartupNotify=false

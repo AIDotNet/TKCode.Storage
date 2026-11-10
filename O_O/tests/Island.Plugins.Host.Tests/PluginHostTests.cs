@@ -7,7 +7,8 @@ public sealed partial class PluginHostTests : IDisposable
 {
     // Generous: the first test in the class pays the cold start (JIT of Jaunt, engine and ICU initialisation), which
     // under a loaded CI machine can take several seconds. Waits return as soon as the condition holds.
-    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(20);
+    // On shared CI machines (GitHub sets CI=true) timers and engines run several times slower: wait longer there.
+    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(Environment.GetEnvironmentVariable("CI") == "true" ? 60 : 20);
 
     private readonly string _root = Directory.CreateTempSubdirectory("o_o-plugins-").FullName;
     private readonly string _data = Directory.CreateTempSubdirectory("o_o-data-").FullName;
