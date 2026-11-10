@@ -49,6 +49,26 @@ public sealed record ChipSnapshot(string PluginId, string ChipId, string? Instan
 /// <summary>A short-lived notice that takes the collapsed island's place for a few seconds ("已复制", "额度 95%").</summary>
 public sealed record AlertSnapshot(string PluginId, VNode? Leading, VNode? Trailing, TimeSpan Duration, long Sequence);
 
+/// <summary>
+/// One notice in a satellite island (docs/design/08-notifications-and-satellites.md §4). A snapshot without a view takes
+/// the notice <paramref name="Key"/> away (an empty key: all of the satellite's notices).
+/// </summary>
+/// <param name="Side">"auto", "left" or "right", as declared.</param>
+/// <param name="Badge">A count drawn on the notice's corner, or null.</param>
+public sealed record SatelliteSnapshot(
+    string PluginId,
+    string SatelliteId,
+    string Key,
+    VNode? View,
+    TimeSpan Duration,
+    int? Badge,
+    string Side,
+    long Sequence)
+{
+    /// <summary>Identifies the satellite across plugins: <c>plugin/satellite</c>.</summary>
+    public string SatelliteKey => $"{PluginId}/{SatelliteId}";
+}
+
 /// <summary>The latest view of one page (docs/design/07-home-and-layout.md §2).</summary>
 public sealed record PageSnapshot(string PluginId, string PageId, string Title, VNode? View, long Sequence, VNode? Status = null)
 {

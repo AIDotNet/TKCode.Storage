@@ -114,6 +114,9 @@ internal static class Program
                   .UsePlatformDetect()
                   // The island is an accessory: no Dock icon, no menu bar of its own.
                   .With(new MacOSPlatformOptions { ShowInDock = false })
+                  // The island and console are small; Skia's default GPU resource cache (sized for full-screen apps)
+                  // only keeps glyph atlases and old layer textures around.
+                  .With(new SkiaOptions { MaxGpuResourceSizeBytes = 24 * 1024 * 1024 })
                   .UseArcApp()
                   .LogToTrace();
 

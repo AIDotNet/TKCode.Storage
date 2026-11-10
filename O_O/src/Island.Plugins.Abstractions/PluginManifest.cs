@@ -90,6 +90,9 @@ public sealed class PluginContributions
     /// <summary>Island layouts the user can apply on the console's 岛体 page: shape, dock, size, pages and chips in one go.</summary>
     public IReadOnlyList<LayoutContribution> Layouts { get => field ?? []; init; }
 
+    /// <summary>Small islands beside the main one for short-lived notices (docs/design/08-notifications-and-satellites.md §4).</summary>
+    public IReadOnlyList<SatelliteContribution> Satellites { get => field ?? []; init; }
+
     /// <summary>Implementations this plugin offers to other plugins (docs/design/03-plugin-system.md §7.1).</summary>
     public IReadOnlyList<ProviderContribution> Providers { get => field ?? []; init; }
 
@@ -134,6 +137,16 @@ public sealed class ChipContribution
     public bool? Enabled { get; init; }
 
     /// <summary>"left" or "right" (default): which side of the island, or which wing beside a notch.</summary>
+    public string? Side { get; init; }
+}
+
+/// <summary>A satellite: a small island beside the main one, shown with <c>island.satellite(id).show(view, options)</c>.</summary>
+public sealed class SatelliteContribution
+{
+    public required string Id { get; init; }
+    public string? Title { get; init; }
+
+    /// <summary>"auto" (default: the side with room, right first), "left" or "right"; the user can pin it in the console.</summary>
     public string? Side { get; init; }
 }
 

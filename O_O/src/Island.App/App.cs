@@ -19,6 +19,8 @@ namespace Island.App;
 /// </summary>
 public class App(IIslandPlatform platform) : Application
 {
+    private SatelliteHost? _satellites;
+
     private static readonly bool Debug = Environment.GetEnvironmentVariable("O_O_DEBUG") == "1";
 
     private IslandController? _island;
@@ -148,6 +150,12 @@ public class App(IIslandPlatform platform) : Application
                 Clipboard = new Island.UI.Services.ClipboardService(window, clipboardPlatform,
                     Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "clipboard-images")),
                 UserPluginDirectory = PluginDirectories[0],
+                SystemCalendar = OperatingSystem.IsMacOS() ? new Island.Platform.MacOS.MacCalendar() : null,
+                // Other apps' notifications for the notifications.listen permission (docs/design/08).
+                NotificationListener = OperatingSystem.IsMacOS() ? (Environment.GetEnvironmentVariable("ZZ_FAKE") == "1" ? new ZzDebugFakeNotify(new Island.Platform.MacOS.MacNotificationListener()) : new Island.Platform.MacOS.MacNotificationListener())
+                    : OperatingSystem.IsWindows() ? new Island.Platform.Windows.WindowsNotificationListener()
+                    : OperatingSystem.IsLinux() ? new Island.Platform.Linux.LinuxNotificationListener()
+                    : null,
                 // Music (docs 05 §1). MacMedia is created here, on the main thread, where its notifications arrive.
                 Media = new Island.Plugins.Host.Services.PlatformMedia(
                     OperatingSystem.IsMacOS() ? new Island.Platform.MacOS.MacNetEaseMedia(new Island.Platform.MacOS.MacMedia())
@@ -155,11 +163,8 @@ public class App(IIslandPlatform platform) : Application
                     : OperatingSystem.IsLinux() ? new Island.Platform.Linux.LinuxMedia()
                     : new Island.Platform.NullMediaPlatform()),
             });
-            // Real loudness for the island's music bars (macOS 14.4+ process tap); elsewhere the bars move by themselves.
-            if (OperatingSystem.IsMacOS())
-            {
-                Island.UI.Controls.AudioLevels.Source = new Island.Platform.MacOS.MacAudioLevels();
-            }
+            // The music bars move by themselves: following an app's real loudness means tapping its audio, which lights
+            // macOS's recording indicator (AudioLevels.Source stays the null source).
             var plugins = _plugins;
             var presenter = _island.CreatePresenter(
                 (plugin, handler, payload) => plugins.Dispatch(plugin, handler, payload),
@@ -173,6 +178,14 @@ public class App(IIslandPlatform platform) : Application
             _plugins.PageEnded += (p, g) => IslandPresenter.Post(() => presenter.EndPage(p, g));
             _plugins.ChipUpdated += s => IslandPresenter.Post(() => presenter.UpdateChip(s));
             _plugins.AlertRaised += a => IslandPresenter.Post(() => presenter.ShowAlert(a));
+            // Satellite islands beside the main one (docs/design/08): notices plugins show with island.satellite().
+            VNodeRenderer.AppIconResolver = plugins.AppIcon;
+            _satellites = new SatelliteHost(platform,
+                new SatellitePreferencesStore(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "satellites.json")),
+                (pid, handler, payload) => plugins.Dispatch(pid, handler, payload));
+            Island.UI.Console.SatellitePanel.Preferences = _satellites.Preferences;
+            _plugins.SatelliteUpdated += _satellites.OnUpdated;
+            _satellites.Follow(_island);
             // Files dropped on the island go to the file shelf (docs 05 §7).
             IslandDropTarget.Attach(window.View, () => plugins.AcceptsFiles, plugins.DropFiles);
             _plugins.PluginLog += e =>

@@ -36,6 +36,23 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
     public event Action<ChipSnapshot>? ChipUpdated;
     public event Action<AlertSnapshot>? AlertRaised;
 
+    /// <summary>A satellite notice appeared or was taken away (a snapshot without a view).</summary>
+    public event Action<SatelliteSnapshot>? SatelliteUpdated;
+
+    /// <summary>What plugins may see of other apps' notifications, edited in the console.</summary>
+    public NotificationPreferences NotificationPreferences => _services.NotificationPrefs;
+
+    /// <summary>The platform's notification reader (the console shows its access state); null where there is none.</summary>
+    public Island.Platform.INotificationListener? NotificationListener => _services.NotificationListener;
+
+    private readonly ConcurrentDictionary<string, byte[]?> _appIcons = new(StringComparer.Ordinal);
+
+    /// <summary>The icon of an application as PNG bytes (cached), or null when the platform cannot give one.</summary>
+    public byte[]? AppIcon(string appId) =>
+        _services.NotificationListener is { } l
+            ? _appIcons.GetOrAdd(appId, id => { try { return l.GetAppIcon(id, 64); } catch { return null; } })
+            : null;
+
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ChipSnapshot> _liveChips = new();
 
     /// <summary>The chips plugins show right now (for the console, which lists instances of multiple chips).</summary>
@@ -335,7 +352,9 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
     /// Reading another application's login is never granted without asking, not even to bundled plugins: it is
     /// personal, and on macOS reading it shows the system's Keychain prompt.
     /// </summary>
-    public static bool AlwaysAsks(string permission) => permission.StartsWith("localAuth:", StringComparison.Ordinal);
+    public static bool AlwaysAsks(string permission) =>
+        permission.StartsWith("localAuth:", StringComparison.Ordinal) ||
+        permission.StartsWith(PluginPermissions.ListenPrefix, StringComparison.Ordinal);
 
     public PermissionStatus GetPermissions(string pluginId)
     {
@@ -417,6 +436,7 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
 
     public void Dispatch(string pluginId, int handlerId, string? payloadJson = null)
     {
+        Console.Error.WriteLine($"[zz] dispatch {pluginId} {handlerId}"); // TEMP
         if (_runners.TryGetValue(pluginId, out var runner))
         {
             runner.Dispatch(handlerId, payloadJson);
@@ -435,6 +455,12 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
         {
             ((IPluginRunnerSink)this).StateChanged(package.Id, PluginState.AwaitingConsent,
                 $"needs permission: {string.Join(", ", status.Pending)}");
+            return;
+        }
+        if (package.HasNoCode)
+        {
+            // A theme or layout pack: everything is in plugin.json. An engine, thread and timers would run nothing.
+            ((IPluginRunnerSink)this).StateChanged(package.Id, PluginState.Running, null);
             return;
         }
         var runner = new PluginRunner(
@@ -525,6 +551,8 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
     }
 
     void IPluginRunnerSink.Alert(AlertSnapshot alert) => AlertRaised?.Invoke(alert);
+
+    void IPluginRunnerSink.Satellite(SatelliteSnapshot snapshot) => SatelliteUpdated?.Invoke(snapshot);
 
     void IPluginRunnerSink.StateChanged(string pluginId, PluginState state, string? reason)
     {

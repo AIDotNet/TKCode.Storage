@@ -9,6 +9,8 @@ const time = (s) => {
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
 };
 
+const cut = (s, n) => ([...String(s)].length > n ? `${[...String(s)].slice(0, n).join('')}…` : String(s));
+
 export async function activate() {
   let now = null;          // { app, title, artist, album, playing, position, duration }
   let at = Date.now();     // when `now.position` was true
@@ -61,8 +63,11 @@ export async function activate() {
     const playing = !!now?.playing;
     if (playing) {
       island.chip('playing').update(ui.row({ gap: 'xs', align: 'center' }, [
-        ui.icon('AudioLines', { size: 14, tone: 'accent' }),
-        ui.text(now.title ?? now.app, { size: 'sm', weight: 'semibold' }),
+        // No `source`: the bars move by themselves. Following the real loudness means tapping the player's audio (macOS's
+        // "System Audio Recording" permission), which this plugin does not do.
+        ui.spectrum({ bars: 4, active: true }),
+        // Short enough for the chip: a longer title is cut with "…" instead of being clipped mid-character.
+        ui.text(cut(now.title ?? now.app, 5), { size: 'sm', weight: 'semibold' }),
       ]));
       act ??= island.activity.create('playing', { title: '正在播放', priority: 'active', page: 'now' });
       act.update({});

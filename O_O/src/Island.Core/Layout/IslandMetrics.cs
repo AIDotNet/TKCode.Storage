@@ -19,6 +19,12 @@ public sealed record IslandMetrics
     /// <summary>Width of each content "wing" beside the notch in the compact state.</summary>
     public double WingWidth { get; init; } = 86;
 
+    /// <summary>
+    /// Width of the right wing when it differs from <see cref="WingWidth"/> (the left one): the UI sizes each wing to its own
+    /// chips so an empty right side does not cover the menu bar's status icons. Null: both wings are <see cref="WingWidth"/>.
+    /// </summary>
+    public double? RightWingWidth { get; init; }
+
     /// <summary>How far the idle capsule reaches past each side of a notch, so it reads as a pill rather than the notch.</summary>
     public double CapsuleNotchMargin { get; init; } = 18;
 

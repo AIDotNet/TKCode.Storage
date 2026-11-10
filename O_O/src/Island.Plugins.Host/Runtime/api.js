@@ -42,6 +42,9 @@ export const ui = Object.freeze({
   /** A local picture (png, jpg, gif, webp, bmp), cropped to fill. props: path (absolute), width, height (px). Shown to the
    *  user only; the plugin never gets its pixels. Shows nothing when the file is missing. */
   image: (props) => node('image', props),
+  /** The real icon of an application (the source of a notification), drawn by the host: the plugin never gets its
+   *  pixels. appId: e.g. 'com.tencent.xinWeChat'. props: size (px, 8-64, default 20). Falls back to a letter badge. */
+  appIcon: (appId, props) => node('appIcon', { ...props, appId: String(appId) }),
   /** Takes the remaining space in a row or stack. */
   spacer: () => node('spacer'),
   /** props: size ('xs'|'sm'|'base'|'lg'|'xl'|'2xl'|'3xl'|'4xl'), weight ('regular'|'medium'|'semibold'|'bold'),
@@ -80,12 +83,12 @@ export const ui = Object.freeze({
    *  Pagination, Skeleton, Slider, Switch). props are the control's properties in camelCase (isOpen, selectedDate 'YYYY-MM-DD',
    *  tone 'Success'…); onChange(value) reports the user's change for controls that have one. Unknown names or props are ignored. */
   arc: (type, props) => node('arc', { ...props, type: String(type) }),
-  /** A page indicator. props: count, index */
-  dots: (props) => node('dots', props),
-  /** props: tone ('neutral'|'success'|'info'|'warning'|'danger'), small */
   /** Bars that dance to the music. props: active (bool, true), bars (1-16, 5), source (a process name, e.g. 'NeteaseMusic':
    *  its real loudness is used where the system allows it, otherwise the bars move by themselves), tone ('accent'). */
   spectrum: (props) => node('spectrum', props),
+  /** A page indicator. props: count, index */
+  dots: (props) => node('dots', props),
+  /** props: tone ('neutral'|'success'|'info'|'warning'|'danger'), small */
   badge: (text, props) => node('badge', { ...props, text: String(text) }),
   /** The island's mascot (Arc AiMascot). props: status ('idle'|'listening'|'thinking'|'writing'|'done'|'error'),
    *  size (24-160 px; below 56 a compact drawing is used) */
@@ -122,7 +125,8 @@ const serialize = (activityId, view, page) => {
   };
   if (page) shaped.page = page;
   if (view?.status) shaped.status = walk(view.status);
-  const ids = internal.registerHandlers(activityId, fns);
+  // Every ref is still { $h: 0 } here: the JSON is the view's shape without its handler ids.
+  const ids = internal.registerHandlers(activityId, fns, JSON.stringify(shaped));
   refs.forEach((ref, i) => { ref.$h = ids[i]; });
   return JSON.stringify(shaped);
 };
@@ -191,7 +195,7 @@ class Chip {
 
   constructor(id, instance) { this.#id = id; this.#instance = instance; }
 
-  /** Shows `view` (a small node: an icon and a short text, at most 64 pt wide) on the collapsed island.
+  /** Shows `view` (a small node: an icon and a short text, at most 96 pt wide) on the collapsed island.
    *  options: { title } names this instance in the console (e.g. the account). */
   update(view, options) {
     host.activity('chip', this.#id, this.#instance, options?.title == null ? '' : String(options.title),
@@ -205,7 +209,46 @@ class Chip {
   }
 }
 
+// ---- satellites ------------------------------------------------------------------------------------------------
+class Satellite {
+  #id;
+  #keys = new Set();
+
+  constructor(id) { this.#id = id; }
+
+  /** Shows a short notice in the small island beside the main one (docs/design/08). plugin.json must declare the satellite
+   *  under contributes.satellites. `view` is a node (use ui.appIcon for the source app's icon); keep it to one or two lines.
+   *  options: { key (a notice with the same key is replaced in place and its timer restarts; default 'default'),
+   *  seconds (1-10, default 4; paused while the pointer is over it; 0: stays until you hide() it, for a running count), badge (a count on its corner), onClick }.
+   *  Promise<boolean>: whether it was accepted (not when over the rate limit of 30 a minute). */
+  show(view, options) {
+    const key = options?.key == null ? 'default' : String(options.key);
+    const body = typeof options?.onClick === 'function' ? ui.item({ onClick: options.onClick }, [view]) : view;
+    const opts = JSON.stringify({ seconds: options?.seconds, badge: options?.badge });
+    this.#keys.add(key);
+    return Promise.resolve(host.activity('satellite', this.#id, key, opts,
+      serialize(`satellite:${this.#id}#${key}`, { expanded: body })) === true);
+  }
+
+  /** Takes the notice `key` away; without a key, all of this satellite's notices. */
+  hide(key) {
+    const k = key == null ? '' : String(key);
+    for (const x of k === '' ? [...this.#keys] : [k]) {
+      internal.dropHandlers(`satellite:${this.#id}#${x}`);
+      this.#keys.delete(x);
+    }
+    host.activity('satelliteEnd', this.#id, k, '', '');
+  }
+}
+const satellites = new Map();
+
 export const island = Object.freeze({
+  /** The satellite `id` declared in plugin.json (contributes.satellites). */
+  satellite: (id) => {
+    id = String(id);
+    if (!satellites.has(id)) satellites.set(id, new Satellite(id));
+    return satellites.get(id);
+  },
   /** The chip `id` declared in plugin.json (contributes.chips); `instance` only for chips declared multiple. */
   chip: (id, instance) => new Chip(String(id), instance == null ? '' : String(instance)),
   /** Takes the collapsed island's place for a few seconds. view: { leading, trailing }; options: { seconds } (1-10, 3). */
@@ -368,6 +411,15 @@ export const media = has('media')
     })
   : undefined;
 
+// ---- system calendar (calendar.system) ---------------------------------------------------------------------------
+// The calendars of the operating system (the macOS Calendar app: iCloud, Exchange, Google… accounts added there).
+export const systemCalendar = has('calendar.system') ? Object.freeze({
+  /** options: { from, to } (ISO instants). Promise<{ error? } | { calendars: [{ id, name, account?, color? }],
+   *  events: [{ id, calendarId, title, start, end, allDay, location?, url?, notes? }] }>. The first call makes the system
+   *  ask the user for access; error is 'denied', 'restricted', 'unavailable', 'timeout' or 'failed'. */
+  read: (options) => call('calendar.system.read', { from: String(options?.from ?? ''), to: String(options?.to ?? '') }),
+}) : undefined;
+
 // ---- oauth (oauth:<provider>; docs 03 §7) --------------------------------------------------------------------
 // Sign-in with a provider the host knows (google, feishu, dingtalk) in the system browser. The host keeps the tokens
 // (keychain) and refreshes them; the plugin gets an account and passes it as `auth` to http.fetch — the host adds the
@@ -388,6 +440,32 @@ export const oauth = permissions.some((p) => p.startsWith('oauth:')) ? Object.fr
   setLabel: (account, label) => call('oauth.setLabel', { handle: account?.handle ?? String(account), label: String(label) }),
   /** Forgets the account and deletes its tokens. */
   signOut: (account) => call('oauth.signOut', { handle: account?.handle ?? String(account) }),
+}) : undefined;
+
+// ---- notifications.listen (docs/design/08-notifications-and-satellites.md) ------------------------------------------
+// Other apps' notifications: only the apps this plugin holds notifications.listen:<app id> for, and only as much as the user
+// allows in the console ("消息显示"): body is null unless they chose full content, title/subtitle/threadId too when hidden.
+// A notification is { id, app: { id, name }, title, subtitle, body, threadId, time (ms), source: 'notification' }.
+export const notifications = permissions.some((p) => p.startsWith('notifications.listen:')) ? Object.freeze({
+  /** Calls fn(notification) for each new notification of the granted apps (options.apps narrows it); returns a function
+   *  that stops. Notifications from before the plugin started are not replayed. */
+  onReceived: (fn, options) => {
+    const apps = Array.isArray(options?.apps) ? options.apps.map(String) : null;
+    return internal.onNotification((n) => { if (!apps || apps.includes(n.app.id)) fn(n); });
+  },
+  /** Calls fn(appId, count | null) when an app's unread count (on its Dock or tray icon) changes. */
+  onBadge: (fn) => internal.onBadge(fn),
+  /** Promise<[notification]>: the most recent ones (memory only, at most 50), oldest first. options: { app, limit }. */
+  list: (options) => call('notifications.list', { app: options?.app == null ? undefined : String(options.app), limit: options?.limit }),
+  /** Promise<number | null>: the unread count of an app, null when it has none or the system cannot tell. */
+  unread: (appId) => call('notifications.unread', { app: String(appId) }),
+  /** Brings the app a notification came from to the front. Promise<boolean>. */
+  activate: (notification) => call('notifications.activate', { id: String(notification?.id ?? notification) }),
+  /** Brings a granted app to the front by its id (e.g. for an unread count read from its Dock badge). Promise<boolean>. */
+  activateApp: (appId) => call('notifications.activate', { app: String(appId) }),
+  /** Promise<{ granted, access: 'Granted'|'NeedsPermission'|'Unsupported', hint?, content, badge }>: whether the system lets
+   *  O_O read notifications, and how the user can allow it. */
+  status: () => call('notifications.status', {}),
 }) : undefined;
 
 // ---- notifications (notifications) -------------------------------------------------------------------------

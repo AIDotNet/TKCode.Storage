@@ -5,5 +5,8 @@
     <!-- Hardened runtime (required for notarization). Apple events: the music plugin queries Music / Spotify. -->
     <key>com.apple.security.automation.apple-events</key>
     <true/>
+    <!-- EventKit: the system-calendar plugin reads the Calendar app's events. -->
+    <key>com.apple.security.personal-information.calendars</key>
+    <true/>
 </dict>
 </plist>

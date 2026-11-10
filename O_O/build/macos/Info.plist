@@ -31,8 +31,14 @@
     <true/>
     <key>NSHumanReadableCopyright</key>
     <string>© AIDotNet</string>
-    <!-- The music plugin asks Music / Spotify what is playing (Automation permission prompt). -->
+    <!-- Automation prompts: the music plugin asks Music / Spotify what is playing; the instant-message plugin reads the unread
+         badges on the Dock icons of WeChat and QQ through System Events (also needs Accessibility, granted in Settings). -->
     <key>NSAppleEventsUsageDescription</key>
-    <string>O_O 需要读取 Music 或 Spotify 正在播放的歌曲，显示在灵动岛上。</string>
+    <string>O_O 需要读取 Music 或 Spotify 正在播放的歌曲，以及微信、QQ 在 Dock 上的未读数，显示在灵动岛上。</string>
+    <!-- The system-calendar plugin reads the Calendar app's events (read only). -->
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>O_O 需要读取“日历”中的日程，显示在灵动岛上。只读，不会修改日程。</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>O_O 需要读取“日历”中的日程，显示在灵动岛上。只读，不会修改日程。</string>
 </dict>
 </plist>

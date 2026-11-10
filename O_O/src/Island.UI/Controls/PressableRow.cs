@@ -22,6 +22,7 @@ public sealed class PressableRow : Border
 
     public PressableRow()
     {
+        AddHandler(PointerPressedEvent, (_, e) => System.Console.Error.WriteLine("[zz] row pressed"), Avalonia.Interactivity.RoutingStrategies.Tunnel, true); // TEMP
         PointerPressed += (_, e) =>
         {
             if (DragFiles is { Count: > 0 } && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
@@ -61,6 +62,8 @@ public sealed class PressableRow : Border
         PointerExited += (_, _) => Tint(false);
         PointerReleased += (_, e) =>
         {
+            System.Console.Error.WriteLine($"[zz] row released btn={e.InitialPressMouseButton} drag={_dragging}"); // TEMP
+
             _press = null;
             if (e.InitialPressMouseButton == MouseButton.Left && !_dragging)
             {

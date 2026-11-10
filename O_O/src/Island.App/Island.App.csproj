@@ -8,7 +8,14 @@
         <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
         <!-- The .NET 11 SDK's optimized AOT publish drops Avalonia's compiled XAML ("No precompiled XAML found" at start). -->
         <UseOptimizedPublish>false</UseOptimizedPublish>
+        <!-- A background accessory: a small heap matters more than GC pauses. No background GC thread, and the GC
+             compacts more eagerly instead of growing the heap (ConserveMemory, 0-9). -->
+        <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     </PropertyGroup>
+
+    <ItemGroup>
+        <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+    </ItemGroup>
 
     <ItemGroup>
         <!-- First-party plugins ship next to the executable, in plugins/<id>/. -->

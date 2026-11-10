@@ -22,6 +22,7 @@ internal interface IPluginRunnerSink
     void PageEnded(string pluginId, string pageId);
     void ChipUpdated(ChipSnapshot snapshot);
     void Alert(AlertSnapshot alert);
+    void Satellite(SatelliteSnapshot snapshot);
     void StateChanged(string pluginId, PluginState state, string? reason);
     void Log(PluginLogEntry entry);
 }
@@ -38,7 +39,7 @@ internal sealed partial class PluginRunner : IDisposable
     private readonly IPluginRunnerSink _sink;
     private readonly PluginRunnerOptions _options;
     private readonly PluginServices _services;
-    private readonly Services.SystemStats Stats = new();
+    private static Services.SystemStats Stats => Services.SystemStats.Shared;
     private readonly PluginPermissions _permissions;
     private readonly PluginSettingsStore _settings;
     private readonly PluginStorage _storage;
@@ -69,6 +70,9 @@ internal sealed partial class PluginRunner : IDisposable
     private readonly HashSet<string> _activities = [];
     private readonly HashSet<string> _pages = [];
     private readonly HashSet<(string Chip, string? Instance)> _chips = [];
+    // The last arguments each live activity, page and chip was shown with. Plugins often re-render on a timer with
+    // nothing changed; an identical update is dropped before parsing and never reaches the UI.
+    private readonly Dictionary<string, string> _lastViews = new(StringComparer.Ordinal);
     private int _generation;
     private int _faults;
     private long _sequence;
@@ -97,6 +101,7 @@ internal sealed partial class PluginRunner : IDisposable
         _sink = sink;
         _options = options;
         _services = services;
+        SubscribeNotifications();
         // Storage belongs to the plugin, not to one engine: it survives restarts.
         _storage = new PluginStorage(Path.Combine(services.DataDirectory, package.Id, "storage.json"), services.StorageQuotaBytes);
         // The user's grants (not just the manifest) decide the hosts; network:@setting sites come from what the user
@@ -123,13 +128,14 @@ internal sealed partial class PluginRunner : IDisposable
     /// <summary>A UI event for handler <paramref name="handlerId"/>; <paramref name="payloadJson"/> may be null.</summary>
     public void Dispatch(int handlerId, string? payloadJson)
     {
-        // A UI event is a user gesture: for a moment the plugin may do what needs one (open a link).
-        Volatile.Write(ref _lastGestureTicks, Environment.TickCount64);
         var generation = Volatile.Read(ref _generation);
         Post(() =>
         {
             if (generation == _generation)
             {
+                // A UI event is a user gesture: for a moment the plugin may do what needs one (open a link). The moment
+                // counts from when the plugin gets the event, not when it was queued, so a busy plugin keeps it.
+                Volatile.Write(ref _lastGestureTicks, Environment.TickCount64);
                 Call("event", handlerId, payloadJson);
             }
         });
@@ -322,6 +328,8 @@ internal sealed partial class PluginRunner : IDisposable
             _sink.ChipUpdated(new ChipSnapshot(Id, chip, instance, "", null, ++_sequence));
         }
         _chips.Clear();
+        _lastViews.Clear();
+        TearDownSatellites();
         _dispatch = null;
         _engine?.Dispose();
         _engine = null;
@@ -338,6 +346,7 @@ internal sealed partial class PluginRunner : IDisposable
         {
             media.Changed -= OnMediaChanged;
         }
+        UnsubscribeNotifications();
         DisposeEngine();
         _flush.Dispose();
         FlushStorage();
@@ -494,6 +503,10 @@ internal sealed partial class PluginRunner : IDisposable
                 }
                 : throw new UnreachableException(),
             "media.nowPlaying" or "media.command" => MediaCall(op, payload, ref c),
+            "notifications.list" or "notifications.unread" or "notifications.activate" or "notifications.status" => NotificationsCall(op, payload, ref c),
+            "calendar.system.read" => _permissions.Has("calendar.system")
+                ? _services.SystemCalendar is { } cal ? SystemCalendarRead(cal, payload) : throw c.TypeError("The system calendar is not available here.")
+                : throw c.TypeError("This plugin has no calendar.system permission."),
             "system.stats" => _permissions.Has("system.info")
                 ? ct => Task.FromResult(Stats.Sample())
                 : throw c.TypeError("This plugin has no system.info permission."),
@@ -969,6 +982,10 @@ internal sealed partial class PluginRunner : IDisposable
             {
                 return Chip(ref c, op == "chipEnd", activityId);
             }
+            if (op is "satellite" or "satelliteEnd")
+            {
+                return Satellite(ref c, op == "satelliteEnd", activityId);
+            }
             if (op == "alert")
             {
                 ActivityView alert;
@@ -992,6 +1009,12 @@ internal sealed partial class PluginRunner : IDisposable
                 {
                     throw c.TypeError($"Page '{activityId}' is not declared in plugin.json (contributes.pages).");
                 }
+                var pageKey = "page\u0001" + activityId;
+                var pageArgs = ViewArgs(ref c);
+                if (_pages.Contains(activityId) && Unchanged(pageKey, pageArgs))
+                {
+                    return JsValue.Undefined;
+                }
                 ActivityView pageView;
                 try
                 {
@@ -1002,11 +1025,13 @@ internal sealed partial class PluginRunner : IDisposable
                     throw c.TypeError($"Invalid view: {e.Message}");
                 }
                 _pages.Add(activityId);
+                _lastViews[pageKey] = pageArgs;
                 _sink.PageUpdated(new PageSnapshot(Id, activityId, declared.Title ?? activityId, pageView.Expanded, ++_sequence, pageView.Status));
                 return JsValue.Undefined;
             }
             if (op == "end")
             {
+                _lastViews.Remove("activity\u0001" + activityId);
                 if (_activities.Remove(activityId))
                 {
                     _sink.ActivityEnded(Id, activityId);
@@ -1016,6 +1041,12 @@ internal sealed partial class PluginRunner : IDisposable
             if (!_activities.Contains(activityId) && _activities.Count >= _options.MaxActivities)
             {
                 throw c.TypeError($"A plugin may show at most {_options.MaxActivities} activities at once.");
+            }
+            var activityKey = "activity\u0001" + activityId;
+            var activityArgs = ViewArgs(ref c);
+            if (_activities.Contains(activityId) && Unchanged(activityKey, activityArgs))
+            {
+                return JsValue.Undefined;
             }
             ActivityView view;
             try
@@ -1034,6 +1065,7 @@ internal sealed partial class PluginRunner : IDisposable
                 _ => ActivityPriority.Passive,
             };
             _activities.Add(activityId);
+            _lastViews[activityKey] = activityArgs;
             _sink.ActivityUpdated(new ActivitySnapshot(Id, activityId, Arg(ref c, 2), priority, view, ++_sequence));
             return JsValue.Undefined;
         }, 5);
@@ -1061,8 +1093,10 @@ internal sealed partial class PluginRunner : IDisposable
             throw c.TypeError("A chip instance id is at most 64 characters.");
         }
         var key = (chipId, instance);
+        var chipKey = "chip\u0001" + chipId + "\u0001" + instance;
         if (end)
         {
+            _lastViews.Remove(chipKey);
             if (_chips.Remove(key))
             {
                 _sink.ChipUpdated(new ChipSnapshot(Id, chipId, instance, "", null, ++_sequence));
@@ -1072,6 +1106,11 @@ internal sealed partial class PluginRunner : IDisposable
         if (!_chips.Contains(key) && _chips.Count >= MaxChips)
         {
             throw c.TypeError($"A plugin may show at most {MaxChips} chips at once.");
+        }
+        var chipArgs = ViewArgs(ref c);
+        if (_chips.Contains(key) && Unchanged(chipKey, chipArgs))
+        {
+            return JsValue.Undefined;
         }
         VNode? view;
         try
@@ -1083,12 +1122,20 @@ internal sealed partial class PluginRunner : IDisposable
             throw c.TypeError($"Invalid view: {e.Message}");
         }
         _chips.Add(key);
+        _lastViews[chipKey] = chipArgs;
         var title = Arg(ref c, 3) is { Length: > 0 } t ? t : declared.Title ?? chipId;
         _sink.ChipUpdated(new ChipSnapshot(Id, chipId, instance, title, view, ++_sequence));
         return JsValue.Undefined;
     }
 
     private const int MaxChips = 32;
+
+    /// <summary>Everything an activity, page or chip update shows: title, priority and view JSON (arguments 2-4).</summary>
+    private static string ViewArgs(ref JsCallContext c) =>
+        string.Concat(Arg(ref c, 2), "\u0001", Arg(ref c, 3), "\u0001", Arg(ref c, 4));
+
+    private bool Unchanged(string key, string args) =>
+        _lastViews.TryGetValue(key, out var last) && string.Equals(last, args, StringComparison.Ordinal);
 
     /// <summary>A string argument; missing or non-string arguments read as empty.</summary>
     private static string Arg(ref JsCallContext c, int index) =>

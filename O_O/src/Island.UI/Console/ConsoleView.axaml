@@ -59,6 +59,11 @@
                 </arc:SidebarItem>
             </arc:SidebarSection>
             <arc:SidebarSection>
+                <arc:SidebarItem Key="system" Label="系统">
+                    <arc:SidebarItem.Icon>
+                        <lucide:LucideIcon Kind="Settings" Size="16" />
+                    </arc:SidebarItem.Icon>
+                </arc:SidebarItem>
                 <arc:SidebarItem Key="about" Label="关于">
                     <arc:SidebarItem.Icon>
                         <lucide:LucideIcon Kind="Info" Size="16" />

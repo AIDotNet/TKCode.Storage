@@ -55,7 +55,7 @@
   // handlers of views that are gone do not leak.
   const handlers = new Map();
   let nextHandler = 1;
-  const handlerSets = new Map(); // activity id → Set of handler ids
+  const handlerSets = new Map(); // activity id → { ids (in view order), shape (the view without them) }
 
   // Asynchronous capability calls: the host settles them later through __island_dispatch('settle', id, result).
   const pending = new Map();
@@ -77,6 +77,8 @@
   const clipboardListeners = new Set();
   const dropListeners = new Set();
   const mediaListeners = new Set();
+  const notificationListeners = new Set();
+  const badgeListeners = new Set();
 
   const internal = Object.freeze({
     onProvidersChanged(fn) {
@@ -90,6 +92,14 @@
       mediaListeners.add(fn);
       return () => mediaListeners.delete(fn);
     },
+    onNotification(fn) {
+      notificationListeners.add(fn);
+      return () => notificationListeners.delete(fn);
+    },
+    onBadge(fn) {
+      badgeListeners.add(fn);
+      return () => badgeListeners.delete(fn);
+    },
     onDrop(fn) {
       dropListeners.add(fn);
       return () => dropListeners.delete(fn);
@@ -102,22 +112,28 @@
       settingsListeners.add(fn);
       return () => settingsListeners.delete(fn);
     },
-    registerHandlers(activityId, fns) {
+    // `shape` is the view's JSON with every handler left out. A re-render that looks exactly like the last one keeps
+    // its ids (now running the new functions): the view is unchanged, so an id still means the same visible control,
+    // and the JSON comes out identical, which the host then skips. Any other render gets fresh ids, so a click on
+    // a view that has since changed does nothing.
+    registerHandlers(activityId, fns, shape) {
       const old = handlerSets.get(activityId);
-      if (old) for (const id of old) handlers.delete(id);
-      const ids = new Set();
-      const assigned = fns.map((fn) => {
+      if (old && shape !== undefined && old.shape === shape && old.ids.length === fns.length) {
+        old.ids.forEach((id, i) => handlers.set(id, fns[i]));
+        return old.ids;
+      }
+      if (old) for (const id of old.ids) handlers.delete(id);
+      const ids = fns.map((fn) => {
         const id = nextHandler++;
         handlers.set(id, fn);
-        ids.add(id);
         return id;
       });
-      handlerSets.set(activityId, ids);
-      return assigned;
+      handlerSets.set(activityId, { ids, shape });
+      return ids;
     },
     dropHandlers(activityId) {
       const old = handlerSets.get(activityId);
-      if (old) for (const id of old) handlers.delete(id);
+      if (old) for (const id of old.ids) handlers.delete(id);
       handlerSets.delete(activityId);
     },
   });
@@ -151,6 +167,12 @@
     } else if (kind === 'media') {
       const now = JSON.parse(payload);
       for (const fn of [...mediaListeners]) fn(now);
+    } else if (kind === 'notify') {
+      const n = JSON.parse(payload);
+      for (const fn of [...notificationListeners]) fn(n);
+    } else if (kind === 'badge') {
+      const b = JSON.parse(payload);
+      for (const fn of [...badgeListeners]) fn(b.app, b.count);
     } else if (kind === 'drop') {
       const paths = JSON.parse(payload);
       for (const fn of [...dropListeners]) fn(paths);

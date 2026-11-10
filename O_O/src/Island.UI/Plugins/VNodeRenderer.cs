@@ -24,6 +24,13 @@ namespace Island.UI.Plugins;
 /// </summary>
 public sealed class VNodeRenderer(Action<int, string?> dispatch)
 {
+    /// <summary>Gives the PNG of an app's icon for <c>appIcon</c> nodes (the app sets it to <c>host.AppIcon</c>).</summary>
+    public static Func<string, byte[]?>? AppIconResolver
+    {
+        get => AppIconView.AppIconResolver;
+        set => AppIconView.AppIconResolver = value;
+    }
+
     // The node each control was last rendered from. Handler ids change on every render, so events read them from here
     // at the moment they fire.
     private readonly ConditionalWeakTable<Control, VNode> _nodes = new();
@@ -72,15 +79,16 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
         "progress" => new ArcProgress(),
         // Any Arc control from the registry (ui.arc): created by name, only listed properties settable.
         "arc" => CreateArc(node),
+        // Bars that dance to the music: real levels of the named process where the platform gives them, else made-up motion.
+        "spectrum" => new Island.UI.Controls.SpectrumBars(),
         "badge" => new ArcBadge(),
         "mascot" => new MascotHost(),
         "gauge" => new Gauge(),
         "counter" => new AnimatedCounter(),
         "dots" => new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 },
+        "appIcon" => new AppIconView(),
         "logo" => new Avalonia.Controls.Shapes.Path { Stretch = Stretch.Uniform },
         // Arc's roll swap: when the child changes identity the old content leaves and the new one rolls in.
-        // Bars that dance to the music: real levels of the named process where the platform gives them, else made-up motion.
-        "spectrum" => new Island.UI.Controls.SpectrumBars(),
         "swap" => new ArcContentSwap
         {
             Mode = ContentSwapMode.Roll,
@@ -121,6 +129,7 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
 
     private void Fire(Control control, string handler, string? payloadJson)
     {
+        System.Console.Error.WriteLine($"[zz] fire {handler} known={_nodes.TryGetValue(control, out var zz)} handlers={(zz is null ? "-" : string.Join(",", zz.Handlers.Keys))}"); // TEMP
         if (_nodes.TryGetValue(control, out var node) && node.Handlers.TryGetValue(handler, out var id))
         {
             dispatch(id, payloadJson);
@@ -226,18 +235,18 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
                         ArcRegistry.Apply(control, arc, node);
                     }
                     break;
+                case (Island.UI.Controls.SpectrumBars spectrum, "spectrum"):
+                    spectrum.Bars = (int)Math.Clamp(node.GetNumber("bars") ?? 5, 1, 16);
+                    spectrum.Source = node.GetString("source");
+                    spectrum.Active = node.GetBool("active") ?? true;
+                    ApplyTone(spectrum, Avalonia.Controls.Primitives.TemplatedControl.ForegroundProperty, node.GetString("tone") ?? "accent");
+                    break;
                 case (SegmentedControl segmented, _):
                     ApplySegmented(segmented, node);
                     break;
                 case (Island.UI.Controls.TextTabs tabs, _):
                     tabs.SetItems(Options(node));
                     tabs.Selected = node.GetString("value");
-                    break;
-                case (Island.UI.Controls.SpectrumBars spectrum, "spectrum"):
-                    spectrum.Bars = (int)Math.Clamp(node.GetNumber("bars") ?? 5, 1, 16);
-                    spectrum.Source = node.GetString("source");
-                    spectrum.Active = node.GetBool("active") ?? true;
-                    ApplyTone(spectrum, Avalonia.Controls.Primitives.TemplatedControl.ForegroundProperty, node.GetString("tone") ?? "accent");
                     break;
                 case (DropdownMenu picker, _):
                     ApplyPicker(picker, node);
@@ -253,6 +262,9 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
                     logo.Data = BrandLogos.Get(node.GetString("name"));
                     logo.Fill = Island("IslandForegroundBrush");
                     logo.Width = logo.Height = Math.Clamp(node.GetNumber("size") ?? 16, 8, 64);
+                    break;
+                case (AppIconView appIcon, _):
+                    appIcon.Update(node.GetString("appId"), node.GetNumber("size"));
                     break;
                 case (MascotHost mascot, _):
                     // The island's mascot is the O_O mascot the user chose (MascotStyle). A plugin always gets a
@@ -592,6 +604,10 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
     // Thumbnails of local pictures (file shelf): decoded off the UI thread, small, cached by path and change time.
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" };
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<Avalonia.Media.Imaging.Bitmap?>> s_thumbnails = new();
+    // Bounded: a long session over a file shelf or clipboard images would otherwise keep every thumbnail it ever showed.
+    // The oldest entries are dropped (not disposed: an Image may still show one; the GC frees it once nothing does).
+    private static readonly System.Collections.Concurrent.ConcurrentQueue<string> s_thumbnailOrder = new();
+    private const int MaxThumbnails = 48;
     private const long MaxImageBytes = 40L * 1024 * 1024;
 
     /// <summary>
@@ -633,7 +649,8 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
         }
         image.Tag = key;
         var pixels = (int)(Math.Max(width, height) * 2); // sharp on Retina
-        var task = s_thumbnails.GetOrAdd(key, _ => Task.Run(() =>
+        var added = false;
+        var task = s_thumbnails.GetOrAdd(key, _ => { added = true; return Task.Run(() =>
         {
             try
             {
@@ -644,7 +661,15 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
             {
                 return null;
             }
-        }));
+        }); });
+        if (added)
+        {
+            s_thumbnailOrder.Enqueue(key);
+            while (s_thumbnails.Count > MaxThumbnails && s_thumbnailOrder.TryDequeue(out var oldest))
+            {
+                s_thumbnails.TryRemove(oldest, out _);
+            }
+        }
         task.ContinueWith(t =>
         {
             if (Equals(image.Tag, key))

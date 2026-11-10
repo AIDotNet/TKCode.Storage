@@ -18,6 +18,7 @@ public sealed class PluginPermissions
         "clipboard.paste",
         "files.shelf",
         "system.info",
+        "calendar.system",
         "mail",
         "shell.openUrl",
         "sidecar",
@@ -31,6 +32,7 @@ public sealed class PluginPermissions
         "network",
         "oauth",
         "localAuth",
+        "notifications.listen",
     };
 
     /// <summary>Local clients whose login plugins may reuse (<c>localAuth:&lt;id&gt;</c>).</summary>
@@ -60,6 +62,8 @@ public sealed class PluginPermissions
     public const string SettingHostPrefix = "@";
 
     private readonly HashSet<string> _all;
+    private readonly HashSet<string> _listenApps = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _badgeApps = new(StringComparer.Ordinal);
     private readonly List<string> _hostSettings = [];
     private readonly HashSet<string> _hosts = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _wildcardSuffixes = [];
@@ -69,6 +73,19 @@ public sealed class PluginPermissions
         _all = all;
         foreach (var p in all)
         {
+            if (p.StartsWith(ListenPrefix, StringComparison.Ordinal))
+            {
+                var arg = p[ListenPrefix.Length..];
+                if (arg.StartsWith(BadgePrefix, StringComparison.Ordinal))
+                {
+                    _badgeApps.Add(arg[BadgePrefix.Length..]);
+                }
+                else
+                {
+                    _listenApps.Add(arg);
+                }
+                continue;
+            }
             if (!p.StartsWith("network:", StringComparison.Ordinal))
             {
                 continue;
@@ -88,6 +105,28 @@ public sealed class PluginPermissions
             }
         }
     }
+
+    /// <summary><c>notifications.listen:&lt;app&gt;</c>: sender and text of that app's notifications (docs/design/08).</summary>
+    public const string ListenPrefix = "notifications.listen:";
+
+    /// <summary><c>notifications.listen:badge:&lt;app&gt;</c>: only the unread count of that app's icon.</summary>
+    public const string BadgePrefix = "badge:";
+
+    /// <summary>Most apps one plugin may listen to.</summary>
+    public const int MaxListenApps = 8;
+
+    /// <summary>The apps whose notifications the plugin may read (the user's grants applied).</summary>
+    public IReadOnlySet<string> ListenApps => _listenApps;
+
+    /// <summary>The apps whose unread count (and nothing else) the plugin may read.</summary>
+    public IReadOnlySet<string> BadgeApps => _badgeApps;
+
+    /// <summary>Whether the plugin may read anything about <paramref name="appId"/>'s notifications or badge.</summary>
+    public bool CanSeeApp(string appId) => _listenApps.Contains(appId) || _badgeApps.Contains(appId);
+
+    /// <summary>A source application id: letters, digits and . _ - (bundle id, AppUserModelId, desktop-entry name).</summary>
+    public static bool IsValidAppId(string id) =>
+        id.Length is > 0 and <= 128 && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-' or '!');
 
     public static PluginPermissions None { get; } = new([]);
 
@@ -179,6 +218,20 @@ public sealed class PluginPermissions
                 {
                     problems.Add($"permission '{p}' needs an argument");
                     continue;
+                }
+                if (kind == "notifications.listen")
+                {
+                    var app = arg.StartsWith(BadgePrefix, StringComparison.Ordinal) ? arg[BadgePrefix.Length..] : arg;
+                    if (!IsValidAppId(app))
+                    {
+                        problems.Add($"invalid permission '{p}': use notifications.listen:<app id> or notifications.listen:badge:<app id> (no wildcards)");
+                        continue;
+                    }
+                    if (all.Count(x => x.StartsWith(ListenPrefix, StringComparison.Ordinal)) >= MaxListenApps)
+                    {
+                        problems.Add($"too many notifications.listen permissions (at most {MaxListenApps})");
+                        continue;
+                    }
                 }
             }
             all.Add(p);

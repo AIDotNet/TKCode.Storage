@@ -227,4 +227,21 @@ public class SideDockTests
         Assert.Equal(1470 - M.FloatingGap * 1.4, right, 3);
         Assert.Equal((33 + 956) / 2.0, f.Window.Y + (f.Surface.Y + f.Surface.Height / 2) * 1.4, 0);
     }
+
+    [Fact]
+    public void Unequal_wings_keep_the_notch_where_it_is_and_size_each_side_on_its_own()
+    {
+        var m = M with { WingWidth = 150, RightWingWidth = 40 };
+        var f = IslandLayout.Compute(Mac, IslandPlacement.Auto, IslandState.Compact, m);
+        var notchLeft = Mac.Notch!.X;
+        var notchRight = Mac.Notch.X + Mac.Notch.Width;
+        var left = f.Window.X + f.Surface.X;
+        var right = f.Window.X + f.Surface.X + f.Surface.Width;
+        Assert.Equal(150, notchLeft - left, 0);            // the left wing
+        Assert.Equal(40, right - notchRight, 0);           // the right wing hugs its content
+        Assert.Equal(Mac.Notch.Width + 190, f.Surface.Width, 3);
+        // Without a separate right wing both are as wide as WingWidth, centred on the notch, as before.
+        var even = IslandLayout.Compute(Mac, IslandPlacement.Auto, IslandState.Compact, M);
+        Assert.Equal(notchLeft - (even.Window.X + even.Surface.X), even.Window.X + even.Surface.X + even.Surface.Width - notchRight, 0);
+    }
 }

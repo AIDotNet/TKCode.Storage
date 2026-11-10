@@ -15,7 +15,8 @@ public sealed partial class PluginHostTests : IDisposable
     private readonly Island.Platform.InMemorySecretStore _secrets = new();
     // Tests never show real notifications: they are captured here.
     private readonly CapturingNotifier _notifier = new();
-    private PluginServices Services => new(_data, _secrets) { Notifier = _notifier };
+    private Island.Platform.ICalendarPlatform? _systemCalendar;
+    private PluginServices Services => new(_data, _secrets) { Notifier = _notifier, SystemCalendar = _systemCalendar };
 
     private sealed class CapturingNotifier : Island.Plugins.Host.Services.IPluginNotifier
     {
@@ -156,6 +157,30 @@ public sealed partial class PluginHostTests : IDisposable
         WaitForUpdate(s => Text(s.View.CompactTrailing) == "2", "second click");
         Thread.Sleep(100);
         Assert.DoesNotContain(_updates, s => Text(s.View.CompactTrailing) == "3");
+    }
+
+    [Fact]
+    public void A_render_identical_to_the_last_is_not_sent_again_and_its_handlers_still_work()
+    {
+        var host = Start("""
+            import { island, ui } from '@island/api';
+            export function activate() {
+              const act = island.activity.create('same', { title: 'Same', priority: 'active' });
+              let n = 0;
+              const render = () => act.update({
+                compact: { leading: ui.icon('Hash'), trailing: ui.text(String(n)) },
+                expanded: ui.button('Add', { onClick: () => { n++; render(); } }),
+              });
+              render();
+              render(); // nothing changed: dropped, but the button now runs this render's closure
+            }
+            """);
+
+        var first = WaitForUpdate(s => s.ActivityId == "same", "first render");
+        Thread.Sleep(100);
+        Assert.Single(_updates, s => s.ActivityId == "same");
+        host.Dispatch("test.plugin", first.View.Expanded!.Handlers["onClick"]);
+        WaitForUpdate(s => Text(s.View.CompactTrailing) == "1", "click on the deduplicated render");
     }
 
     [Fact]

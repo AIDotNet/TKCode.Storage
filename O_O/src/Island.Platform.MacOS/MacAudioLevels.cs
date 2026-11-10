@@ -381,21 +381,12 @@ public sealed unsafe partial class MacAudioLevels : IAudioLevelSource
         }
         foreach (var id in ids)
         {
-            var pid = ReadUInt(id, Fcc("ppid"));
+            // The bundle id is already in hand; only ask the kernel for the process name when it does not match.
+            // (Process.GetProcessById built a full Process, never disposed, for every audio client on every poll.)
             var bundle = ReadString(id, Fcc("pbid"));
-            string? processName = null;
-            if (pid is { } value)
-            {
-                try
-                {
-                    processName = Process.GetProcessById((int)value).ProcessName;
-                }
-                catch (Exception e) when (e is ArgumentException or InvalidOperationException)
-                {
-                    // gone already
-                }
-            }
-            if ((processName?.Contains(name, StringComparison.OrdinalIgnoreCase) ?? false) || (bundle?.Contains(name, StringComparison.OrdinalIgnoreCase) ?? false))
+            if ((bundle?.Contains(name, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (ReadUInt(id, Fcc("ppid")) is { } pid && ProcessName((int)pid) is { } processName
+                    && processName.Contains(name, StringComparison.OrdinalIgnoreCase)))
             {
                 result.Add(id);
             }
@@ -409,6 +400,17 @@ public sealed unsafe partial class MacAudioLevels : IAudioLevelSource
         uint size = sizeof(uint), value = 0;
         return AudioObjectGetPropertyData(obj, ref address, 0, 0, ref size, (nint)(&value)) == 0 ? value : null;
     }
+
+    /// <summary>The executable's name (libproc's <c>proc_name</c>), or null when the process is gone.</summary>
+    private static string? ProcessName(int pid)
+    {
+        var buffer = stackalloc byte[256];
+        var length = proc_name(pid, buffer, 256);
+        return length > 0 ? System.Text.Encoding.UTF8.GetString(buffer, length) : null;
+    }
+
+    [LibraryImport("/usr/lib/libSystem.dylib")]
+    private static partial int proc_name(int pid, byte* buffer, uint size);
 
     private static string? ReadString(uint obj, uint selector)
     {

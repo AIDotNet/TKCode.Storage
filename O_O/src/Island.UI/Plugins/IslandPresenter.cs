@@ -488,13 +488,13 @@ public sealed class IslandPresenter
             {
                 continue;
             }
-            // A chip is small (docs 07 §4): at most 64 pt, and never wrapped. Not clipped either: the trailing glyph of
+            // A chip is small (docs 07 §4): at most 96 pt (an icon and five CJK characters), and never wrapped. Not clipped either: the trailing glyph of
             // a value such as "43%" was being cut at the chip's edge.
             if (control.Parent is Panel old)
             {
                 old.Children.Remove(control);
             }
-            control.MaxWidth = 64;
+            control.MaxWidth = 96;
             control.ClipToBounds = false;
             control.VerticalAlignment = VerticalAlignment.Center;
             row.Children.Add(control);

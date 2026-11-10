@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
+using Avalonia.VisualTree;
 using Island.Platform;
 
 namespace Island.UI.Controls;
@@ -34,8 +36,15 @@ public sealed class SpectrumBars : TemplatedControl
     private bool _animating;
     private long _lastFrame;
     private double _time;
-    private readonly Random _random = new(7);
+    private float[] _hold = new float[5];   // seconds a bar stays at its peak before it may fall
+    private double _gainPeak = 0.3;         // the loudest recent level, so quiet music still fills the bars
+    private double _beat;                   // a shared pulse (made-up motion): jumps to 1 on a beat, then decays
+    private double _nextBeat;
     private long _lastTry;
+    private IslandStatePanel? _panel;        // the island state this sits in; an inactive one is faded out, not removed
+    private readonly IBrush?[] _brushes = new IBrush?[9];
+    private Color _brushColor;
+    private double _brushOpacity = -1;
 
     static SpectrumBars()
     {
@@ -43,7 +52,11 @@ public sealed class SpectrumBars : TemplatedControl
         AffectsMeasure<SpectrumBars>(BarsProperty);
         ActiveProperty.Changed.AddClassHandler<SpectrumBars>((s, _) => s.Refresh());
         SourceProperty.Changed.AddClassHandler<SpectrumBars>((s, _) => s.Refresh());
-        BarsProperty.Changed.AddClassHandler<SpectrumBars>((s, _) => s._shown = new float[Math.Clamp(s.Bars, 1, 16)]);
+        BarsProperty.Changed.AddClassHandler<SpectrumBars>((s, _) =>
+        {
+            s._shown = new float[Math.Clamp(s.Bars, 1, 16)];
+            s._hold = new float[s._shown.Length];
+        });
     }
 
     public bool Active { get => GetValue(ActiveProperty); set => SetValue(ActiveProperty, value); }
@@ -59,23 +72,53 @@ public sealed class SpectrumBars : TemplatedControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        _panel = this.FindAncestorOfType<IslandStatePanel>();
+        if (_panel is not null)
+        {
+            _panel.PropertyChanged += OnPanelChanged;
+        }
         Refresh();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
+        if (_panel is not null)
+        {
+            _panel.PropertyChanged -= OnPanelChanged;
+            _panel = null;
+        }
         StopListening();
         _animating = false;
     }
+
+    private void OnPanelChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == IslandStatePanel.IsActiveProperty)
+        {
+            Refresh();
+        }
+    }
+
+    /// <summary>
+    /// On screen: attached, visible, and in the island state that is showing. A collapsed island keeps its expanded
+    /// panel in the tree (faded out); animating there redrew the window every frame and kept the audio tap open.
+    /// </summary>
+    private bool Shown => VisualRoot is not null && IsEffectivelyVisible && (_panel?.IsActive ?? true);
 
     /// <summary>Starts or stops the listening and the frame loop to match <see cref="Active"/> and <see cref="Source"/>.</summary>
     private void Refresh()
     {
         StopListening();
         _lastTry = Environment.TickCount64;
+        if (!Shown)
+        {
+            // Come back from rest instead of resuming a frozen frame.
+            Array.Fill(_shown, (float)Rest);
+            return;
+        }
         TryListen();
-        if (VisualRoot is not null && !_animating && (Active || _shown.Any(v => v > Rest + 0.01f)))
+        if (!_animating && (Active || _shown.Any(v => v > Rest + 0.01f)))
         {
             _animating = true;
             _lastFrame = Environment.TickCount64;
@@ -85,7 +128,7 @@ public sealed class SpectrumBars : TemplatedControl
 
     private void TryListen()
     {
-        if (Active && Source is { Length: > 0 } source && VisualRoot is not null)
+        if (Active && Source is { Length: > 0 } source && Shown)
         {
             _listening = AudioLevels.Source.Listen(source, Math.Clamp(Bars, 1, 16), levels =>
             {
@@ -104,9 +147,10 @@ public sealed class SpectrumBars : TemplatedControl
 
     private void OnFrame(TimeSpan _)
     {
-        if (VisualRoot is null)
+        if (!Shown)
         {
             _animating = false;
+            StopListening();
             return;
         }
         var now = Environment.TickCount64;
@@ -124,6 +168,29 @@ public sealed class SpectrumBars : TemplatedControl
         var fresh = real is not null && now - Interlocked.Read(ref _realAtTicks) < RealTimeout.TotalMilliseconds;
         var bars = _shown.Length;
         var moving = false;
+
+        // Real levels: follow the loudest recent level (slowly forgetting it) so quiet passages still move the bars, then
+        // lift the low end a little (a square root), which is closer to how loudness is heard.
+        if (fresh)
+        {
+            var loudest = 0.0;
+            foreach (var v in real!)
+            {
+                loudest = Math.Max(loudest, v);
+            }
+            _gainPeak = Math.Max(Math.Max(loudest, 0.25), _gainPeak * Math.Exp(-0.25 * dt));
+        }
+        // Made-up motion: a shared beat that decays, travelling along the bars as a ripple, over a slow organic wave.
+        if (Active && !fresh)
+        {
+            if (_time >= _nextBeat)
+            {
+                _beat = 1;
+                _nextBeat = _time + 0.42 + 0.16 * (0.5 + 0.5 * Math.Sin(_time * 0.7));
+            }
+            _beat *= Math.Exp(-5.5 * dt);
+        }
+
         for (var i = 0; i < bars; i++)
         {
             float target;
@@ -133,19 +200,34 @@ public sealed class SpectrumBars : TemplatedControl
             }
             else if (fresh)
             {
-                // The levels come in more bands than bars only if Bars changed meanwhile; stretch to fit.
-                target = real![Math.Min(real.Length - 1, i * real.Length / bars)];
-                target = (float)(Rest + (1 - Rest) * target);
+                // Neighbouring bands blend a little so the bars read as one shape, not as independent needles.
+                float Level(int k) => real![Math.Min(real.Length - 1, Math.Clamp(k, 0, bars - 1) * real.Length / bars)];
+                var blended = 0.25 * Level(i - 1) + 0.5 * Level(i) + 0.25 * Level(i + 1);
+                var level = Math.Sqrt(Math.Clamp(blended / _gainPeak, 0, 1));
+                target = (float)(Rest + (1 - Rest) * level);
             }
             else
             {
                 var phase = i * 1.7;
-                var wave = 0.5 + 0.28 * Math.Sin(_time * (2.3 + 0.55 * i) + phase) + 0.14 * Math.Sin(_time * (5.1 + 0.4 * i) + phase * 2);
-                target = (float)Math.Clamp(Rest + (1 - Rest) * wave * (0.75 + 0.25 * _random.NextDouble()), Rest, 1);
+                var wave = 0.42 + 0.22 * Math.Sin(_time * (1.9 + 0.35 * i) + phase) + 0.12 * Math.Sin(_time * (4.3 + 0.3 * i) + phase * 2);
+                // The beat reaches the bars one after another, the middle ones highest.
+                var ripple = _beat * Math.Exp(-0.18 * i) * (0.55 + 0.45 * Math.Sin(Math.PI * (i + 0.5) / bars));
+                target = (float)Math.Clamp(Rest + (1 - Rest) * Math.Clamp(wave + 0.45 * ripple, 0, 1), Rest, 1);
             }
-            // Fast attack, slower release, frame-rate independent.
-            var rate = target > _shown[i] ? 18.0 : 7.0;
-            _shown[i] += (float)((target - _shown[i]) * (1 - Math.Exp(-rate * dt)));
+            // Snap up, hold the peak for a beat, then fall: frame-rate independent.
+            if (target > _shown[i])
+            {
+                _shown[i] += (float)((target - _shown[i]) * (1 - Math.Exp(-26.0 * dt)));
+                _hold[i] = 0.07f;
+            }
+            else if (_hold[i] > 0)
+            {
+                _hold[i] -= (float)dt;
+            }
+            else
+            {
+                _shown[i] += (float)((target - _shown[i]) * (1 - Math.Exp(-8.0 * dt)));
+            }
             moving |= Math.Abs(target - _shown[i]) > 0.004;
         }
         InvalidateVisual();
@@ -161,13 +243,32 @@ public sealed class SpectrumBars : TemplatedControl
 
     public override void Render(DrawingContext context)
     {
-        var brush = Foreground ?? Brushes.White;
+        var baseBrush = Foreground ?? Brushes.White;
         var bars = _shown.Length;
         for (var i = 0; i < bars; i++)
         {
-            var h = Math.Max(BarWidth, _shown[i] * Height_);
+            // Heights on half points (crisp edges), and quieter bars a touch dimmer so a peak stands out.
+            var h = Math.Round(Math.Max(BarWidth, _shown[i] * Height_) * 2) / 2;
             var x = i * (BarWidth + Gap);
+            var brush = baseBrush;
+            if (baseBrush is ISolidColorBrush solid)
+            {
+                brush = Dimmed(solid, Math.Clamp((_shown[i] - Rest) / (1 - Rest), 0, 1));
+            }
             context.DrawRectangle(brush, null, new RoundedRect(new Rect(x, (Height_ - h) / 2, BarWidth, h), BarWidth / 2));
         }
+    }
+
+    /// <summary>The bar colour at 60–100 % of its opacity by loudness, in nine cached steps (was a new brush per bar per frame).</summary>
+    private IBrush Dimmed(ISolidColorBrush solid, double loudness)
+    {
+        if (solid.Color != _brushColor || solid.Opacity != _brushOpacity)
+        {
+            Array.Clear(_brushes);
+            _brushColor = solid.Color;
+            _brushOpacity = solid.Opacity;
+        }
+        var step = (int)Math.Round(loudness * (_brushes.Length - 1));
+        return _brushes[step] ??= new ImmutableSolidColorBrush(solid.Color, solid.Opacity * (0.6 + 0.4 * step / (_brushes.Length - 1)));
     }
 }

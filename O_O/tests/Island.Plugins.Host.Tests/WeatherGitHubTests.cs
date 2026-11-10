@@ -77,7 +77,7 @@ public sealed partial class PluginHostTests
         Assert.Contains("周杰伦", Texts(page.View.Expanded).ToList());
         var chip = WaitFor(() => _chipViews.LastOrDefault(c => c.Key == "com.o_o.netease/wave" && c.View is not null), "bars chip");
         var bars = Assert.Single(Nodes(chip.View!), n => n.Type == "spectrum");
-        Assert.Equal("NeteaseMusic", bars.GetString("source"));
+        Assert.Null(bars.GetString("source"));              // never names a process: no audio is tapped, the bars move by themselves
         Assert.Contains(api.Requests, r => r.Contains("/api/search/get/web", StringComparison.Ordinal) && r.Contains("%E6%99%B4%E5%A4%A9", StringComparison.Ordinal));
 
         media.Play(new NowPlaying("NeteaseMusic", "晴天", "周杰伦", null, false));      // paused: the chip goes

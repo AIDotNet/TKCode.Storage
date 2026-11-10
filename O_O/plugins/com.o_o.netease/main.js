@@ -1,6 +1,6 @@
 // NetEase Cloud Music (网易云音乐). Listens to what the media capability reports; while the NetEase client plays, a chip
-// on the right of the collapsed island shows bars that dance to its real loudness (ui.spectrum with the process name;
-// the host falls back to a made-up motion where it cannot listen). The page shows the song, a scrolling lyric and the
+// on the right of the collapsed island shows bars that dance (ui.spectrum, a made-up motion: reading the real loudness would mean tapping the app's audio, which
+// lights macOS's recording indicator). The page shows the song, a scrolling lyric and the
 // charts. Songs and lyrics come from NetEase's unofficial public web endpoints (no login); every call may fail, and
 // the plugin then simply shows less. Only the song title and artist are ever sent.
 import { island, ui, media, http, settings, shell } from '@island/api';
@@ -168,7 +168,7 @@ export async function activate() {
     const total = now.duration ?? lyrics.duration;
     return ui.stack({ gap: 'sm', align: 'stretch' }, [
       ui.row({ gap: 'md', align: 'center' }, [
-        ui.spectrum({ bars: 9, source: 'NeteaseMusic', active: !!now.playing }),
+        ui.spectrum({ bars: 9, active: !!now.playing }),
         ui.stack({ gap: 'xs', grow: true }, [
           ui.text(now.title ?? '网易云音乐', { size: 'lg', weight: 'semibold', lines: 1 }),
           now.artist ? ui.text(now.artist, { tone: 'secondary', size: 'sm', lines: 1 }) : null,
@@ -225,7 +225,7 @@ export async function activate() {
       const i = p == null || lyrics.state !== 'ready' ? -1 : lineAt(lyrics.lines, p);
       const line = settings.get('chipLyric') && i >= 0 ? lyrics.lines[i].text : null;
       island.chip('wave').update(ui.row({ gap: 'xs', align: 'center' }, [
-        ui.spectrum({ bars: Math.min(9, Math.max(3, settings.get('bars') ?? 5)), source: 'NeteaseMusic', active: true }),
+        ui.spectrum({ bars: Math.min(9, Math.max(3, settings.get('bars') ?? 5)), active: true }),
         line ? ui.text(cut(line, 6), { size: 'xs', tone: 'secondary' }) : null,
       ]));
       act ??= island.activity.create('playing', { title: '网易云播放中', priority: 'passive', page: 'now' });

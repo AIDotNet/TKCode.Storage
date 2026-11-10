@@ -23,6 +23,12 @@ if (Test-Path $Zip) { Remove-Item $Zip -Force }
 Compress-Archive -Path "$Publish\*" -DestinationPath $Zip
 
 Write-Host "==> Installer"
+# Simplified Chinese is one of Inno Setup 6's unofficial translations, not installed with it (pinned: an older translation
+# works with any newer Inno Setup 6, which falls back to English for messages it lacks).
+$Chinese = Join-Path $PSScriptRoot "ChineseSimplified.isl"
+if (-not (Test-Path $Chinese)) {
+  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/is-6_4_3/Files/Languages/Unofficial/ChineseSimplified.isl" -OutFile $Chinese
+}
 $Iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
 if (-not $Iscc) { $Iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
 if (-not (Test-Path $Iscc)) { throw "Inno Setup (ISCC.exe) not found" }

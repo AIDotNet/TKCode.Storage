@@ -49,8 +49,11 @@ public partial class ConsoleView : UserControl
                 ShowPage(Nav.SelectedKey);
             }
         };
-        plugins.PluginStateChanged += (_, _, _) => Dispatcher.UIThread.Post(UpdateBadge);
-        ArcTheme.Manager.StateChanged += (_, _) => Dispatcher.UIThread.Post(ApplyGlass);
+        Action<string, PluginState, string?> stateChanged = (_, _, _) => Dispatcher.UIThread.Post(UpdateBadge);
+        EventHandler<ArcThemeChangedEventArgs> themeChanged = (_, _) => Dispatcher.UIThread.Post(ApplyGlass);
+        ConsoleParts.WhileAttached(this,
+            () => { plugins.PluginStateChanged += stateChanged; ArcTheme.Manager.StateChanged += themeChanged; },
+            () => { plugins.PluginStateChanged -= stateChanged; ArcTheme.Manager.StateChanged -= themeChanged; });
         // Token colours resolve only once the view is in a window; before that they read as transparent.
         AttachedToVisualTree += (_, _) => ApplyGlass();
         ShowPage(Nav.SelectedKey);
@@ -90,6 +93,7 @@ public partial class ConsoleView : UserControl
         }
         Page.Content = key switch
         {
+            "system" => new SystemPage(),
             "appearance" => new AppearancePage(),
             "island" => new IslandPage(
                 _appearance ?? new Island.Core.Layout.IslandAppearanceStore(Path.Combine(_dataDirectory, "..", "island.json")),
@@ -100,6 +104,10 @@ public partial class ConsoleView : UserControl
             "about" => new AboutPage(_dataDirectory),
             _ => _pluginsPage ??= new PluginsPage(_plugins),
         };
+        // A page opens at its top, whatever the previous page was scrolled to (the new content's size is known only
+        // after layout, so once now and once after it).
+        ContentPane.Offset = default;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => ContentPane.Offset = default, Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     /// <summary>

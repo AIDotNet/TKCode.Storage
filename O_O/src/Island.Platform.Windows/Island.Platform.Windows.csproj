@@ -3,6 +3,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Island.Platform.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Island.Platform.Abstractions\Island.Platform.Abstractions.csproj" />
   </ItemGroup>
 </Project>

@@ -77,7 +77,11 @@ public static class IslandLayout
         // Keep the expanded shape inside the window whatever the metrics say.
         width = Math.Min(width, metrics.WindowWidth);
         height = Math.Min(height, metrics.WindowHeight - top);
-        var surface = new RectD(centerX - width / 2 - window.X, top, width, height);
+        // Unequal wings: the notch stays where it is, so the shape's centre moves by half the difference.
+        var shift = notch is not null && state == IslandState.Compact && metrics.RightWingWidth is { } rightWing
+            ? (rightWing - metrics.WingWidth) / 2
+            : 0;
+        var surface = new RectD(centerX + shift - width / 2 - window.X, top, width, height);
 
         var attachedToTop = resolved is ResolvedPlacement.WrapNotch or ResolvedPlacement.Attached;
         // Attached to the top, the collapsed island's bottom corners are capped: a full round end curved in on its values.
@@ -224,7 +228,7 @@ public static class IslandLayout
         if (notch is not null)
         {
             // Around a notch the compact height is the notch height so the shape reads as the notch growing sideways.
-            var compactWidth = notch.Width + m.WingWidth * 2;
+            var compactWidth = notch.Width + m.WingWidth + (m.RightWingWidth ?? m.WingWidth);
             return state switch
             {
                 // The capsule is visibly a pill even at rest; wrapping, the idle shape is the notch itself.

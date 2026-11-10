@@ -256,6 +256,48 @@ public sealed partial class PluginHostTests
         Assert.DoesNotContain("webcal", Err(r.GetProperty("events")[1]));
     }
 
+    private sealed class FakeSystemCalendar(string json) : Island.Platform.ICalendarPlatform
+    {
+        public List<(DateTimeOffset From, DateTimeOffset To)> Reads { get; } = [];
+
+        public Task<string> ReadAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
+        {
+            Reads.Add((from, to));
+            return Task.FromResult(json);
+        }
+    }
+
+    [Fact]
+    public void System_calendar_provider_reads_the_native_calendar_and_adds_colours_and_meeting_links()
+    {
+        var fake = new FakeSystemCalendar("""
+            { "calendars": [{ "id": "c1", "name": "工作", "account": "iCloud", "color": "#34aadc" }],
+              "events": [
+                { "id": "e1", "calendarId": "c1", "title": "评审", "allDay": false, "start": "2030-01-01T02:00:00.000Z", "end": "2030-01-01T03:00:00.000Z",
+                  "location": "会议室", "notes": "加入 https://meet.google.com/abc-defg-hij 。" },
+                { "id": "e2", "calendarId": "c1", "title": "小雪", "allDay": true, "start": "2030-01-02", "end": "2030-01-03" } ] }
+            """);
+        _systemCalendar = fake;
+        var r = RunCalendarProvider("com.o_o.cal.system", "system", []);
+        Assert.Equal("工作（iCloud）", Ok(r.GetProperty("calendars")[0])[0].GetProperty("name").GetString());
+        var events = EventsOf(r);
+        Assert.Equal(2, events.Count);
+        Assert.Equal("https://meet.google.com/abc-defg-hij", events[0].GetProperty("meetingUrl").GetString());
+        Assert.Equal("#34aadc", events[0].GetProperty("color").GetString());
+        Assert.False(events[0].TryGetProperty("notes", out _));
+        Assert.True(events[1].GetProperty("allDay").GetBoolean());
+        Assert.NotEmpty(fake.Reads);
+        Assert.True(fake.Reads[0].To > fake.Reads[0].From);
+    }
+
+    [Fact]
+    public void System_calendar_provider_turns_a_denied_permission_into_a_readable_error()
+    {
+        _systemCalendar = new FakeSystemCalendar("""{ "error": "denied" }""");
+        var r = RunCalendarProvider("com.o_o.cal.system", "system", []);
+        Assert.Contains("日历", Err(r.GetProperty("events")[0]));
+    }
+
     /// <summary>A fake calendar provider plugin whose events are given as JS expressions relative to `now`.</summary>
     private void WriteFakeCalendarProvider(string id, string providerId, string eventsJs) =>
         WritePluginWithManifest(id,

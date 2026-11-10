@@ -11,9 +11,16 @@ namespace Island.Plugins.Host.Services;
 /// platform cannot tell are left out (null). CPU and network are rates between two samples, so the first call after
 /// start reports no rate yet.
 /// </summary>
-internal sealed class SystemStats
+internal sealed partial class SystemStats
 {
+    /// <summary>One sampler for every plugin: rates need a single baseline, and a second reader within
+    /// <see cref="Fresh"/> gets the same figures instead of another sample.</summary>
+    public static SystemStats Shared { get; } = new();
+
+    private static readonly TimeSpan Fresh = TimeSpan.FromSeconds(1);
     private readonly object _gate = new();
+    private string? _last;
+    private DateTime _lastAt = DateTime.MinValue;
     private (long Busy, long Total)? _cpu;
     private (long In, long Out, DateTime At)? _net;
 
@@ -22,6 +29,10 @@ internal sealed class SystemStats
     {
         lock (_gate)
         {
+            if (_last is not null && DateTime.UtcNow - _lastAt < Fresh)
+            {
+                return _last;
+            }
             double? cpu = null;
             long? memTotal = null, memUsed = null;
             (int Percent, bool Charging)? battery = null;
@@ -78,7 +89,8 @@ internal sealed class SystemStats
                 Num(w, "netOut", netOut);
                 w.WriteEndObject();
             }
-            return Encoding.UTF8.GetString(ms.ToArray());
+            _lastAt = DateTime.UtcNow;
+            return _last = Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
         }
     }
 
@@ -149,7 +161,11 @@ internal sealed class SystemStats
         return (rx, tx);
     }
 
-    // ---- macOS (the system's own tools; no private APIs) -------------------------------------------------------------
+    // ---- macOS (Mach and sysctl in-process; only the battery still asks pmset, at most once a minute) ----------------
+
+    private (int, bool)? _battery;
+    private DateTime _batteryAt = DateTime.MinValue;
+    private static readonly TimeSpan BatteryEvery = TimeSpan.FromMinutes(1);
 
     private static string Run(string file, string args)
     {
@@ -164,68 +180,120 @@ internal sealed class SystemStats
         return output;
     }
 
-    private double? MacCpu()
+    private unsafe double? MacCpu()
     {
-        // Sum of the per-process shares over the cores: cheap, and close to Activity Monitor's figure.
-        var sum = Run("/bin/ps", "-A -o %cpu").Split('\n').Skip(1).Select(l => double.TryParse(l.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : 0).Sum();
-        return Math.Min(100, sum / Environment.ProcessorCount);
-    }
-
-    private static (long?, long?) MacMemory()
-    {
-        var total = long.Parse(Run("/usr/sbin/sysctl", "-n hw.memsize").Trim(), CultureInfo.InvariantCulture);
-        var vm = Run("/usr/bin/vm_stat", "");
-        var page = 16384L;
-        long free = 0, inactive = 0, speculative = 0;
-        foreach (var line in vm.Split('\n'))
+        // HOST_CPU_LOAD_INFO: ticks spent in user, system, idle and nice, summed over every core.
+        var ticks = stackalloc uint[4];
+        var count = 4;
+        if (host_statistics(mach_host_self(), 3, ticks, ref count) != 0)
         {
-            if (line.Contains("page size of", StringComparison.Ordinal))
-            {
-                var digits = new string(line.SkipWhile(c => !char.IsDigit(c)).TakeWhile(char.IsDigit).ToArray());
-                if (long.TryParse(digits, out var ps)) { page = ps; }
-            }
-            var kv = line.Split(':');
-            if (kv.Length != 2) { continue; }
-            var count = long.TryParse(kv[1].Trim().TrimEnd('.'), out var c) ? c : 0;
-            switch (kv[0].Trim())
-            {
-                case "Pages free": free = count; break;
-                case "Pages inactive": inactive = count; break;
-                case "Pages speculative": speculative = count; break;
-            }
+            return null;
         }
-        return (total, total - (free + inactive + speculative) * page);
+        long user = ticks[0], system = ticks[1], idle = ticks[2], nice = ticks[3];
+        var total = user + system + idle + nice;
+        return Rate(total - idle, total);
     }
 
-    private static (int, bool)? MacBattery()
+    private static unsafe (long?, long?) MacMemory()
     {
+        long total = 0;
+        var size = (nint)sizeof(long);
+        if (sysctlbyname("hw.memsize", &total, ref size, null, 0) != 0)
+        {
+            return (null, null);
+        }
+        // HOST_VM_INFO64 (vm_statistics64): free_count at 0, inactive_count at 8, speculative_count at 92.
+        var vm = stackalloc uint[38];
+        var count = 38;
+        if (host_statistics64(mach_host_self(), 4, vm, ref count) != 0)
+        {
+            return (total, null);
+        }
+        long free = vm[0], inactive = vm[2], speculative = vm[23];
+        return (total, total - (free + inactive + speculative) * Environment.SystemPageSize);
+    }
+
+    private (int, bool)? MacBattery()
+    {
+        if (DateTime.UtcNow - _batteryAt < BatteryEvery)
+        {
+            return _battery;
+        }
+        _batteryAt = DateTime.UtcNow;
         var text = Run("/usr/bin/pmset", "-g batt");
         var i = text.IndexOf('%', StringComparison.Ordinal);
-        if (i < 0) { return null; }
+        if (i < 0) { return _battery = null; }
         var start = i;
         while (start > 0 && char.IsDigit(text[start - 1])) { start--; }
-        return int.TryParse(text.AsSpan(start, i - start), out var pct)
+        return _battery = int.TryParse(text.AsSpan(start, i - start), out var pct)
             ? (pct, text.Contains("AC Power", StringComparison.Ordinal) && !text.Contains("discharging", StringComparison.Ordinal))
             : null;
     }
 
-    private static (long, long)? MacNet()
+    private readonly Dictionary<ushort, (uint In, uint Out)> _ifCounters = [];
+    private long _netInTotal, _netOutTotal;
+
+    internal unsafe (long, long)? MacNet()
     {
-        // netstat -ib: one line per interface address; take each interface's <Link#> row (the byte counters).
-        long rx = 0, tx = 0;
-        var lines = Run("/usr/sbin/netstat", "-ib").Split('\n');
-        if (lines.Length < 2) { return null; }
-        var header = lines[0].Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
-        int ib = header.IndexOf("Ibytes"), ob = header.IndexOf("Obytes");
-        if (ib < 0 || ob < 0) { return null; }
-        foreach (var line in lines.Skip(1))
+        // sysctl { CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0 }: one RTM_IFINFO2 message (if_msghdr2) per interface.
+        // Unprivileged callers get the byte counters cut to 32 bits, so they wrap every 4 GB: keep running totals from
+        // each interface's wrap-safe change instead of summing the raw values. Loopback is left out.
+        var mib = stackalloc int[] { 4, 17, 0, 0, 6, 0 };
+        nint len = 0;
+        if (sysctl(mib, 6, null, ref len, null, 0) != 0 || len <= 0)
         {
-            var f = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (f.Length <= ob || !f[2].StartsWith("<Link#", StringComparison.Ordinal) || f[0].StartsWith("lo", StringComparison.Ordinal)) { continue; }
-            // Rows without an address column have one field fewer.
-            var shift = f.Length - header.Count;
-            if (long.TryParse(f[ib + shift], out var i) && long.TryParse(f[ob + shift], out var o)) { rx += i; tx += o; }
+            return null;
         }
-        return (rx, tx);
+        var buffer = new byte[len + 1024]; // interfaces can appear between the two calls
+        len = buffer.Length;
+        fixed (byte* p = buffer)
+        {
+            if (sysctl(mib, 6, p, ref len, null, 0) != 0)
+            {
+                return null;
+            }
+            for (nint at = 0; at + 4 <= len;)
+            {
+                var msg = p + at;
+                var msgLen = *(ushort*)msg;
+                if (msgLen == 0 || at + msgLen > len)
+                {
+                    break;
+                }
+                // Offsets from offsetof(struct if_msghdr2, …) on macOS 26: flags 8, index 12, ibytes 96, obytes 104.
+                const int RtmIfInfo2 = 0x12, IffLoopback = 0x8;
+                if (msg[3] == RtmIfInfo2 && msgLen >= 112 && (*(int*)(msg + 8) & IffLoopback) == 0)
+                {
+                    var index = *(ushort*)(msg + 12);
+                    var rx = (uint)*(ulong*)(msg + 96);
+                    var tx = (uint)*(ulong*)(msg + 104);
+                    if (_ifCounters.TryGetValue(index, out var prev))
+                    {
+                        _netInTotal += unchecked(rx - prev.In);
+                        _netOutTotal += unchecked(tx - prev.Out);
+                    }
+                    _ifCounters[index] = (rx, tx);
+                }
+                at += msgLen;
+            }
+            return (_netInTotal, _netOutTotal);
+        }
     }
+
+    private const string LibSystem = "/usr/lib/libSystem.dylib";
+
+    [LibraryImport(LibSystem)]
+    private static partial uint mach_host_self();
+
+    [LibraryImport(LibSystem)]
+    private static unsafe partial int host_statistics(uint host, int flavor, uint* info, ref int count);
+
+    [LibraryImport(LibSystem)]
+    private static unsafe partial int host_statistics64(uint host, int flavor, uint* info, ref int count);
+
+    [LibraryImport(LibSystem)]
+    private static unsafe partial int sysctl(int* name, uint length, void* oldp, ref nint oldlen, void* newp, nint newlen);
+
+    [LibraryImport(LibSystem, StringMarshalling = StringMarshalling.Utf8)]
+    private static unsafe partial int sysctlbyname(string name, void* oldp, ref nint oldlen, void* newp, nint newlen);
 }

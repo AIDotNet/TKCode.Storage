@@ -60,7 +60,7 @@ public sealed class PluginsPage : Panel
         Children.Add(_addDialog);
         _drawer.Closed += (_, _) => _drawerPlugin = null;
         Rebuild();
-        host.PluginStateChanged += (id, _, _) => Dispatcher.UIThread.Post(() =>
+        Action<string, PluginState, string?> stateChanged = (id, _, _) => Dispatcher.UIThread.Post(() =>
         {
             Rebuild();
             if (_drawerPlugin == id)
@@ -68,6 +68,7 @@ public sealed class PluginsPage : Panel
                 FillDrawer(id);
             }
         });
+        WhileAttached(this, () => host.PluginStateChanged += stateChanged, () => host.PluginStateChanged -= stateChanged);
     }
 
     /// <summary>Opens the "添加插件" dialog.</summary>
@@ -214,6 +215,18 @@ public sealed class PluginsPage : Panel
                 old.Children.Remove(_claudePanel);
             }
             body.Children.Add(_claudePanel ??= new ClaudeConnectionPanel(_host));
+        }
+
+        if (permissions.Declared.Any(p => p.StartsWith("notifications.listen", StringComparison.Ordinal)))
+        {
+            body.Children.Add(SectionLabel("通知"));
+            body.Children.Add(new NotificationsPanel(_host));
+        }
+
+        if (package.Manifest.Contributes.Satellites.Count > 0 && SatellitePanel.Preferences is { } satellitePrefs)
+        {
+            body.Children.Add(SectionLabel("消息小岛"));
+            body.Children.Add(new SatellitePanel(package, satellitePrefs));
         }
 
         var settings = _host.GetSettings(package.Id);
@@ -532,6 +545,7 @@ public sealed class PluginsPage : Panel
             "clipboard.paste" => "粘贴到当前应用",
             "files.shelf" => "使用文件暂存区",
             "system.info" => "读取电池、CPU、内存、网速等系统状态（只读）",
+            "calendar.system" => "读取系统日历（macOS 日历 App 中的日程，只读）",
             "mail" => "访问你连接的邮箱",
             "shell.openUrl" => "在浏览器中打开链接",
             "sidecar" => "运行附带的本机程序",

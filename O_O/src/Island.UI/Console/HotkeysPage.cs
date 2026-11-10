@@ -73,7 +73,8 @@ public sealed class HotkeysPage : StackPanel
             : "如果某个组合已被其他应用占用，这里会说明；换一个组合即可。"));
 
         Refresh();
-        service.StatusChanged += _ => Avalonia.Threading.Dispatcher.UIThread.Post(Refresh);
+        Action<string> statusChanged = _ => Avalonia.Threading.Dispatcher.UIThread.Post(Refresh);
+        WhileAttached(this, () => service.StatusChanged += statusChanged, () => service.StatusChanged -= statusChanged);
         DetachedFromVisualTree += (_, _) => service.Suspend(false);
     }
 

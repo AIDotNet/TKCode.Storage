@@ -24,6 +24,9 @@ public sealed class IslandController : IDisposable
     // Pointer sampling. AppKit and X11 report the pointer even while the window ignores it, which is what lets the
     // transparent parts of the window pass clicks through and still notice the pointer arriving.
     private static readonly TimeSpan SampleInterval = TimeSpan.FromMilliseconds(33);
+    // While the pointer is far from the island nothing it does matters: sample at 10 Hz until it comes near.
+    private static readonly TimeSpan FarSampleInterval = TimeSpan.FromMilliseconds(100);
+    private const double NearDistance = 160; // island points around the input region that count as near
 
     // Longer than Arc's Morph spring (0.42 s) so a collapsing shape is never clipped by the region while it shrinks.
     private static readonly TimeSpan RegionSettleDelay = TimeSpan.FromMilliseconds(700);
@@ -85,6 +88,7 @@ public sealed class IslandController : IDisposable
                 e.Handled = true;
                 return;
             }
+            System.Console.Error.WriteLine("[zz] island surface pressed"); // TEMP
             _states.Click();
         };
         view.Surface.PointerMoved += (_, e) => Drag(e);
@@ -247,7 +251,7 @@ public sealed class IslandController : IDisposable
 
     // How often to look for a full-screen window, and for the screen under the pointer (跟随鼠标).
     private static readonly TimeSpan FullScreenInterval = TimeSpan.FromSeconds(1);
-    private const int FollowMouseEverySamples = 15; // ~0.5 s at the sampling rate
+    private static readonly TimeSpan FollowMouseEvery = TimeSpan.FromSeconds(0.5); // whatever the sampling rate is
     private static readonly TimeSpan FadeDuration = TimeSpan.FromMilliseconds(200);
     private DispatcherTimer? _fullScreenTimer;
     private bool _hidden;
@@ -255,7 +259,7 @@ public sealed class IslandController : IDisposable
 
     /// <summary>How thick the island is while it is a thin line for a full-screen app (DIPs).</summary>
     private const double ThinLineThickness = 4;
-    private int _followCountdown;
+    private TimeSpan _followAt = TimeSpan.MinValue / 2;
 
     /// <summary>
     /// Hides the island (fades out and lets every click through) while another application is full screen on its
@@ -282,6 +286,10 @@ public sealed class IslandController : IDisposable
             return;
         }
         _hidden = hide;
+        if (_anchor is { } a)
+        {
+            PublishAnchor(a with { Hidden = hide });
+        }
         Log($"full screen app: {(hide ? "hiding" : "showing")} the island");
         var view = _window.View;
         view.Transitions ??=
@@ -289,6 +297,15 @@ public sealed class IslandController : IDisposable
             new Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = FadeDuration },
         ];
         view.Opacity = hide ? 0 : 1;
+        // Hidden for a full-screen app the island takes no pointer: there is nothing to sample until it comes back.
+        if (hide)
+        {
+            _sampler.Stop();
+        }
+        else if (Environment.GetEnvironmentVariable("O_O_DEMO") != "1")
+        {
+            _sampler.Start();
+        }
         if (hide)
         {
             _states.Collapse();
@@ -352,11 +369,11 @@ public sealed class IslandController : IDisposable
     /// <summary>跟随鼠标: moves the island when the pointer is on another screen (never while it is open).</summary>
     private void FollowMouse()
     {
-        if (_appearance.Display != IslandDisplay.FollowMouse || _states.State == IslandState.Expanded || --_followCountdown > 0)
+        if (_appearance.Display != IslandDisplay.FollowMouse || _states.State == IslandState.Expanded || _clock.Elapsed - _followAt < FollowMouseEvery)
         {
             return;
         }
-        _followCountdown = FollowMouseEverySamples;
+        _followAt = _clock.Elapsed;
         if (ChooseScreen() is { } screen && _screen is { } current && screen.Bounds != current.Bounds)
         {
             Relayout();
@@ -734,7 +751,9 @@ public sealed class IslandController : IDisposable
             ExpandedHeight = Math.Clamp(Math.Ceiling(contentHeight), _metrics.MinExpandedHeight,
                 dock == IslandDock.Top ? _metrics.MaxExpandedHeight : _metrics.SideMaxExpandedHeight),
             CompactWidth = Math.Clamp(Math.Ceiling(chipsLeft.Width + chipsRight.Width + CompactGap), _metrics.IdleWidth, MaxCompactWidth),
-            WingWidth = Math.Clamp(Math.Ceiling(Math.Max(chipsLeft.Width, chipsRight.Width) + WingGap), MinWingWidth, MaxWingWidth),
+            // Each wing is as wide as its own chips: an empty right wing must not cover the menu bar's status icons.
+            WingWidth = Math.Clamp(Math.Ceiling(chipsLeft.Width + WingGap), MinWingWidth, MaxWingWidth),
+            RightWingWidth = Math.Clamp(Math.Ceiling(chipsRight.Width + WingGap), MinRightWingWidth, MaxWingWidth),
             SideCompactWidth = Math.Clamp(Math.Ceiling(Math.Max(chipsLeft.Width, chipsRight.Width) + SidePadding * 2), MinSideWidth, MaxSideWidth),
             SideCompactHeight = Math.Clamp(Math.Ceiling(chipsLeft.Height + chipsRight.Height + CompactGap), _metrics.SideIdleHeight, MaxSideHeight),
         };
@@ -786,10 +805,11 @@ public sealed class IslandController : IDisposable
         {
             var columns = view.CompactGrid.ColumnDefinitions;
             var aroundNotch = compact.NotchGap > 0;
-            columns[0].Width = aroundNotch ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            columns[0].Width = aroundNotch ? new GridLength(metrics.WingWidth) : GridLength.Auto;
             columns[1].Width = aroundNotch ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
-            columns[2].Width = aroundNotch ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            columns[2].Width = aroundNotch ? new GridLength(metrics.RightWingWidth ?? metrics.WingWidth) : GridLength.Auto;
         }
+        RaiseAnchor(compact, scale, dock, state == IslandState.Expanded);
         view.CompactPanel.IsActive = state == IslandState.Compact;
         view.ExpandedPanel.IsActive = state == IslandState.Expanded;
 
@@ -805,11 +825,44 @@ public sealed class IslandController : IDisposable
         Log($"state={state} dock={dock} placement={frame.Placement} window={frame.Window} surface={frame.Surface} chips={_compactContent}");
     }
 
+    private IslandAnchor? _anchor;
+
+    /// <summary>Where the collapsed island is on the desktop (pixels), for windows that sit beside it; null before the first layout.</summary>
+    public IslandAnchor? Anchor => _anchor;
+
+    /// <summary>Raised when <see cref="Anchor"/> changes: the island moved or resized, expanded or collapsed, hid or reappeared.</summary>
+    public event Action<IslandAnchor>? AnchorChanged;
+
+    private void RaiseAnchor(IslandFrame compact, double scale, IslandDock dock, bool expanded)
+    {
+        if (_topology is null || _screen is null)
+        {
+            return;
+        }
+        PixelRect Px(RectD r) => new(
+            _screen.Bounds.X + (int)Math.Round((compact.Window.X + r.X - _topology.Bounds.X) * scale),
+            _screen.Bounds.Y + (int)Math.Round((compact.Window.Y + r.Y - _topology.Bounds.Y) * scale),
+            (int)Math.Round(r.Width * scale),
+            (int)Math.Round(r.Height * scale));
+        PublishAnchor(new IslandAnchor(Px(compact.Surface), scale, dock, _screen.Bounds, expanded, _hidden, compact.Corners));
+    }
+
+    private void PublishAnchor(IslandAnchor anchor)
+    {
+        if (anchor == _anchor)
+        {
+            return;
+        }
+        _anchor = anchor;
+        AnchorChanged?.Invoke(anchor);
+    }
+
     // Collapsed sizing: space between the two groups, and between a wing's content and the notch.
     private const double CompactGap = 20;
     private const double WingGap = 10;
     private const double MaxCompactWidth = 420;
     private const double MinWingWidth = 44;
+    private const double MinRightWingWidth = 26;
     private const double MaxWingWidth = 220;
     private const double SidePadding = 8;
     private const double MinSideWidth = 36;
@@ -929,6 +982,15 @@ public sealed class IslandController : IDisposable
         }
         FollowMouse();
         var k = _window.IslandScale;
+        var near = NearDistance * k;
+        var interval = p.X < _region.X - near || p.X > _region.X + _region.Width + near
+                       || p.Y < _region.Y - near || p.Y > _region.Y + _region.Height + near
+            ? FarSampleInterval
+            : SampleInterval;
+        if (_sampler.Interval != interval)
+        {
+            _sampler.Interval = interval;
+        }
         var onShape = _frame is { } f && HitArea(f).Contains(new PointD(p.X / k, p.Y / k));
         // The window takes the pointer anywhere on the region (which may be larger than the shape mid-animation),
         // but only the shape itself counts as hovering the island.
@@ -953,3 +1015,15 @@ public sealed class IslandController : IDisposable
         _bridge?.Dispose();
     }
 }
+
+/// <summary>
+/// Where the collapsed island sits on the desktop, in pixels, so a window can float beside it (docs/design/08 §4.3).
+/// </summary>
+/// <param name="SurfacePx">The collapsed island's shape.</param>
+/// <param name="Scale">Pixels per DIP of the island's screen.</param>
+/// <param name="ScreenBoundsPx">The island's screen.</param>
+/// <param name="Expanded">The island is open right now (anything beside it should step aside).</param>
+/// <param name="Hidden">The island is hidden for a full-screen app.</param>
+/// <param name="Corners">The collapsed island's corner radii (island units), so things beside it take its shape: square on
+/// top and rounded below when it hangs from the screen edge (the notch look), fully round when it floats (the capsule look).</param>
+public sealed record IslandAnchor(PixelRect SurfacePx, double Scale, IslandDock Dock, PixelRect ScreenBoundsPx, bool Expanded, bool Hidden = false, Island.Core.Layout.Corners? Corners = null);

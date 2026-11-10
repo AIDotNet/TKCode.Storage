@@ -12,6 +12,32 @@ public sealed record PluginPackage(
 {
     public string Id => Manifest.Id;
     public string EntryPath => Path.GetFullPath(Path.Combine(Directory, Manifest.Main));
+
+    /// <summary>
+    /// The entry is only <c>export function activate() {}</c> (comments aside) and the plugin asks for no permissions:
+    /// a declarative pack (themes, layouts) with nothing to run, so the host starts no engine for it.
+    /// </summary>
+    public bool HasNoCode => _hasNoCode ??= Manifest.Permissions.Count == 0 && IsEmptyEntry(EntryPath);
+
+    private bool? _hasNoCode;
+
+    private static bool IsEmptyEntry(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists || info.Length > 4096)
+            {
+                return false;
+            }
+            var code = System.Text.RegularExpressions.Regex.Replace(File.ReadAllText(path), @"//[^\n]*|/\*[\s\S]*?\*/|\s+", "");
+            return code is "exportfunctionactivate(){}" or "exportfunctionactivate(){};";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 }
 
 public enum PluginState
@@ -66,7 +92,7 @@ public sealed record PluginRunnerOptions
     public TimeSpan HealthyAfter { get; init; } = TimeSpan.FromMinutes(5);
 
     /// <summary>Shortest timer interval a plugin may ask for.</summary>
-    public TimeSpan MinTimerInterval { get; init; } = TimeSpan.FromMilliseconds(16);
+    public TimeSpan MinTimerInterval { get; init; } = TimeSpan.FromMilliseconds(100); // the clock plugin's stopwatch ticks at 100 ms
 
     public int MaxTimers { get; init; } = 256;
     public int MaxActivities { get; init; } = 2;
@@ -105,6 +131,19 @@ public sealed record PluginServices(string DataDirectory, Island.Platform.ISecre
 
     /// <summary>What is playing and transport commands for the media permission; null where the app offers none.</summary>
     public Services.IPluginMedia? Media { get; init; }
+
+    /// <summary>The operating system's own calendars for the calendar.system permission; null where there are none.</summary>
+    public Island.Platform.ICalendarPlatform? SystemCalendar { get; init; }
+
+    /// <summary>Reads other apps' notifications for the notifications.listen permission; null where the app offers none.</summary>
+    public Island.Platform.INotificationListener? NotificationListener { get; init; }
+
+    /// <summary>Distributes the listener's notifications to plugins; null without a listener.</summary>
+    public Services.NotificationHub? NotificationHub =>
+        NotificationListener is null ? null : field ??= new Services.NotificationHub(NotificationListener, NotificationPrefs);
+
+    /// <summary>What plugins may see of those notifications (the console edits it).</summary>
+    public Services.NotificationPreferences NotificationPrefs => field ??= new Services.NotificationPreferences(DataDirectory);
 
     /// <summary>Sign-in providers for oauth:&lt;id&gt; (tests point them at a local server).</summary>
     public IReadOnlyDictionary<string, Services.OAuthProfile> OAuthProfiles { get; init; } = Services.OAuthProfile.Defaults;

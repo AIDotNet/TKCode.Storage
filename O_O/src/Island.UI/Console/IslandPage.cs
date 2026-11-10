@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using Avalonia.Layout;
 using Avalonia.Media;
 using System.Collections.ObjectModel;
@@ -194,7 +195,8 @@ public sealed class IslandPage : StackPanel
     private Control ChipList()
     {
         var offered = new List<(ChipInfo Info, string Plugin)> { (Island.UI.Plugins.IslandPresenter.MascotChip, "O_O") };
-        foreach (var package in _plugins.Packages)
+        // Only running plugins: a stopped plugin never sends its chip, so switching it on here would show nothing.
+        foreach (var package in _plugins.Packages.Where(p => _plugins.IsEnabled(p.Id)))
         {
             foreach (var chip in package.Manifest.Contributes.Chips)
             {
@@ -222,7 +224,7 @@ public sealed class IslandPage : StackPanel
         list.ItemTemplate = new FuncDataTemplate<ChipInfo>((chip, _) => chip is null ? new Panel() : ChipRow(chip, plugins[chip.Key]));
         list.Reordered += (_, _) => _chips.Set(_chips.Current with { Order = [.. rows.Select(r => r.Key)] });
         panel.Children.Add(list);
-        panel.Children.Add(Note($"岛收起时在左右两侧显示打开的小项，每侧最多 {ChipPreferences.MaxPerSide} 个；在刘海两侧时，左、右即刘海的左翼和右翼。提醒会临时占据这里几秒。"));
+        panel.Children.Add(Note($"岛收起时在左右两侧显示打开的小项，每侧最多 {ChipPreferences.MaxPerSide} 个；这里只列出已启用插件的小项，有的小项只在有内容时出现（如有待办、正在专注）；在刘海两侧时，左、右即刘海的左翼和右翼。提醒会临时占据这里几秒。"));
         return panel;
     }
 
@@ -275,7 +277,9 @@ public sealed class IslandPage : StackPanel
     /// </summary>
     private Control PageList()
     {
+        // Only running plugins: a stopped plugin's page never appears on the island.
         var offered = _plugins.Packages
+            .Where(p => _plugins.IsEnabled(p.Id))
             .SelectMany(p => p.Manifest.Contributes.Pages.Select(page => (Package: p, Page: page)))
             .ToDictionary(
                 x => PageSnapshot.PageKey(x.Package.Id, x.Page.Id),
@@ -291,11 +295,22 @@ public sealed class IslandPage : StackPanel
         var list = new ReorderableList { Label = "页面", ItemsSource = rows };
         list.ItemTemplate = new FuncDataTemplate<PageInfo>((page, _) => page is null ? new Panel() : PageRow(page, offered[page.Key].Plugin));
         list.Reordered += (_, _) => _pages.Set(_pages.Current with { Order = [.. rows.Select(r => r.Key)] });
-        _pages.Changed += _ => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        // Bound to this list: Build() replaces it, and the old list must stop listening (and stop being kept alive).
+        Action<PagePreferences> pagesChanged = _ => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            // Re-template the rows so the home marks follow the change.
+            // Re-template the rows so the home marks follow the change. The rows are rebuilt, which would otherwise
+            // move the console's scroll position (it jumped to the bottom): keep the offset and put it back.
+            var scroll = this.FindAncestorOfType<ScrollViewer>();
+            var offset = scroll?.Offset ?? default;
             list.ItemTemplate = new FuncDataTemplate<PageInfo>((page, _) => page is null ? new Panel() : PageRow(page, offered[page.Key].Plugin));
+            if (scroll is not null)
+            {
+                scroll.Offset = offset;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => scroll.Offset = offset, Avalonia.Threading.DispatcherPriority.Loaded);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => scroll.Offset = offset, Avalonia.Threading.DispatcherPriority.Background);
+            }
         });
+        WhileAttached(list, () => _pages.Changed += pagesChanged, () => _pages.Changed -= pagesChanged);
         panel.Children.Add(list);
         panel.Children.Add(Note("拖动左侧把手调整标签顺序。点开岛时，如果有正在进行的活动就显示它的页面，否则显示首页。关闭页面不会停用插件。"));
         return panel;
@@ -304,7 +319,7 @@ public sealed class IslandPage : StackPanel
     private Control PageRow(PageInfo page, string plugin)
     {
         var prefs = _pages.Current;
-        var visible = prefs.Visible(_plugins.Packages.SelectMany(p => p.Manifest.Contributes.Pages
+        var visible = prefs.Visible(_plugins.Packages.Where(p => _plugins.IsEnabled(p.Id)).SelectMany(p => p.Manifest.Contributes.Pages
             .Select(g => new PageInfo(PageSnapshot.PageKey(p.Id, g.Id), g.Title ?? g.Id, g.Enabled ?? true))));
         var isHome = prefs.HomeOf(visible) == page.Key;
         var toggle = new ArcSwitch { IsChecked = prefs.IsEnabled(page), VerticalAlignment = VerticalAlignment.Center };

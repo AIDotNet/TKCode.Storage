@@ -16,8 +16,7 @@ namespace Island.App;
 /// </summary>
 internal static class ShellIntegration
 {
-    // The tray icon is drawn from the mascot at runtime, like the app icon (Tools/IconRenderer.cs), so it always
-    // matches the island; at 2x for sharp menu bars.
+    // The tray icon is the app logo (AppLogo.cs), like the app icon (Tools/IconRenderer.cs); at 2x for sharp menu bars.
     private const double IconSize = 22;
     private const int IconScale = 2;
 
@@ -51,18 +50,6 @@ internal static class ShellIntegration
         {
             System.Diagnostics.Trace.TraceWarning($"O_O: tray icon not drawn: {e.Message}");
         }
-        // The icon follows the mascot the user picks.
-        Island.UI.MascotStyle.Changed += (_, _) => Dispatcher.UIThread.Post(() =>
-        {
-            try
-            {
-                tray.Icon = RenderIcon();
-            }
-            catch (Exception e) when (e is InvalidOperationException or NotSupportedException)
-            {
-                System.Diagnostics.Trace.TraceWarning($"O_O: tray icon not drawn: {e.Message}");
-            }
-        });
         // Windows and Linux open the menu on right-click; a left click opens the console, as apps there do.
         tray.Clicked += (_, _) =>
         {
@@ -123,23 +110,12 @@ internal static class ShellIntegration
         return new NullFullScreenDetector();
     }
 
-    /// <summary>The mascot, alone on a transparent square, as a window icon.</summary>
+    /// <summary>The logo, alone on a transparent square, as a window icon.</summary>
     private static WindowIcon RenderIcon()
     {
-        // The look the user picked (About page), at its smallest drawing, scaled into the icon.
-        var mascot = Island.UI.MascotStyle.Create(24);
-        mascot.HorizontalAlignment = HorizontalAlignment.Center;
-        mascot.VerticalAlignment = VerticalAlignment.Center;
-        mascot.RenderTransform = new ScaleTransform(IconSize / 24, IconSize / 24);
-        var root = new Panel { Width = IconSize, Height = IconSize, Background = Brushes.Transparent, Children = { mascot } };
-        // Styles and templates apply once the control is in a top level; this window is never shown.
-        var host = new ArcWindow { Content = root, SizeToContent = SizeToContent.WidthAndHeight, ShowInTaskbar = false };
-        host.Measure(Size.Infinity);
-        host.Arrange(new Rect(host.DesiredSize));
-        Dispatcher.UIThread.RunJobs();
+        var root = new Panel { Width = IconSize, Height = IconSize, Background = Brushes.Transparent, Children = { AppLogo.Create(IconSize) } };
         root.Measure(new Size(IconSize, IconSize));
         root.Arrange(new Rect(0, 0, IconSize, IconSize));
-        Dispatcher.UIThread.RunJobs();
         var px = (int)IconSize * IconScale;
         using var bitmap = new RenderTargetBitmap(new PixelSize(px, px), new Vector(96 * IconScale, 96 * IconScale));
         bitmap.Render(root);
@@ -150,7 +126,6 @@ internal static class ShellIntegration
             File.WriteAllBytes(png, stream.ToArray()); // development aid: the icon as drawn
         }
         stream.Position = 0;
-        host.Content = null;
         return new WindowIcon(stream);
     }
 

@@ -3,6 +3,12 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Scripts\calendar.js" LogicalName="calendar.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Island.Platform.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Island.Platform.Abstractions\Island.Platform.Abstractions.csproj" />
   </ItemGroup>
 </Project>

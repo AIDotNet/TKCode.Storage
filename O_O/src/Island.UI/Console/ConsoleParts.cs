@@ -10,6 +10,37 @@ namespace Island.UI.Console;
 /// <summary>Small layout helpers shared by the console pages; every value comes from Arc tokens.</summary>
 internal static class ConsoleParts
 {
+    /// <summary>
+    /// Keeps a subscription to a long-lived source (the plugin host, a store, the theme manager) only while
+    /// <paramref name="owner"/> is on screen. Console pages are rebuilt on every visit and the window on every open;
+    /// a handler left on the source would keep the whole page alive for the rest of the session.
+    /// </summary>
+    public static void WhileAttached(Control owner, Action subscribe, Action unsubscribe)
+    {
+        var on = false;
+        void Attach()
+        {
+            if (!on)
+            {
+                on = true;
+                subscribe();
+            }
+        }
+        owner.AttachedToVisualTree += (_, _) => Attach();
+        owner.DetachedFromVisualTree += (_, _) =>
+        {
+            if (on)
+            {
+                on = false;
+                unsubscribe();
+            }
+        };
+        if (TopLevel.GetTopLevel(owner) is not null)
+        {
+            Attach();
+        }
+    }
+
     public static Control PageTitle(string title, string description) => new StackPanel
     {
         Spacing = 6,
