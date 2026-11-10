@@ -198,6 +198,11 @@ public sealed class PluginsPage : Panel
         }
 
         // Setup that a permission works with sits next to it.
+        if (permissions.Declared.Any(p => p.StartsWith("oauth:", StringComparison.Ordinal)))
+        {
+            body.Children.Add(SectionLabel("已登录的账户"));
+            body.Children.Add(new OAuthAccountsPanel(_host, package.Id));
+        }
         if (permissions.Declared.Contains("localAuth:claude-code"))
         {
             body.Children.Add(SectionLabel("Claude Code"));

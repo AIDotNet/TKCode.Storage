@@ -9,7 +9,9 @@
     "island": "^1.0.0"
   },
   "main": "main.js",
-  "permissions": [],
+  "permissions": [
+    "notifications"
+  ],
   "contributes": {
     "pages": [
       {
@@ -73,6 +75,12 @@
           "title": "自动开始下一段",
           "description": "专注结束后自动开始休息，休息结束后自动开始专注。",
           "default": false
+        },
+        "systemNotify": {
+          "type": "boolean",
+          "title": "系统通知",
+          "description": "除了岛上的提醒，也发送一条系统通知（看不到岛时也能知道）。",
+          "default": true
         }
       }
     }

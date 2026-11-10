@@ -2,7 +2,13 @@
 // the console (address + app password; the host reads the password itself), plus Gmail / Outlook accounts signed in
 // with Google / Microsoft (OAuth; the host uses the token over XOAUTH2 — this plugin never sees it). Shows the unread
 // count as a chip, alerts once per check about new mail, and lists recent messages; a click opens the web mailbox.
-import { island, ui, mail, oauth, settings, storage, shell } from '@island/api';
+import { island, ui, mail, oauth, settings, storage, shell, notify } from '@island/api';
+
+// A system notification as well, when the user wants one (setting "systemNotify"); never fails the caller.
+const systemNotify = (title, body) => {
+  if (notify && settings.get('systemNotify') !== false) notify.show({ title, body }).catch(() => {});
+};
+
 
 const PER_PAGE = 5;
 const MINUTE = 60 * 1000;
@@ -94,6 +100,7 @@ export function activate() {
       storage.set('seen', seen);
       if (fresh > 0) {
         island.alert({ leading: ui.icon('Mail'), trailing: ui.text(`${fresh} 封新邮件`, { size: 'sm', weight: 'semibold' }) }, { seconds: 4 });
+        systemNotify(`${fresh} 封新邮件`, '');
       }
     } catch (e) {
       notice = e.message;

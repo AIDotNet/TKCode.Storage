@@ -12,7 +12,13 @@
 //   Providers that sign in (Google, Feishu, DingTalk) also offer
 //     status() → { needsSignIn, configured, signingIn }   signIn() → { started }   (opens the system browser)
 //   and the 日程 page shows a "登录 …" row for each that has no account yet.
-import { island, ui, settings, storage, clipboard, shell } from '@island/api';
+import { island, ui, settings, storage, clipboard, shell, notify } from '@island/api';
+
+// A system notification as well, when the user wants one (setting "systemNotify"); never fails the caller.
+const systemNotify = (title, body) => {
+  if (notify && settings.get('systemNotify') !== false) notify.show({ title, body }).catch(() => {});
+};
+
 
 const IFACE = 'calendar';
 const MINUTE = 60 * 1000;
@@ -144,6 +150,7 @@ export async function activate() {
           leading: ui.icon(s.meetingUrl ? 'Video' : 'CalendarClock'),
           trailing: ui.text(`${minutes > 0 ? `${minutes} 分钟后` : '现在'} · ${cut(s.title, 10)}`, { size: 'sm', weight: 'semibold' }),
         }, { seconds: 6 });
+        systemNotify(minutes > 0 ? `${minutes} 分钟后开始` : '日程开始', s.title);
       }
       act ??= island.activity.create('soon', { title: '日程即将开始', page: 'today' });
       act.setPriority(now >= s.startMs ? 'active' : 'passive');

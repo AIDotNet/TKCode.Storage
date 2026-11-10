@@ -2,7 +2,13 @@
 // phase runs the collapsed island shows the time left (a chip) and opening the island goes to this page (an active
 // activity). A pomodoro can be tied to a task of the to-do plugin ("todo" provider); finishing one counts for the
 // day and for that task. The state survives restarts: a phase that ended while O_O was closed finishes on start.
-import { island, ui, settings, storage } from '@island/api';
+import { island, ui, settings, storage, notify } from '@island/api';
+
+// A system notification as well, when the user wants one (setting "systemNotify"); never fails the caller.
+const systemNotify = (title, body) => {
+  if (notify && settings.get('systemNotify') !== false) notify.show({ title, body }).catch(() => {});
+};
+
 
 const MINUTE = 60 * 1000;
 const PHASES = { work: '专注', short: '短休息', long: '长休息' };
@@ -69,6 +75,7 @@ export function activate() {
         leading: ui.icon(was === 'work' ? 'Coffee' : 'Timer', { tone: 'accent' }),
         trailing: ui.text(was === 'work' ? `完成一个番茄，${PHASES[phase]}一下` : '休息结束，开始专注吧', { size: 'sm', weight: 'semibold' }),
       }, { seconds: 6 });
+      systemNotify(was === 'work' ? '完成一个番茄' : '休息结束', was === 'work' ? `${PHASES[phase]}一下吧。` : '开始下一个番茄吧。');
     }
     update();
   };

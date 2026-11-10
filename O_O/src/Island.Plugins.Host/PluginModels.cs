@@ -124,6 +124,9 @@ public sealed record PluginServices(string DataDirectory, Island.Platform.ISecre
     /// </summary>
     public int OAuthCallbackPort { get; init; } = 47821;
 
+    /// <summary>System notifications for the notifications permission (tests capture them instead).</summary>
+    public Services.IPluginNotifier Notifier { get; init; } = new Services.SystemNotifier();
+
     /// <summary>Where plugin packages the user installs go (the first plugin directory); null: no installing.</summary>
     public string? UserPluginDirectory { get; init; }
 
