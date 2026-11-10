@@ -12,7 +12,20 @@ public sealed partial class PluginHostTests : IDisposable
     private readonly string _root = Directory.CreateTempSubdirectory("o_o-plugins-").FullName;
     private readonly string _data = Directory.CreateTempSubdirectory("o_o-data-").FullName;
     private readonly Island.Platform.InMemorySecretStore _secrets = new();
-    private PluginServices Services => new(_data, _secrets);
+    // Tests never show real notifications: they are captured here.
+    private readonly CapturingNotifier _notifier = new();
+    private PluginServices Services => new(_data, _secrets) { Notifier = _notifier };
+
+    private sealed class CapturingNotifier : Island.Plugins.Host.Services.IPluginNotifier
+    {
+        public readonly ConcurrentQueue<(string Title, string Body)> Shown = new();
+
+        public Task ShowAsync(string title, string body, CancellationToken ct)
+        {
+            Shown.Enqueue((title, body));
+            return Task.CompletedTask;
+        }
+    }
     private readonly ConcurrentQueue<ActivitySnapshot> _updates = new();
     private readonly ConcurrentQueue<(string Plugin, string Activity)> _ended = new();
     private readonly ConcurrentQueue<(string Plugin, PluginState State, string? Reason)> _states = new();

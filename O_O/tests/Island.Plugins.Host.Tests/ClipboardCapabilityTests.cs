@@ -227,3 +227,34 @@ public sealed partial class PluginHostTests
         Assert.NotEqual(box.Key, Nodes(page.View.Expanded).First(n => n.Type == "input").Key); // a fresh, empty box
     }
 }
+
+public sealed partial class PluginHostTests
+{
+    [Fact]
+    public void Notifications_carry_the_plugins_name_and_are_rate_limited()
+    {
+        _permissions = "\"notifications\"";
+        StartWith("""
+            import { notify } from '@island/api';
+            export async function activate() {
+              await notify.show({ title: '番茄完成', body: '休息\u0007一下' });
+              try { await notify.show({ title: 'again' }); } catch (e) { console.info('second: ' + e.message); }
+            }
+            """, Services);
+        WaitFor(() => _notifier.Shown.FirstOrDefault() is { Title: not null } n ? "ok" : null, "shown");
+        Assert.Equal(("Test · 番茄完成", "休息一下"), _notifier.Shown.Single());          // name first, control chars dropped
+        WaitFor(() => _logs.FirstOrDefault(l => l.Message.StartsWith("second:") && l.Message.Contains("10 秒")), "rate limited");
+    }
+
+    [Fact]
+    public void Focus_sends_a_system_notification_when_a_pomodoro_ends()
+    {
+        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.focus"), Path.Combine(_root, "com.o_o.focus"));
+        // A pomodoro that ended while O_O was closed finishes on start (see the focus tests): it notifies.
+        Directory.CreateDirectory(Path.Combine(_data, "com.o_o.focus"));
+        File.WriteAllText(Path.Combine(_data, "com.o_o.focus", "storage.json"),
+            $$"""{ "state": { "phase": "work", "running": true, "endsAt": {{DateTimeOffset.UtcNow.AddMinutes(-1).ToUnixTimeMilliseconds()}}, "cycle": 0 } }""");
+        StartWith(null, Services);
+        WaitFor(() => _notifier.Shown.FirstOrDefault(n => n.Title.Contains("完成一个番茄")) is { Title: not null } ? "ok" : null, "notified");
+    }
+}

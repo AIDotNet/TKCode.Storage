@@ -120,6 +120,33 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
 
     public PluginState? GetState(string pluginId) => _states.TryGetValue(pluginId, out var s) ? s : null;
 
+    // ---- signed-in accounts (oauth:) -------------------------------------------------------------------------------
+
+    /// <summary>An account a plugin signed in with <c>oauth.signIn</c>.</summary>
+    public sealed record OAuthAccount(string Handle, string Provider, string ProviderName, string? Label);
+
+    /// <summary>The accounts <paramref name="pluginId"/> has signed in (for the console).</summary>
+    public IReadOnlyList<OAuthAccount> GetOAuthAccounts(string pluginId)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(Sessions(pluginId).Accounts());
+        return [.. doc.RootElement.EnumerateArray().Select(a => new OAuthAccount(
+            a.GetProperty("handle").GetString()!, a.GetProperty("provider").GetString()!,
+            a.TryGetProperty("providerName", out var n) ? n.GetString()! : a.GetProperty("provider").GetString()!,
+            a.TryGetProperty("label", out var l) ? l.GetString() : null))];
+    }
+
+    /// <summary>Signs an account out: its tokens are deleted; the plugin sees it gone on its next look.</summary>
+    public void SignOut(string pluginId, string handle)
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(handle, HostJsonContext.Default.String);
+        Sessions(pluginId).SignOut($"{{\"handle\":{payload}}}");
+        RefreshProviders();
+    }
+
+    private Services.OAuthSessions Sessions(string pluginId) =>
+        new(Package(pluginId).Id, _services.DataDirectory, _services.Secrets, _services.Http, _services.OAuthProfiles,
+            _services.OpenBrowser, _services.OAuthCallbackPort);
+
     // ---- enabling, installing, removing (the console's 插件 page) ------------------------------------------------
 
     private Dictionary<string, bool>? _enabled;

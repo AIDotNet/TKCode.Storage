@@ -5,8 +5,14 @@
 //   2. the "从剪贴板添加" button on the page: each line of the copied text becomes a task.
 // Both understand simple dates and times ("明天 下午3点 交周报", "!周五 发版"). On the island tasks are ticked off,
 // starred, deleted, or handed to the focus timer. Other plugins see the list through the "todo" provider.
-import { island, ui, settings, storage, clipboard } from '@island/api';
+import { island, ui, settings, storage, clipboard, notify } from '@island/api';
 import { parseTask } from './parse.js';
+
+// A system notification as well, when the user wants one (setting "systemNotify"); never fails the caller.
+const systemNotify = (title, body) => {
+  if (notify && settings.get('systemNotify') !== false) notify.show({ title, body }).catch(() => {});
+};
+
 
 const PER_PAGE = 5;
 const MINUTE = 60 * 1000;
@@ -182,6 +188,7 @@ export function activate() {
         alerted.add(t.id);
         save();
         island.alert({ leading: ui.icon('AlarmClock', { tone: 'accent' }), trailing: ui.text(t.title, { size: 'sm', weight: 'semibold' }) }, { seconds: 6 });
+        systemNotify('待办到期', t.title);
       }
     }
     if (near.length === 0) {

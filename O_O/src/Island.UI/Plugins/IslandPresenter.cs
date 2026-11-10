@@ -322,6 +322,13 @@ public sealed class IslandPresenter
             leading = _compactRenderer.Render(owner.View.CompactLeading, mine ? _view.CompactLeading.Content as Control : null);
             trailing = _compactRenderer.Render(owner.View.CompactTrailing, mine ? _view.CompactTrailing.Content as Control : null);
         }
+        else if (_minimal)
+        {
+            // 极简模式: only the time (alerts and urgent activities above still take its place).
+            List<(VNode View, string PluginId, ChipInfo Info)> time = [(TimeView(), "o_o", TimeChip)];
+            leading = null;
+            trailing = ChipRow([TimeChip], time, HorizontalAlignment.Right);
+        }
         else
         {
             var offered = AllChips().ToList();
@@ -397,6 +404,53 @@ public sealed class IslandPresenter
     private bool _vertical;
 
     /// <summary>Stacks the collapsed island's chips vertically (docked to a side edge) or lays them out in a row.</summary>
+    /// <summary>The time chip of 极简模式, drawn by O_O itself.</summary>
+    public static readonly ChipInfo TimeChip = new("o_o/time", "时间", EnabledByDefault: true, DefaultSide: ChipSide.Right);
+
+    private static VNode TimeView() => new("text", null,
+        new Dictionary<string, object>
+        {
+            ["text"] = DateTime.Now.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+            ["size"] = "sm",
+            ["weight"] = "semibold",
+            ["tabular"] = true,
+        },
+        new Dictionary<string, int>(), []);
+
+    private bool _minimal;
+    private DispatcherTimer? _minuteTimer;
+
+    /// <summary>
+    /// 极简模式 (docs 07 §5): collapsed, the island shows only the time and alerts — no chips. The time is O_O's own,
+    /// whatever plugins are on.
+    /// </summary>
+    public bool Minimal
+    {
+        get => _minimal;
+        set
+        {
+            if (_minimal == value)
+            {
+                return;
+            }
+            _minimal = value;
+            _minuteTimer?.Stop();
+            _minuteTimer = null;
+            if (value)
+            {
+                // Refresh on every minute boundary while the time is shown.
+                _minuteTimer = new DispatcherTimer(TimeSpan.FromSeconds(60 - DateTime.Now.Second + 0.2), DispatcherPriority.Background, (s, _) =>
+                {
+                    ((DispatcherTimer)s!).Interval = TimeSpan.FromSeconds(60 - DateTime.Now.Second + 0.2);
+                    RefreshCompact();
+                });
+                _minuteTimer.Start();
+            }
+            _chipControls.Clear();
+            RefreshCompact();
+        }
+    }
+
     public bool Vertical
     {
         get => _vertical;
