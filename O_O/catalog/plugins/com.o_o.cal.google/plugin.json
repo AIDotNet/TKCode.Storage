@@ -1,11 +1,11 @@
 {
   "id": "com.o_o.cal.google",
   "name": "Google 日历",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Google 日历来源：登录 Google 账户，读取主日历的日程",
   "icon": "CalendarDays",
   "engines": {
-    "island": "^1.0.0"
+    "island": "^2.0.0"
   },
   "main": "main.js",
   "requires": [

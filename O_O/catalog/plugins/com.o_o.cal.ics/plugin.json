@@ -1,11 +1,11 @@
 {
   "id": "com.o_o.cal.ics",
   "name": "日历订阅（ICS）",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "订阅 ICS 日历链接",
   "icon": "Link",
   "engines": {
-    "island": "^1.0.0"
+    "island": "^2.0.0"
   },
   "main": "main.js",
   "requires": [

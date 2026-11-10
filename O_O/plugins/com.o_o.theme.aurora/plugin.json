@@ -1,9 +1,10 @@
 {
   "id": "com.o_o.theme.aurora",
   "name": "极光主题",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "深色界面配紫罗兰强调色，圆角更柔和",
   "icon": "Sparkles",
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "optional": true,
   "permissions": [],

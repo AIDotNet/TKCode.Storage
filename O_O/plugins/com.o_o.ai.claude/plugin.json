@@ -1,9 +1,10 @@
 {
   "id": "com.o_o.ai.claude",
   "name": "Claude 用量",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "读取本机 Claude Code 的套餐用量（通过状态栏，不读取登录凭据）",
   "icon": "logo:claude",
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "requires": ["com.o_o.ai-usage"],
   "permissions": [

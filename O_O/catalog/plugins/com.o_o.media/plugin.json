@@ -1,36 +1,14 @@
 {
   "id": "com.o_o.media",
   "name": "音乐",
-  "version": "0.1.0",
-  "description": "显示正在播放的音乐，控制播放",
+  "version": "0.2.0",
+  "description": "播放音乐时在岛上显示歌名和律动条，展开后可以控制播放",
   "icon": "Music",
-  "engines": {
-    "island": "^1.0.0"
-  },
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
-  "permissions": [
-    "media"
-  ],
+  "permissions": ["media"],
   "contributes": {
-    "pages": [
-      {
-        "id": "now",
-        "title": "音乐",
-        "icon": "Music"
-      }
-    ],
-    "chips": [
-      {
-        "id": "playing",
-        "title": "正在播放",
-        "side": "left"
-      }
-    ],
-    "activities": [
-      {
-        "id": "playing",
-        "title": "正在播放"
-      }
-    ]
+    "home": [{ "id": "now", "title": "音乐", "icon": "Music" }],
+    "activities": [{ "id": "playing", "title": "正在播放", "priority": "normal", "accent": "music" }]
   }
 }

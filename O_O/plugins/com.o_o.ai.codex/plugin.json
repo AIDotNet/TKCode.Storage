@@ -1,9 +1,10 @@
 {
   "id": "com.o_o.ai.codex",
   "name": "Codex 用量",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "读取本机 Codex 登录的套餐用量",
   "icon": "logo:codex",
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "requires": ["com.o_o.ai-usage"],
   "permissions": [

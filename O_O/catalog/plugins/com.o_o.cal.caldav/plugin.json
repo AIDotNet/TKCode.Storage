@@ -1,11 +1,11 @@
 {
   "id": "com.o_o.cal.caldav",
   "name": "CalDAV 日历",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CalDAV 日历来源：企业微信、iCloud、Nextcloud 等",
   "icon": "CalendarSync",
   "engines": {
-    "island": "^1.0.0"
+    "island": "^2.0.0"
   },
   "main": "main.js",
   "requires": [

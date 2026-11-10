@@ -1,12 +1,12 @@
 {
   "id": "com.o_o.todo",
   "name": "待办",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "轻量待办清单，到期前提醒",
   "icon": "ListTodo",
   "optional": true,
   "engines": {
-    "island": "^1.0.0"
+    "island": "^2.0.0"
   },
   "main": "main.js",
   "permissions": [
@@ -14,26 +14,21 @@
     "notifications"
   ],
   "contributes": {
-    "pages": [
+    "home": [
       {
         "id": "list",
         "title": "待办",
         "icon": "ListTodo"
       }
     ],
-    "chips": [
+    "ambient": [
       {
         "id": "count",
         "title": "待办数量",
         "side": "right"
       }
     ],
-    "activities": [
-      {
-        "id": "due",
-        "title": "待办到期"
-      }
-    ],
+    "activities": [{ "id": "due", "title": "待办到期", "priority": "passive", "accent": "reminder" }],
     "providers": [
       {
         "interface": "todo",

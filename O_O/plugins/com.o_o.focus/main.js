@@ -1,6 +1,6 @@
 // First-party focus timer (docs/design/05-builtin-plugins.md §5): pomodoros of work, short and long breaks. While a
-// phase runs the collapsed island shows the time left (a chip) and opening the island goes to this page (an active
-// activity). A pomodoro can be tied to a task of the to-do plugin ("todo" provider); finishing one counts for the
+// phase is under way the island shows the time left as a live activity (docs/design/09-island-v2.md) whose card has
+// the controls. A pomodoro can be tied to a task of the to-do plugin ("todo" provider); finishing one counts for the
 // day and for that task. The state survives restarts: a phase that ended while O_O was closed finishes on start.
 import { island, ui, settings, storage, notify } from '@island/api';
 
@@ -75,8 +75,9 @@ export function activate() {
     if (finished) {
       island.alert({
         leading: ui.icon(was === 'work' ? 'Coffee' : 'Timer', { tone: 'accent' }),
-        trailing: ui.text(was === 'work' ? `完成一个番茄，${PHASES[phase]}一下` : '休息结束，开始专注吧', { size: 'sm', weight: 'semibold' }),
-      }, { seconds: 6 });
+        center: ui.text(was === 'work' ? `完成一个番茄，${PHASES[phase]}一下` : '休息结束，开始专注吧', { size: 'sm', weight: 'semibold' }),
+        seconds: 6,
+      });
       systemNotify(was === 'work' ? '完成一个番茄' : '休息结束', was === 'work' ? `${PHASES[phase]}一下吧。` : '开始下一个番茄吧。');
     }
     update();
@@ -185,17 +186,43 @@ export function activate() {
         ui.text(n > 0 ? `今天完成 ${n} 个番茄` : '今天还没有完成番茄', { tone: 'secondary', size: 'xs' }),
       ]),
     ]);
-    island.page('timer').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
+    island.home.page('timer').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
       ui.tabs({ value: view, onChange: (v) => { view = v; render(); } }, [ui.option('timer', '计时'), ui.option('stats', '统计')]),
       view === 'stats' ? statsView() : timerView,
     ]), { status: ui.text(n > 0 ? `今日 ${n} 🍅` : '', { tone: 'secondary', size: 'sm' }) });
 
-    // Collapsed: the time left, while a phase is under way (running or paused part-way).
-    if (fresh) island.chip('remaining').remove();
-    else island.chip('remaining').update(ui.row({ gap: 'xs', align: 'center' }, [
-      ui.icon(state.phase === 'work' ? (state.running ? 'Timer' : 'Pause') : 'Coffee', { tone: state.phase === 'work' ? 'accent' : 'secondary', size: 14 }),
-      ui.text(clock(remaining), { size: 'sm', weight: 'semibold', tabular: true }),
-    ]));
+    // The island: a live activity while a phase is under way, running or paused part-way (docs/design/09-island-v2.md).
+    if (fresh) {
+      session?.end();
+      session = null;
+      return;
+    }
+    const icon = state.phase === 'work' ? (state.running ? 'Timer' : 'Pause') : 'Coffee';
+    const spec = {
+      priority: state.running ? 'normal' : 'passive',
+      compact: {
+        leading: ui.icon(icon, { tone: state.phase === 'work' ? 'accent' : 'secondary', size: 14 }),
+        trailing: ui.text(clock(remaining), { size: 'sm', weight: 'semibold', tabular: true }),
+      },
+      minimal: ui.icon(icon, { size: 14 }),
+      expanded: {
+        leading: ui.icon(icon, { tone: state.phase === 'work' ? 'accent' : 'secondary', size: 24 }),
+        center: ui.stack({ gap: 'xs' }, [
+          ui.text(PHASES[state.phase], { weight: 'semibold' }),
+          state.task ? ui.text(state.task.title, { tone: 'secondary', size: 'sm', lines: 1 }) : null,
+        ]),
+        trailing: ui.text(clock(remaining), { size: '2xl', weight: 'semibold', tabular: true }),
+        bottom: ui.stack({ gap: 'sm', align: 'stretch' }, [
+          ui.progress({ value: Math.round((1 - remaining / total) * 1000) / 10, max: 100 }),
+          ui.row({ gap: 'sm', align: 'center' }, [
+            ui.button(state.running ? '暂停' : '继续', { variant: 'ghost', onClick: state.running ? pause : start }),
+            ui.iconButton('SkipForward', { label: '跳过这一段', onClick: () => next(false) }),
+            ui.iconButton('RotateCcw', { label: '重新开始这一段', onClick: reset }),
+          ]),
+        ]),
+      },
+    };
+    if (session) session.update(spec); else session = island.activity('session', spec);
   }
 
   // Runs while a phase runs: the time, the end of the phase, and the activity that brings the user here.
@@ -205,13 +232,10 @@ export function activate() {
       return;
     }
     if (state.running) {
-      session ??= island.activity.create('session', { title: '专注中', priority: 'active', page: 'timer' });
-      session.update({});
       ticker ??= setInterval(update, 1000);
-    } else {
-      session?.end();
-      session = null;
-      if (ticker) { clearInterval(ticker); ticker = null; }
+    } else if (ticker) {
+      clearInterval(ticker);
+      ticker = null;
     }
     render();
   }

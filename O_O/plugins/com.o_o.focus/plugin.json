@@ -1,38 +1,26 @@
 {
   "id": "com.o_o.focus",
   "name": "专注",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "番茄钟专注，可绑定待办",
   "icon": "Timer",
   "optional": true,
   "engines": {
-    "island": "^1.0.0"
+    "island": "^2.0.0"
   },
   "main": "main.js",
   "permissions": [
     "notifications"
   ],
   "contributes": {
-    "pages": [
+    "home": [
       {
         "id": "timer",
         "title": "专注",
         "icon": "Timer"
       }
     ],
-    "chips": [
-      {
-        "id": "remaining",
-        "title": "专注剩余时间",
-        "side": "left"
-      }
-    ],
-    "activities": [
-      {
-        "id": "session",
-        "title": "专注中"
-      }
-    ],
+    "activities": [{ "id": "session", "title": "专注", "priority": "normal", "accent": "timer" }],
     "providers": [
       {
         "interface": "focus",

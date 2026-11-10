@@ -1,9 +1,10 @@
 {
   "id": "com.o_o.theme.mono",
   "name": "黑白主题",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "近乎无彩色的中性强调色，方正一些的圆角",
   "icon": "Contrast",
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "optional": true,
   "permissions": [],

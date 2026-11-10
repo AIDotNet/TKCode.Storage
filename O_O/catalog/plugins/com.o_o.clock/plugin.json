@@ -1,29 +1,14 @@
 {
   "id": "com.o_o.clock",
   "name": "时钟",
-  "version": "0.1.0",
-  "description": "\"今日\"页带时钟和秒表；秒表运行时在收起的岛上显示计时",
+  "version": "0.2.0",
+  "description": "\"今日\"页带时钟和秒表；秒表计时的时候在岛上显示",
   "icon": "Clock",
-  "engines": {
-    "island": "^1.0.0"
-  },
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "permissions": [],
   "contributes": {
-    "pages": [
-      {
-        "id": "today",
-        "title": "今日",
-        "icon": "CalendarDays",
-        "enabled": false
-      }
-    ],
-    "chips": [
-      {
-        "id": "time",
-        "title": "时间",
-        "side": "right"
-      }
-    ]
+    "home": [{ "id": "today", "title": "今日", "icon": "CalendarDays", "enabled": false }],
+    "activities": [{ "id": "stopwatch", "title": "秒表", "priority": "normal", "accent": "timer" }]
   }
 }

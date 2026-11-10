@@ -1,9 +1,10 @@
 {
   "id": "com.o_o.layout.presets",
   "name": "岛布局预设",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "几套现成的岛布局：简洁、专注、工作台",
   "icon": "LayoutDashboard",
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "optional": true,
   "permissions": [],

@@ -36,15 +36,33 @@ export function activate() {
     render();
   };
 
-  // The collapsed island gets the stopwatch while it runs (the mascot is O_O's own chip); the time of day is never shown
-  // on the island.
-  // The full clock lives on the optional 今日 page (docs 07 §2), off until the user turns it on.
+  // The stopwatch is a live activity while it runs or holds a time (docs/design/09-island-v2.md); the time of day is
+  // never shown on the island. The full clock lives on the optional 今日 home page, off until the user turns it on.
+  let activity = null;
+  const controls = (running) => ui.row({ gap: 'sm' }, [
+    ui.button(running ? '暂停' : '继续', { variant: 'ghost', onClick: toggle }),
+    ui.button('结束', { variant: 'ghost', onClick: () => { elapsedMs = 0; startedAt = null; clearInterval(ticker); ticker = null; render(); } }),
+  ]);
   function render() {
     const now = new Date();
     const running = startedAt !== null;
-    if (running) island.chip('time').update(ui.text(stopwatchText(), { size: 'sm', weight: 'semibold', tabular: true }));
-    else island.chip('time').remove();
-    island.page('today').update(ui.stack({ gap: 'md' }, [
+    if (running || elapsedMs > 0) {
+      const spec = {
+        priority: running ? 'normal' : 'passive',
+        compact: { leading: ui.icon('Timer', { size: 14 }), trailing: ui.text(stopwatchText(), { size: 'sm', weight: 'semibold', tabular: true }) },
+        minimal: ui.icon('Timer', { size: 14 }),
+        expanded: {
+          leading: ui.icon('Timer', { size: 24 }),
+          center: ui.text(stopwatchText(), { size: '2xl', weight: 'semibold', tabular: true }),
+          bottom: controls(running),
+        },
+      };
+      if (activity) activity.update(spec); else activity = island.activity('stopwatch', spec);
+    } else if (activity) {
+      activity.end();
+      activity = null;
+    }
+    island.home.page('today').update(ui.stack({ gap: 'md' }, [
       ui.row({ gap: 'md', align: 'end' }, [
         ui.text(`${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
           { size: '4xl', tabular: true }),

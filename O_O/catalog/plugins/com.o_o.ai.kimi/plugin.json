@@ -1,9 +1,10 @@
 {
   "id": "com.o_o.ai.kimi",
   "name": "Kimi 余额",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "用 API Key 查询 Kimi（Moonshot）余额",
   "icon": "Wallet",
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "requires": ["com.o_o.ai-usage"],
   "permissions": [

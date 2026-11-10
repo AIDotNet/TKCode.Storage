@@ -1,9 +1,10 @@
 {
   "id": "com.o_o.theme.default",
   "name": "默认主题",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "苹果风格：系统蓝强调色、macOS 比例的圆角，浅色或深色跟随系统",
   "icon": "Palette",
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "permissions": [],
   "contributes": {

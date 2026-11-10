@@ -83,7 +83,7 @@ export function activate() {
       } else {
         lines.forEach(add);
         save();
-        island.alert({ leading: ui.icon('ListPlus'), trailing: ui.text(`已添加 ${lines.length} 项`, { size: 'sm', weight: 'semibold' }) }, { seconds: 2 });
+        island.alert({ leading: ui.icon('ListPlus'), center: ui.text(`已添加 ${lines.length} 项`, { size: 'sm', weight: 'semibold' }), seconds: 2 });
       }
     } catch (e) {
       notice = e.message;
@@ -138,7 +138,7 @@ export function activate() {
     page = Math.min(page, pages - 1);
     const dueToday = open.filter((t) => t.due && new Date(t.due) <= new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)).length;
 
-    island.page('list').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
+    island.home.page('list').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
       // Quick add: type and press Enter ("明天 15:30 交周报", "!" in front marks it important).
       ui.input({
         key: `add-${addCount}`, placeholder: '添加待办，回车保存（如"明天 15:30 交周报"）',
@@ -169,8 +169,8 @@ export function activate() {
       notice ? ui.text(notice, { tone: 'secondary', size: 'xs', wrap: true }) : null,
     ]), { status: ui.text(open.length === 0 ? '' : dueToday > 0 ? `${open.length} 项 · ${dueToday} 项今天到期` : `${open.length} 项`, { tone: 'secondary', size: 'sm' }) });
 
-    if (open.length === 0) island.chip('count').remove();
-    else island.chip('count').update(ui.text(`${open.length} 项待办`, { size: 'sm', weight: 'semibold' }));
+    if (open.length === 0) island.ambient('count').remove();
+    else island.ambient('count').update(ui.text(`${open.length} 项待办`, { size: 'sm', weight: 'semibold' }));
   }
 
   // Timed tasks close to their time: shown on the collapsed island ahead of time (passive), owning it for the first
@@ -187,7 +187,7 @@ export function activate() {
       if (at <= now && !alerted.has(t.id)) {
         alerted.add(t.id);
         save();
-        island.alert({ leading: ui.icon('AlarmClock', { tone: 'accent' }), trailing: ui.text(t.title, { size: 'sm', weight: 'semibold' }) }, { seconds: 6 });
+        island.alert({ leading: ui.icon('AlarmClock', { tone: 'accent' }), center: ui.text(t.title, { size: 'sm', weight: 'semibold' }), seconds: 6, priority: 'high' });
         systemNotify('待办到期', t.title);
       }
     }
@@ -198,14 +198,25 @@ export function activate() {
     }
     const { t, at } = near[0];
     const mins = Math.round((at - now) / MINUTE);
-    dueAct ??= island.activity.create('due', { title: '待办到期', priority: 'passive', page: 'list' });
-    dueAct.setPriority(at <= now && now - at <= 10 * MINUTE ? 'active' : 'passive');
-    dueAct.update({
+    const when = mins > 0 ? `${mins} 分钟后` : '到时间了';
+    const spec = {
+      // Ahead of time it waits its turn; for the first ten minutes after the time it comes first.
+      priority: at <= now && now - at <= 10 * MINUTE ? 'high' : 'passive',
       compact: {
         leading: ui.icon('AlarmClock', { tone: at <= now ? 'accent' : 'secondary', size: 16 }),
-        trailing: ui.text(mins > 0 ? `${mins} 分钟后` : '到时间了', { size: 'sm', weight: 'semibold' }),
+        trailing: ui.text(when, { size: 'sm', weight: 'semibold' }),
       },
-    });
+      minimal: ui.icon('AlarmClock', { tone: at <= now ? 'accent' : 'secondary', size: 14 }),
+      expanded: {
+        leading: ui.icon('AlarmClock', { tone: 'accent', size: 24 }),
+        center: ui.stack({ gap: 'xs' }, [
+          ui.text(t.title, { weight: 'semibold', lines: 1 }),
+          ui.text(when, { tone: 'secondary', size: 'sm' }),
+        ]),
+        trailing: ui.button('完成', { variant: 'ghost', onClick: () => toggle(t) }),
+      },
+    };
+    if (dueAct) dueAct.update(spec); else dueAct = island.activity('due', spec);
   };
 
   island.provide('todo', 'todo', {

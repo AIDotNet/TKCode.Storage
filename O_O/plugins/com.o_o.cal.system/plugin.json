@@ -1,12 +1,12 @@
 {
   "id": "com.o_o.cal.system",
   "name": "系统日历（macOS）",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "读取 macOS“日历”App 里的日程（iCloud、Exchange、Google 等已在系统中登录的账户），只读",
   "icon": "Calendar",
   "optional": true,
   "engines": {
-    "island": "^1.0.0"
+    "island": "^2.0.0"
   },
   "main": "main.js",
   "requires": ["com.o_o.calendar"],
