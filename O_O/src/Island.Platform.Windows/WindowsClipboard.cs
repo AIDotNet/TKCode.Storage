@@ -55,6 +55,14 @@ public sealed partial class WindowsClipboard : IClipboardPlatform
         }
     }
 
+    public void RestoreFocus()
+    {
+        if (_target != 0)
+        {
+            SetForegroundWindow(_target);
+        }
+    }
+
     public PasteResult Paste()
     {
         if (_target != 0)

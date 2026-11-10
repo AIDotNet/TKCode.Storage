@@ -31,6 +31,10 @@ export const ui = Object.freeze({
   /** A tile the user can click or drag (a softly filled rounded shape — the one filled shape the island allows; use it
    *  for things picked up, such as files). Its children stack vertically. props: width, gap, align, onClick, dragFiles */
   card: (props, children) => node('card', Array.isArray(props?.dragFiles) ? { ...props, dragFiles: props.dragFiles.map(String).join('\n') } : props, children),
+  /** A text box. It takes the keyboard only when the user clicks into it (the user's app keeps it otherwise); Esc
+   *  gives it back. props: kind ('search' for a search field), placeholder, value (applied while the user is not
+   *  typing in it), maxLength, onChange(text) on every edit, onSubmit(text) on Enter. Give it a key. */
+  input: (props) => node('input', props),
   /** Children flow left to right and wrap onto the next line when the island is narrow (cards). props: gap */
   wrap: (props, children) => node('wrap', props, children),
   /** A local picture (png, jpg, gif, webp, bmp), cropped to fill. props: path (absolute), width, height (px). Shown to the

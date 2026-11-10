@@ -39,6 +39,7 @@ export function activate() {
   let dueAct = null;
   const alerted = new Set(storage.get('alerted') ?? []);
 
+  let addCount = 0;
   const save = () => { storage.set('tasks', tasks); storage.set('alerted', [...alerted]); };
 
   const add = (line) => {
@@ -132,6 +133,18 @@ export function activate() {
     const dueToday = open.filter((t) => t.due && new Date(t.due) <= new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)).length;
 
     island.page('list').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
+      // Quick add: type and press Enter ("明天 15:30 交周报", "!" in front marks it important).
+      ui.input({
+        key: `add-${addCount}`, placeholder: '添加待办，回车保存（如"明天 15:30 交周报"）',
+        onSubmit: (text) => {
+          if (add(text.trim())) {
+            addCount++; // a fresh, empty box for the next one
+            view = 'open';
+            save();
+            render();
+          }
+        },
+      }),
       ui.row({ gap: 'xs', align: 'center' }, [
         ui.tabs({ value: view, onChange: (v) => { view = v; page = 0; render(); } },
           [ui.option('open', `待办 ${open.length || ''}`.trim()), ui.option('done', '已完成')]),

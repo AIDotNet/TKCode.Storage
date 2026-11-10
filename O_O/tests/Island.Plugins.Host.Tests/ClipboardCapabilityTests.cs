@@ -179,3 +179,51 @@ public sealed partial class PluginHostTests
         WaitFor(() => _logs.FirstOrDefault(l => l.Message.StartsWith("file:") && l.Message.Contains("http(s)")), "file: refused");
     }
 }
+
+public sealed partial class PluginHostTests
+{
+    [Fact]
+    public void Clipboard_search_filters_as_you_type_and_enter_pastes_the_best_match()
+    {
+        var clipboard = new FakeClipboard();
+        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.clipboard"), Path.Combine(_root, "com.o_o.clipboard"));
+        StartWith(null, Services with { Clipboard = clipboard });
+        WaitForPage(s => s.PluginId == "com.o_o.clipboard", "history");
+        var now = DateTimeOffset.Now;
+        foreach (var text in new[] { "alpha one", "beta two", "alpha three" })
+        {
+            clipboard.Copy(ClipboardEntry.FromText(text, null, now));
+        }
+        var page = WaitForPage(s => s.PluginId == "com.o_o.clipboard" && HistoryRows(s).Count() == 3, "three entries");
+        var search = Nodes(page.View.Expanded).Single(n => n.Type == "input");
+        Assert.Equal("search", search.GetString("kind"));
+
+        _host!.Dispatch("com.o_o.clipboard", search.Handlers["onChange"], "\"alpha\"");
+        page = WaitForPage(s => s.PluginId == "com.o_o.clipboard" && HistoryRows(s).Count() == 2 &&
+                                HistoryRows(s).All(r => Texts(r).Any(t => t.StartsWith("alpha"))), "filtered to alpha");
+        Assert.Equal("alpha three", Texts(HistoryRows(page).First()).First(t => t.StartsWith("alpha")));
+        search = Nodes(page.View.Expanded).Single(n => n.Type == "input");
+        _host.Dispatch("com.o_o.clipboard", search.Handlers["onSubmit"], "\"alpha\"");
+        WaitFor(() => clipboard.Pasted.Count == 1 ? "ok" : null, "enter pastes");
+        Assert.Equal("alpha three", clipboard.Pasted[0].Text);
+
+        Thread.Sleep(300); // pasting re-rendered the page: use the latest box's handlers
+        search = Nodes(_pageViews.Last(s => s.PluginId == "com.o_o.clipboard").View.Expanded).Single(n => n.Type == "input");
+        _host.Dispatch("com.o_o.clipboard", search.Handlers["onChange"], "\"zzz\"");
+        WaitForPage(s => s.PluginId == "com.o_o.clipboard" && Texts(s.View.Expanded).Contains("没有包含\"zzz\"的内容。"), "no match");
+    }
+
+    [Fact]
+    public void A_to_do_typed_on_the_island_is_added_with_its_date()
+    {
+        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.todo"), Path.Combine(_root, "com.o_o.todo"));
+        StartWith(null, Services);
+        WaitForPage(s => s.PluginId == "com.o_o.todo" && Nodes(s.View.Expanded).Any(n => n.Type == "input"), "to-do page with a box");
+        Thread.Sleep(300); // handlers are renewed on every render: use the latest view's
+        var page = _pageViews.Last(s => s.PluginId == "com.o_o.todo");
+        var box = Nodes(page.View.Expanded).First(n => n.Type == "input");
+        _host!.Dispatch("com.o_o.todo", box.Handlers["onSubmit"], "\"!明天 15:30 交周报\"");
+        page = WaitForPage(s => s.PluginId == "com.o_o.todo" && Texts(s.View.Expanded).Any(t => t.Contains("交周报")), "task added");
+        Assert.NotEqual(box.Key, Nodes(page.View.Expanded).First(n => n.Type == "input").Key); // a fresh, empty box
+    }
+}

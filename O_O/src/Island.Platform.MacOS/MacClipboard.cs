@@ -57,6 +57,14 @@ public sealed partial class MacClipboard : IClipboardPlatform
 
     public string? TargetAppName => _target == 0 ? null : FromNSString(ObjC.Send(_target, ObjC.Sel("localizedName")));
 
+    public void RestoreFocus()
+    {
+        if (_target != 0)
+        {
+            ObjC.SendByte(_target, ObjC.Sel("activateWithOptions:"), (nint)ActivateIgnoringOtherApps);
+        }
+    }
+
     public PasteResult Paste()
     {
         if (!AXIsProcessTrusted())

@@ -3,7 +3,7 @@
 // entry back into the app the user was working in when it is clicked.
 import { island, ui, clipboard, settings, storage } from '@island/api';
 
-const PER_PAGE = 5;
+const PER_PAGE = 4;   // the search box takes a row
 const FILTERS = [['all', '全部'], ['text', '文本'], ['url', '链接'], ['image', '图片'], ['files', '文件']];
 const ICONS = { text: 'Type', url: 'Link', files: 'File' };
 
@@ -83,15 +83,30 @@ export function activate() {
     ui.iconButton('X', { label: '删除', onClick: () => remove(e) }),
   ]);
 
+  // Search: what the user types in the box (the island takes the keyboard only while they type there).
+  let query = '';
+  const matches = (e) => {
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return (e.text ?? '').toLowerCase().includes(q) || (e.files ?? []).some((f) => name(f).toLowerCase().includes(q)) ||
+      (e.app ?? '').toLowerCase().includes(q);
+  };
+  const visible = () => items
+    .filter((e) => (filter === 'all' || e.kind === filter) && matches(e))
+    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); // pinned first, otherwise newest first
+
   function render() {
-    const shown = items
-      .filter((e) => filter === 'all' || e.kind === filter)
-      .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); // pinned first, otherwise newest first
+    const shown = visible();
     const pages = Math.max(1, Math.ceil(shown.length / PER_PAGE));
     page = Math.min(page, pages - 1);
     const slice = shown.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
 
     island.page('history').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
+      ui.input({
+        key: 'search', kind: 'search', placeholder: '搜索剪贴板', value: query,
+        onChange: (text) => { query = text.trim(); page = 0; render(); },
+        onSubmit: () => { const first = visible()[0]; if (first) use(first); },   // Enter pastes the best match
+      }),
       ui.row({ gap: 'xs', align: 'center' }, [
         ui.tabs({ value: filter, onChange: (v) => { filter = v; page = 0; render(); } },
           FILTERS.map(([v, l]) => ui.option(v, l))),
@@ -100,7 +115,7 @@ export function activate() {
         pages > 1 ? ui.iconButton('ChevronRight', { label: '下一页', disabled: page >= pages - 1, onClick: () => { page++; render(); } }) : null,
       ]),
       slice.length === 0
-        ? ui.text(items.length === 0 ? '复制的内容会出现在这里。' : '没有这一类的内容。', { tone: 'secondary' })
+        ? ui.text(items.length === 0 ? '复制的内容会出现在这里。' : query ? `没有包含"${query}"的内容。` : '没有这一类的内容。', { tone: 'secondary' })
         : ui.stack({ gap: 'xs', align: 'stretch' }, slice.map(row)),
       pages > 1 ? ui.dots({ count: pages, index: page }) : null,
       notice ? ui.text(notice, { tone: 'secondary', size: 'xs', wrap: true }) : null,
