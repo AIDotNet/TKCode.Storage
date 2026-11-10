@@ -196,7 +196,8 @@ function* occurrences(start, rrule, endWallMs, toInstant, tzid) {
   let emitted = 0;
   const emit = function* (ms) {
     if (ms < t0) return false;
-    const w = fromWallMs(ms, start.date);
+    // Occurrences keep the series' UTC-ness: a DTSTART written in UTC (…Z) repeats in UTC, not in local time.
+    const w = { ...fromWallMs(ms, start.date), utc: start.utc };
     if (toInstant(w, start.date ? undefined : tzid) > untilMs) return true;
     emitted++;
     yield w;

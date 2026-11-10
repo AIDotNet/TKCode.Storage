@@ -9,6 +9,9 @@
 //   listCalendars(account) → [{ id, name, color?, primary? }]
 //   listEvents(account, { from, to }) → [{ id, calendarId, title, start, end, allDay, location?, meetingUrl?, url? }]
 //     timed events: ISO 8601 instants; all-day events: YYYY-MM-DD (end exclusive)
+//   Providers that sign in (Google, Feishu, DingTalk) also offer
+//     status() → { needsSignIn, configured, signingIn }   signIn() → { started }   (opens the system browser)
+//   and the 日程 page shows a "登录 …" row for each that has no account yet.
 import { island, ui, settings, storage, clipboard } from '@island/api';
 
 const IFACE = 'calendar';
@@ -40,6 +43,9 @@ export async function activate() {
   let act = null;
   let timer = null;
   let refreshTimer = null;
+  let signIns = [];                      // providers waiting for the user to sign in: { id, title, configured, signingIn }
+  let watchUntil = 0;                    // after "登录" was clicked: look again every few seconds until then
+  let watchTimer = null;
 
   // ---- fetching ---------------------------------------------------------------------------------------------------
 
@@ -77,10 +83,16 @@ export async function activate() {
       const range = { from: new Date(from).toISOString(), to: new Date(from + 2 * DAY).toISOString() };
       const lists = [];
       const failures = [];
+      const waiting = [];
       for (const p of providers) {
         if (!p.running) continue;
         try {
           const accounts = await island.providers.call(IFACE, p.id, 'accounts');
+          if (accounts.length === 0) {
+            // A provider that signs in tells whether it needs to; others (CalDAV, ICS) just have no account yet.
+            const s = await island.providers.call(IFACE, p.id, 'status').catch(() => null);
+            if (s?.needsSignIn) waiting.push({ id: p.id, title: p.title, configured: !!s.configured, signingIn: !!s.signingIn });
+          }
           for (const a of accounts) {
             const source = a.label || p.title;
             try {
@@ -95,6 +107,8 @@ export async function activate() {
       }
       events = merge(lists);
       errors = failures;
+      signIns = waiting;
+      if (waiting.length === 0) watchUntil = 0;
       fetchedAt = new Date().toISOString();
       storage.set('cache', { events, errors, at: fetchedAt });
     } finally {
@@ -180,6 +194,35 @@ export async function activate() {
     render(Date.now());
   };
 
+  // "登录 …": the provider opens the system browser; until the account appears (or 5 minutes pass) look every few
+  // seconds, so the events show up soon after the user finishes in the browser.
+  const signIn = async (p) => {
+    if (!p.configured) {
+      notice = `先在控制台 › 插件 › ${p.title} 中填写应用的 ID 和密钥，再回来登录。`;
+      render(Date.now());
+      return;
+    }
+    try {
+      await island.providers.call(IFACE, p.id, 'signIn');
+      notice = `已在浏览器中打开 ${p.title} 的登录页，完成后这里会自动更新。`;
+      watchUntil = Date.now() + 5 * MINUTE;
+      clearInterval(watchTimer);
+      watchTimer = setInterval(() => {
+        if (Date.now() > watchUntil) { clearInterval(watchTimer); watchTimer = null; return; }
+        refresh();
+      }, 3000);
+    } catch (err) {
+      notice = err.message;
+    }
+    render(Date.now());
+  };
+
+  const signInRow = (p) => ui.item({ key: `signin:${p.id}`, gap: 'sm', align: 'center', onClick: () => signIn(p) }, [
+    ui.icon('LogIn', { tone: 'secondary', size: 16 }),
+    ui.text(p.signingIn ? `正在登录 ${p.title}…` : `登录 ${p.title}`, { grow: true, weight: 'medium' }),
+    ui.text(p.configured ? '在浏览器中登录' : '需先填写应用 ID', { tone: 'secondary', size: 'xs' }),
+  ]);
+
   const when = (e, now) => {
     if (e.allDay) return '全天';
     const range = `${hm(e.startMs)}–${hm(e.endMs)}`;
@@ -217,7 +260,7 @@ export async function activate() {
     if (!anyProvider) {
       body = ui.stack({ gap: 'xs' }, [
         ui.text('还没有日历来源', { weight: 'semibold' }),
-        ui.text('在控制台的"插件"页启用"CalDAV 日历"（企业微信、iCloud 等）或"日历订阅（ICS）"，并填写地址。', { tone: 'secondary', size: 'sm', wrap: true }),
+        ui.text('在控制台的"插件"页添加 Google、飞书、钉钉日历，或"CalDAV 日历"（企业微信、iCloud 等）、"日历订阅（ICS）"。', { tone: 'secondary', size: 'sm', wrap: true }),
       ]);
     } else if (shown.length === 0) {
       body = ui.text(fetchedAt ? `${tab === 'today' ? '今天' : '明天'}没有日程。` : '正在读取…', { tone: 'secondary' });
@@ -235,6 +278,7 @@ export async function activate() {
         pages > 1 ? ui.iconButton('ChevronRight', { label: '下一页', disabled: page >= pages - 1, onClick: () => { page++; render(Date.now()); } }) : null,
       ]),
       body,
+      ...signIns.map(signInRow),
       pages > 1 ? ui.dots({ count: pages, index: page }) : null,
       notice ? ui.text(notice, { tone: 'secondary', size: 'xs', wrap: true }) : null,
       ...errors.map((e) => ui.text(`${e.source}：${e.message}`, { tone: 'secondary', size: 'xs', wrap: true })),

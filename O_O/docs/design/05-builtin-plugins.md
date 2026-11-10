@@ -136,6 +136,12 @@ type CalendarEvent = {
 >   - 不显示参会人。
 >   - 飞书、钉钉、Google 的 OAuth 插件等宿主 `oauth` 能力就绪后再做。
 
+> **实现状态（2026-11-10，OAuth 来源）**：三个插件都是可选内置插件，登录走宿主 `oauth`（系统浏览器 + 回环回调；令牌由宿主保存在钥匙串、自动刷新，只发给各自的 API 主机，插件只拿到账户句柄）。用户在插件设置里填自己应用的 ID / 密钥；"日程"页对还没有账户的来源显示"登录 …"一行（提供方的 `status()` / `signIn()`），点击后打开浏览器，并在 5 分钟内每 3 秒检查一次，登录完成后日程自动出现。
+> - `com.o_o.cal.google`：作用域 `calendar.events.readonly`；`GET /calendar/v3/calendars/primary/events?timeMin&timeMax&singleEvents=true&orderBy=startTime`（展开重复日程、分页）；会议链接取 `hangoutLink` 或 `conferenceData.entryPoints` 中的 video；账户名取返回里主日历的 `summary`（邮箱），因此不需要额外作用域。只读主日历。
+> - `com.o_o.cal.feishu`：企业自建应用（App ID / Secret），需在应用里登记重定向 URL `http://127.0.0.1:47821/oauth/callback`；作用域 `calendar:calendar:readonly offline_access`（无 offline_access 就拿不到 refresh_token）。`GET /open-apis/calendar/v4/calendars`（取 primary 和 shared，跳过只看忙闲和会议室），`GET …/calendars/{id}/events?start_time&end_time`（Unix 秒）；返回 `{ code, msg, data }`。重复日程按 `recurrence`（RRULE）用 `ical.js` 展开。账户名取 `GET /open-apis/authen/v1/user_info`。**未能核实**：`instance_view`（官方展开接口）的路径——当前文档里查不到，所以自行展开；例外实例（改期的单次日程）与系列可能重复显示。
+> - `com.o_o.cal.dingtalk`：第三方个人应用 / 内部应用的用户令牌（宿主按钉钉格式换取，令牌放在 `x-acs-dingtalk-access-token` 头里）；`GET /v1.0/contact/users/me` 取 unionId，`GET /v1.0/calendar/users/{unionId}/calendars/primary/eventsview?timeMin&timeMax&maxResults&nextToken`（"日程视图"，由服务端展开重复日程；已对照官方文档核实）。**未核实**：桌面端走浏览器回跳式登录（login.dingtalk.com/oauth2/auth）对个人用户是否可用。
+> - 修正：`ical.js`（三份）里重复日程的 UTC 起始时间（`DTSTART:…Z`）展开后被当成本机时间，导致在非 UTC 时区偏移；现在每次重复都保留 UTC。
+
 ### 6.3 UI
 
 - Compact：会前 15 分钟起显示 `passive` 活动（来源平台图标 + 会议名 + `Countdown`），会前 1 分钟升级为 `critical`，带"加入会议"按钮（打开会议链接）。
