@@ -76,6 +76,7 @@ Setting types: `string` (optionally `enum`; `format`: `password` (keychain), `ur
 | `clipboard.read` / `.write` / `.watch` / `.paste` | the clipboard (`clipboard.*`); `.paste` pastes into the app the user was in |
 | `files.shelf` | files dropped on the island (`files.onDrop`), `files.info/reveal/open`, `ui.item({ dragFiles })` |
 | `media` | now playing + play/pause/next (`media.*`) |
+| `shell.openUrl` | `shell.openUrl(url)`: open https/http/mailto/meeting-app links — only within a few seconds after the user clicked something in the plugin |
 | `localAuth:claude-code` / `localAuth:codex-cli` | read-only use of those apps' local logins (always asks the user) |
 
 Unknown permissions make the manifest invalid. Everything else (pages, chips, alerts, activities, storage,

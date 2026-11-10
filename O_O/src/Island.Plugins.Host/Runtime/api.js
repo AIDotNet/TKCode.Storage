@@ -367,6 +367,13 @@ export const oauth = permissions.some((p) => p.startsWith('oauth:')) ? Object.fr
   signOut: (account) => call('oauth.signOut', { handle: account?.handle ?? String(account) }),
 }) : undefined;
 
+// ---- shell (shell.openUrl) ------------------------------------------------------------------------------------
+export const shell = has('shell.openUrl') ? Object.freeze({
+  /** Opens a link (https, http, mailto, meeting apps) with the system. Only right after the user clicked something
+   *  in this plugin (within a few seconds), so call it from an onClick handler. */
+  openUrl: (url) => call('shell.openUrl', { url: String(url) }),
+}) : undefined;
+
 // ---- settings (declared in plugin.json contributes.settings; edited by the user in the console) ------------------
 export const settings = Object.freeze({
   /** The value, the schema default, or undefined. Password settings: use getSecret. */

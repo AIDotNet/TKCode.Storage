@@ -10,7 +10,8 @@
   },
   "main": "main.js",
   "permissions": [
-    "clipboard.write"
+    "clipboard.write",
+    "shell.openUrl"
   ],
   "contributes": {
     "pages": [

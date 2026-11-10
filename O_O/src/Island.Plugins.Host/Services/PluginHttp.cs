@@ -159,7 +159,13 @@ internal sealed class PluginHttp(HttpClient client, PluginPermissions permission
         }
         foreach (var raw in userUrls())
         {
-            if (Uri.TryCreate(raw?.Trim(), UriKind.Absolute, out var site) && site.Scheme is "https" or "http" &&
+            // webcal:// is how calendar subscriptions are shared; it means https.
+            var text = raw?.Trim();
+            if (text?.StartsWith("webcal://", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                text = "https://" + text["webcal://".Length..];
+            }
+            if (Uri.TryCreate(text, UriKind.Absolute, out var site) && site.Scheme is "https" or "http" &&
                 site.Scheme == uri.Scheme && site.IdnHost.Equals(uri.IdnHost, StringComparison.OrdinalIgnoreCase) &&
                 site.Port == uri.Port && string.IsNullOrEmpty(site.UserInfo))
             {

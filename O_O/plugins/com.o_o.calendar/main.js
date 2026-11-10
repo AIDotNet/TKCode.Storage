@@ -9,7 +9,7 @@
 //   listCalendars(account) → [{ id, name, color?, primary? }]
 //   listEvents(account, { from, to }) → [{ id, calendarId, title, start, end, allDay, location?, meetingUrl?, url? }]
 //     timed events: ISO 8601 instants; all-day events: YYYY-MM-DD (end exclusive)
-import { island, ui, settings, storage, clipboard } from '@island/api';
+import { island, ui, settings, storage, clipboard, shell } from '@island/api';
 
 const IFACE = 'calendar';
 const MINUTE = 60 * 1000;
@@ -166,7 +166,14 @@ export async function activate() {
   const open = async (e) => {
     notice = null;
     if (e.meetingUrl) {
-      // There is no "open in browser" capability yet: the link goes to the clipboard.
+      // Join: open the link (the meeting app or the browser). If it cannot be opened, the link goes to the clipboard.
+      try {
+        await shell.openUrl(e.meetingUrl);
+        render(Date.now());
+        return;
+      } catch {
+        // fall through to copying
+      }
       try {
         await clipboard.write({ text: e.meetingUrl });
         island.alert({ leading: ui.icon('Link'), trailing: ui.text('已复制会议链接', { size: 'sm', weight: 'semibold' }) }, { seconds: 2 });

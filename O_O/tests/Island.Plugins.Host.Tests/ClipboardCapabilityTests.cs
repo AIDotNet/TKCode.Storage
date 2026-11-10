@@ -152,3 +152,30 @@ public sealed partial class PluginHostTests
         Assert.Equal(png, clipboard.Pasted[1].Image);
     }
 }
+
+public sealed partial class PluginHostTests
+{
+    [Fact]
+    public void Links_open_only_right_after_a_click_and_only_safe_kinds()
+    {
+        var opened = new System.Collections.Concurrent.ConcurrentQueue<Uri>();
+        _permissions = "\"shell.openUrl\"";
+        _contributes = """{ "pages": [{ "id": "p" }] }""";
+        StartWith("""
+            import { island, ui, shell } from '@island/api';
+            export async function activate() {
+              try { await shell.openUrl('https://example.com/a'); } catch (e) { console.info('no click: ' + e.message); }
+              island.page('p').update(ui.button('go', { onClick: async () => {
+                await shell.openUrl('https://example.com/b');
+                try { await shell.openUrl('file:///etc/passwd'); } catch (e) { console.info('file: ' + e.message); }
+              } }));
+            }
+            """, Services with { OpenBrowser = u => { opened.Enqueue(u); return Task.CompletedTask; } });
+        WaitFor(() => _logs.FirstOrDefault(l => l.Message.StartsWith("no click:") && l.Message.Contains("clicks")), "refused without a click");
+        var page = WaitFor(() => _pages.LastOrDefault(), "page");
+        _host!.Dispatch("test.plugin", page.View!.Handlers["onClick"]);
+        WaitFor(() => opened.Count == 1 ? "ok" : null, "opened after the click");
+        Assert.Equal("https://example.com/b", opened.Single().AbsoluteUri);
+        WaitFor(() => _logs.FirstOrDefault(l => l.Message.StartsWith("file:") && l.Message.Contains("http(s)")), "file: refused");
+    }
+}

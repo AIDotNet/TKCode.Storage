@@ -240,18 +240,20 @@ public sealed partial class PluginHostTests
     }
 
     [Fact]
-    public void Ics_subscriptions_are_read_and_webcal_links_explained()
+    public void Ics_subscriptions_are_read_and_webcal_links_mean_https()
     {
         using var server = new FakeCalendarServer((method, path, _) => path == "/feed.ics" ? (200, TestCalendar()) : (404, ""));
         var r = RunCalendarProvider("com.o_o.cal.ics", "ics", new()
         {
-            ["url1"] = server.Url + "/feed.ics", ["url2"] = "webcal://example.com/x.ics", ["name2"] = "节假日",
+            // webcal:// means https:// — tried against the local (plain-http) server, so it fails at TLS, never leaving
+            // this machine; what matters is that it was taken as an https subscription, not refused as webcal.
+            ["url1"] = server.Url + "/feed.ics", ["url2"] = server.Url.Replace("http://", "webcal://") + "/feed.ics", ["name2"] = "节假日",
         });
         var accounts = Ok(r.GetProperty("accounts")).EnumerateArray().Select(a => a.GetProperty("handle").GetString()).ToList();
         Assert.Equal(["url1", "url2"], accounts);
         Assert.Equal("测试日历", Ok(r.GetProperty("calendars")[0])[0].GetProperty("name").GetString());
         Assert.Contains(EventsOf(r), e => e.GetProperty("title").GetString() == "团建");
-        Assert.Contains("webcal://", Err(r.GetProperty("events")[1]));
+        Assert.DoesNotContain("webcal", Err(r.GetProperty("events")[1]));
     }
 
     /// <summary>A fake calendar provider plugin whose events are given as JS expressions relative to `now`.</summary>
@@ -293,15 +295,17 @@ public sealed partial class PluginHostTests
         Thread.Sleep(300);
         Assert.Single(_alertsSeen, a => a.PluginId == "com.o_o.calendar");                        // once, not per refresh
 
-        // Clicking the meeting copies its link (there is no "open URL" capability yet).
+        // Clicking the meeting opens its link (shell.openUrl, right after the click).
         var clipboard = new FakeClipboard();
+        var opened = new System.Collections.Concurrent.ConcurrentQueue<Uri>();
         _host!.Dispose();
         _updates.Clear();
         _pageViews.Clear();
-        StartWith(null, Services with { Clipboard = clipboard });
+        StartWith(null, Services with { Clipboard = clipboard, OpenBrowser = u => { opened.Enqueue(u); return Task.CompletedTask; } });
         page = WaitForPage(s => s.PluginId == "com.o_o.calendar" && Nodes(s.View.Expanded).Any(n => n.Type == "item" && Texts(n).Contains("周会")), "events again");
         _host!.Dispatch("com.o_o.calendar", Nodes(page.View.Expanded).First(n => n.Type == "item" && Texts(n).Contains("周会")).Handlers["onClick"]);
-        WaitFor(() => clipboard.Content?.Text == "https://meet.google.com/abc-defg-hij" ? "ok" : null, "link copied");
+        WaitFor(() => opened.FirstOrDefault()?.AbsoluteUri == "https://meet.google.com/abc-defg-hij" ? "ok" : null, "link opened");
+        Assert.Null(clipboard.Content); // opened, so nothing was copied
     }
 
     [Fact]

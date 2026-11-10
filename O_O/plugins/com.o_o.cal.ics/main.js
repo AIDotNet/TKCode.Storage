@@ -17,7 +17,8 @@ const slot = (n) => ({
 const host = (url) => url.replace(/^[a-z]+:\/\//i, '').split(/[/?#]/)[0];
 
 const fetchText = async (url) => {
-  if (/^webcal:\/\//i.test(url)) throw new Error('webcal:// 链接请改成 https:// 后填写');
+  // webcal:// is how subscriptions are shared; it means https (the host allows the same site for it).
+  url = url.replace(/^webcal:\/\//i, 'https://');
   if (!/^https?:\/\//i.test(url)) throw new Error('订阅链接要以 https:// 开头');
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < REFETCH) return hit.text;

@@ -16,9 +16,16 @@ SDK 由 `global.json` 固定为 .NET 10。
 | --- | --- |
 | `O_O_DEBUG=1` | 在 stderr 输出屏幕、刘海、布局与原生窗口状态 |
 | `O_O_FAKE_NOTCH=185x32` | 假装当前屏幕有居中的刘海（宽×高，pt），用于在无刘海的机器上检查刘海布局 |
-| `O_O_PLACEMENT=Attached` | 强制放置模式：`Auto` / `Attached` / `Floating` / `BelowMenuBar`（控制台完成前的临时入口） |
+| `O_O_PLACEMENT=Attached` | 强制放置模式（覆盖"岛体"设置）：`Auto` / `Attached` / `Floating` / `BelowMenuBar` / `Capsule` |
 | `O_O_STATE=Expanded` | 启动后保持展开 |
 | `O_O_DEMO=1` | 每 2 秒在 展开 → 紧凑 → 空闲 → 紧凑 间循环，用于截图与检查动画 |
+| `O_O_INSTANCE=名称` | 单实例锁用的名字；开发时另起一个互不影响的实例（否则第二次启动会交给已运行的 O_O 并退出） |
+| `O_O_DEBUG_WINDOW_PNG=路径` | 启动后把岛窗口（含模板）离屏渲染成 PNG，检查透明与形状 |
+| `O_O_DEBUG_WINDOW_PNG_DELAY=秒` | 上一项的延迟（默认 2 秒），用来截取动画结束后的画面 |
+| `O_O_DEBUG_TRAY_PNG=路径` | 把菜单栏 / 托盘图标渲染成 PNG |
+| `O_O_FAKE_FULLSCREEN=1` | 假装前台有全屏应用，检查"全屏时隐藏" |
+
+命令行：`--probe-fullscreen x y w h` 用当前平台的全屏检测判断给定矩形（调试检测逻辑）；`--pack-plugin <目录> [输出.zip]` 校验并打包插件（见下文"插件"）。
 
 ## 启动性能
 
@@ -46,6 +53,8 @@ src/Island.App/bin/Debug/net10.0/O_O --render-island out.png expanded [attached]
 
 `O_O_RENDER_GLASS=1` 配合 `--render-console` 可在彩色背景上预览控制台的玻璃层次（离屏渲染无法捕获真实的系统材质）。
 
+`O_O_RENDER_PLUGIN=<插件 id>` 配合 `--render-console … plugins` 打开该插件的详情抽屉；`O_O_RENDER_PLUGIN=+add` 打开"添加插件"对话框。`--render-island` 时 `O_O_RENDER_ACTIVITY=<插件 id>` 切到该插件的页面，`O_O_RENDER_DROP=路径1:路径2` 先把文件拖进文件暂存。
+
 默认按 1 倍渲染；`O_O_RENDER_SCALE=2` 更清晰，但部分 Arc 组件的合成层在离屏 2 倍渲染时会被重复缩放（错位、放大），这是渲染工具的限制，不代表界面有问题。
 
 ## 生成应用图标
@@ -61,6 +70,9 @@ dotnet build src/Island.App && src/Island.App/bin/Debug/net10.0/O_O --render-ico
 ## 插件
 
 第一方插件在 `plugins/`，构建时复制到输出目录。用户插件放在 `~/Library/Application Support/O_O/plugins/<id>/`（Windows `%APPDATA%\O_O\plugins`），同 id 时覆盖内置插件。
+
+
+插件以 `.zip` 安装（控制台 → 插件 → 添加插件）。打包：`O_O --pack-plugin <插件目录> [输出.zip]`（开发时：`dotnet run --project src/Island.App -- --pack-plugin <目录>`），会按安装时的规则校验清单、权限、设置与入口文件，并排除 `.git`、`node_modules` 等。编写插件的完整指南见 Claude Code 技能 `.claude/skills/o_o-plugin/SKILL.md`（附最小模板）。
 
 ## 工程结构
 

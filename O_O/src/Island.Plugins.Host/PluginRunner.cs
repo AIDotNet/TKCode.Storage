@@ -43,6 +43,10 @@ internal sealed partial class PluginRunner : IDisposable
     private readonly PluginStorage _storage;
     private readonly PluginHttp _http;
     private readonly OAuthSessions _oauth;
+    private long _lastGestureTicks = long.MinValue / 2;
+
+    /// <summary>How long after a click on its view a plugin may still open a link (async work in between).</summary>
+    public static readonly TimeSpan GestureWindow = TimeSpan.FromSeconds(3);
     private readonly Timer _flush;
     private int _pendingCalls;
 
@@ -116,6 +120,8 @@ internal sealed partial class PluginRunner : IDisposable
     /// <summary>A UI event for handler <paramref name="handlerId"/>; <paramref name="payloadJson"/> may be null.</summary>
     public void Dispatch(int handlerId, string? payloadJson)
     {
+        // A UI event is a user gesture: for a moment the plugin may do what needs one (open a link).
+        Volatile.Write(ref _lastGestureTicks, Environment.TickCount64);
         var generation = Volatile.Read(ref _generation);
         Post(() =>
         {
@@ -504,6 +510,11 @@ internal sealed partial class PluginRunner : IDisposable
                     _ => _oauth.SetLabel(payload),
                 })
                 : throw c.TypeError("This plugin has no oauth: permission."),
+            "shell.openUrl" => _permissions.Has("shell.openUrl")
+                ? Environment.TickCount64 - Volatile.Read(ref _lastGestureTicks) <= (long)GestureWindow.TotalMilliseconds
+                    ? _ => PluginShell.OpenUrl(payload, _services.OpenBrowser)
+                    : throw c.TypeError("shell.openUrl only works right after the user clicks something in this plugin.")
+                : throw c.TypeError("This plugin has no shell.openUrl permission."),
             "secrets.get" or "secrets.set" or "secrets.delete" => _permissions.Has("secrets")
                 ? _ => Task.Run(() => Secret(op, payload))
                 : throw c.TypeError("This plugin has no secrets permission."),
