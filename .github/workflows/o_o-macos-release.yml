@@ -7,8 +7,10 @@
 # Repository secrets (Settings → Secrets and variables → Actions):
 #   MACOS_CERTIFICATE              base64 of the Developer ID Application certificate (.p12, with private key)
 #   MACOS_CERTIFICATE_PASSWORD     the .p12 password
-#   APPLE_ID                       the Apple ID used for notarization
-#   APPLE_APP_SPECIFIC_PASSWORD    an app-specific password for that Apple ID (appleid.apple.com)
+#   APPLE_ID                       optional: the Apple ID used for notarization
+#   APPLE_APP_SPECIFIC_PASSWORD    optional: an app-specific password for that Apple ID (appleid.apple.com)
+# Without the two optional secrets the .dmg is signed but not notarized: it runs, but macOS asks the user to allow it
+# once (System Settings → Privacy & Security → Open Anyway) when it was downloaded with a browser.
 # Repository variable:
 #   APPLE_TEAM_ID                  the team id (42B564FHYL)
 name: O_O macOS release
@@ -77,8 +79,14 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
         run: |
+          NOTARIZE=()
+          if [[ -n "$APPLE_ID" && -n "$APPLE_APP_SPECIFIC_PASSWORD" && -n "$APPLE_TEAM_ID" ]]; then
+            NOTARIZE=(--notarize)
+          else
+            echo "::warning::APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD not set: the .dmg is signed but not notarized."
+          fi
           build/macos/package.sh --arch "${{ matrix.arch }}" --version "${{ steps.version.outputs.value }}" \
-            --identity "$SIGNING_IDENTITY" --notarize
+            --identity "$SIGNING_IDENTITY" "${NOTARIZE[@]}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -107,4 +115,4 @@ jobs:
           VERSION="${GITHUB_REF#refs/tags/o_o-v}"
           gh release create "${GITHUB_REF#refs/tags/}" dist/*.dmg --repo "$GITHUB_REPOSITORY" \
             --title "O_O $VERSION" \
-            --notes "O_O $VERSION for macOS 14+. Download O_O-$VERSION-macos-arm64.dmg for Apple Silicon or O_O-$VERSION-macos-x64.dmg for Intel, open it and drag O_O to Applications. Signed with a Developer ID and notarized by Apple."
+            --notes "O_O $VERSION for macOS 14+. Download O_O-$VERSION-macos-arm64.dmg for Apple Silicon or O_O-$VERSION-macos-x64.dmg for Intel, open it and drag O_O to Applications."
