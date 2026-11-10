@@ -40,6 +40,10 @@ public sealed class PluginsPageTests : IDisposable
 
     private static List<TKCode.Arc.Card> Cards(Control root) => root.GetLogicalDescendants().OfType<TKCode.Arc.Card>().ToList();
 
+    /// <summary>The market's cards, by name (each card carries its plugin's name for screen readers).</summary>
+    private static List<string> MarketCards(Control root) =>
+        [.. root.GetLogicalDescendants().OfType<Border>().Select(b => Avalonia.Automation.AutomationProperties.GetName(b)).OfType<string>()];
+
     [Fact]
     public void A_source_sits_in_the_card_of_the_plugin_it_feeds_and_a_plugin_turned_off_stays() => Headless.Run(() =>
     {
@@ -68,19 +72,19 @@ public sealed class PluginsPageTests : IDisposable
         new Window { Width = 900, Height = 700, Content = new ScrollViewer { Content = page } }.Show();
         page.ShowAdd();
 
-        var titles = Cards(page).Select(c => c.Title as string).ToList();
+        var titles = MarketCards(page);
         Assert.Contains("专注", titles);
         Assert.Contains("AI 用量", titles);
         Assert.DoesNotContain("待办", titles);                     // on: it is in the list, not the market
 
         var search = page.GetLogicalDescendants().OfType<TKCode.Arc.SearchField>().Single();
         search.Text = "专注";
-        Assert.Equal(["专注"], Cards(page).Select(c => c.Title as string));
+        Assert.Equal(["专注"], MarketCards(page));
 
         search.Text = "";
         var filter = page.GetLogicalDescendants().OfType<TKCode.Arc.SegmentedControl>().Single();
         filter.SelectedValue = "ai";
-        Assert.Equal(["AI 用量"], Cards(page).Select(c => c.Title as string));
+        Assert.Equal(["AI 用量"], MarketCards(page));
     });
 
     [Theory]

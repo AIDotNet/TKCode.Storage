@@ -103,6 +103,7 @@ public sealed partial class PluginsPage
         ToolTip.SetTip(description, item.Description);
 
         var card = new Border { BorderThickness = new Thickness(1), Padding = new Thickness(16, 14), Child = body };
+        Avalonia.Automation.AutomationProperties.SetName(card, item.Name);
         card.Bind(Border.BackgroundProperty, card.GetResourceObservable(ConsoleView.GroupBrushKey));
         ArcTokens.Bind(card, Border.BorderBrushProperty, ArcDesignTokenKind.BorderSubtle);
         ArcTokens.BindCornerRadius(card, ArcDesignTokenKind.RadiusPanel);
