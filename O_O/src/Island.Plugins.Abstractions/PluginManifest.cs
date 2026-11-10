@@ -179,19 +179,6 @@ public sealed class ThemeContribution
         s.Length is 7 or 9 && s[0] == '#' && s.Skip(1).All(Uri.IsHexDigit);
 }
 
-public sealed class ActivityContribution
-{
-    public required string Id { get; init; }
-    public string? Title { get; init; }
-}
-
-[JsonSourceGenerationOptions(
-    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    ReadCommentHandling = JsonCommentHandling.Skip,
-    AllowTrailingCommas = true)]
-[JsonSerializable(typeof(PluginManifest))]
-[JsonSerializable(typeof(string))]
-internal sealed partial class PluginJsonContext : JsonSerializerContext
 /// <summary>
 /// A layout preset for the island (docs/design/07-home-and-layout.md): what the user gets when applying it. Everything is
 /// optional; what is absent is left as the user has it. Applying never hides the pages or chips the preset does not
@@ -275,5 +262,18 @@ public sealed class LayoutChip
     public string? Side { get; init; }
 }
 
+public sealed class ActivityContribution
+{
+    public required string Id { get; init; }
+    public string? Title { get; init; }
+}
+
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    ReadCommentHandling = JsonCommentHandling.Skip,
+    AllowTrailingCommas = true)]
+[JsonSerializable(typeof(PluginManifest))]
+[JsonSerializable(typeof(string))]
+internal sealed partial class PluginJsonContext : JsonSerializerContext
 {
 }
