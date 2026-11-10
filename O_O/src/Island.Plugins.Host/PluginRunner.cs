@@ -123,13 +123,14 @@ internal sealed partial class PluginRunner : IDisposable
     /// <summary>A UI event for handler <paramref name="handlerId"/>; <paramref name="payloadJson"/> may be null.</summary>
     public void Dispatch(int handlerId, string? payloadJson)
     {
-        // A UI event is a user gesture: for a moment the plugin may do what needs one (open a link).
-        Volatile.Write(ref _lastGestureTicks, Environment.TickCount64);
         var generation = Volatile.Read(ref _generation);
         Post(() =>
         {
             if (generation == _generation)
             {
+                // A UI event is a user gesture: for a moment the plugin may do what needs one (open a link). The moment
+                // counts from when the plugin gets the event, not when it was queued, so a busy plugin keeps it.
+                Volatile.Write(ref _lastGestureTicks, Environment.TickCount64);
                 Call("event", handlerId, payloadJson);
             }
         });
