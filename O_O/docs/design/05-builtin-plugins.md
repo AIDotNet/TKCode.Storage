@@ -200,6 +200,13 @@ type CalendarEvent = {
 - Panel：多账户 `SegmentedControl`，最近 20 封列表，悬停预览，点击在默认邮件客户端/网页中打开；可选"AI 摘要"（借助 AI 插件，需用户启用）。
 - 规则：VIP 发件人才弹 Alert、免打扰时段。
 
+> **实现状态（2026-11-10）**：
+> - **宿主能力 `mail`**（`mail.check / status / recent`）：没有用 MailKit（NativeAOT 风险 R5），而是自写的精简只读 IMAP 客户端（`Services/Imap.cs`）：隐式 TLS（993，系统证书校验）、LOGIN（引号转义，不能加引号的字符串走 literal）、SASL XOAUTH2（SASL-IR）、STATUS、EXAMINE（从不 SELECT / STORE，不会把邮件标成已读）、UID SEARCH、UID FETCH（ENVELOPE / BODYSTRUCTURE，再取第一个 text/plain（否则 text/html）部分的前 1KB 做摘要，`BODY.PEEK`）；解码 RFC 2047、quoted-printable、base64，字符集经 `CodePagesEncodingProvider`（GBK / GB2312 按 GB18030 解码）。响应大小与每次操作（45 秒）都有上限。轮询，不用 IDLE。
+> - **账户与密钥**：插件只描述账户，宿主决定连哪里、自己取密钥。授权码账户：`{ host | hostSetting, port?, user | userSetting, passwordSetting }`——服务器必须是已知邮箱服务商（QQ、163、126、腾讯企业邮、阿里、iCloud、Gmail、Outlook 等）或用户在设置里填写的地址；密码由宿主从插件自己的密码设置读取，JS 拿不到。OAuth 账户：`{ oauth: handle }`——服务器由登录提供商固定（Google → `imap.gmail.com`，Microsoft → `outlook.office365.com`），令牌经 XOAUTH2 发送，插件给的 host 被忽略；其他提供商（飞书、钉钉）的登录不能用来收邮件。
+> - **OAuth**：新增 `microsoft` 提供商（`login.microsoftonline.com/common` v2.0，PKCE，公共客户端，范围 `offline_access https://outlook.office.com/IMAP.AccessAsUser.All`）；登录返回的 `id_token` 里的邮箱用作账户名（XOAUTH2 的用户名）。Gmail 用 `https://mail.google.com/` 范围——这是 Google 的**受限**范围，公开发布前需要通过 Google 的应用验证（含安全评估）；验证前只能由用户自己创建客户端 ID。
+> - **插件 `com.o_o.mail`**（可选）：最多 3 个授权码邮箱（预设 QQ / 163 / 126 / 腾讯企业邮 / 阿里 / iCloud / Gmail / 自定义服务器）+ Google / Microsoft 登录（填好客户端 ID 后在"邮件"页点"用 … 登录"）。收起时右侧未读数小项；每次检查到新邮件提醒一次（"n 封新邮件"，首次检查不算新）；"邮件"页按账户分标签，最近邮件分页，未读圆点，点击打开对应的网页邮箱（`shell.openUrl`）；登录账户可退出。
+> - **未做 / 未验证**：IDLE 实时推送、发信、正文全文、VIP 规则与免打扰；没有用真实的 Gmail / Outlook / QQ 账户验证过（XOAUTH2 与 IMAP 主机名按各家文档）；Outlook 个人邮箱已停用应用密码，只能走 Microsoft 登录。
+
 ## 10. AI 订阅 / 余额：聚合插件 + 提供商插件
 
 ### 10.1 拆分原则

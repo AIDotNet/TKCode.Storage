@@ -491,6 +491,7 @@ internal sealed partial class PluginRunner : IDisposable
                 }
                 : throw new UnreachableException(),
             "media.nowPlaying" or "media.command" => MediaCall(op, payload, ref c),
+            "mail.check" => MailCall(payload, ref c),
             "files.info" or "files.reveal" or "files.open" => _permissions.Has("files.shelf")
                 ? _ => Task.Run(() => op switch
                 {

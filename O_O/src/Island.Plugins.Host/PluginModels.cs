@@ -113,6 +113,12 @@ public sealed record PluginServices(string DataDirectory, Island.Platform.ISecre
     public Func<Uri, Task> OpenBrowser { get; init; } = Services.OAuthSessions.OpenSystemBrowser;
 
     /// <summary>
+    /// Tests only: opens the stream to an IMAP server (e.g. a plain one on this machine). Null in the app, where mail
+    /// always goes over implicit TLS with the system's certificate validation.
+    /// </summary>
+    public Func<string, int, CancellationToken, Task<Stream>>? ImapConnect { get; init; }
+
+    /// <summary>
     /// The loopback port the browser returns to after signing in (<c>http://127.0.0.1:&lt;port&gt;/oauth/callback</c>). Fixed,
     /// because some providers (Feishu) require the exact redirect address to be registered with the app.
     /// </summary>

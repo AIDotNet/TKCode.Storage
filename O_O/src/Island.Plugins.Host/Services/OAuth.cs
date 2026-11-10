@@ -25,6 +25,7 @@ public enum OAuthTokenStyle
 /// plugin, and the token only ever goes to <see cref="ApiHosts"/> — so a plugin cannot point a login at its own server.
 /// </summary>
 /// <param name="TokenHeader">Where the access token goes: null for <c>Authorization: Bearer</c>, else this header, raw.</param>
+/// <param name="ImapHosts">The mail servers (IMAP, XOAUTH2) the token may be used with; the first is the one used.</param>
 public sealed record OAuthProfile(
     string Id,
     string Name,
@@ -34,7 +35,8 @@ public sealed record OAuthProfile(
     IReadOnlyList<string> ApiHosts,
     bool Pkce = true,
     string? TokenHeader = null,
-    IReadOnlyDictionary<string, string>? ExtraAuthorizeParameters = null)
+    IReadOnlyDictionary<string, string>? ExtraAuthorizeParameters = null,
+    IReadOnlyList<string>? ImapHosts = null)
 {
     /// <summary>
     /// The providers O_O signs in to (docs/design/05-builtin-plugins.md §6.2). Google is the standard desktop flow;
@@ -45,7 +47,16 @@ public sealed record OAuthProfile(
         ["google"] = new("google", "Google",
             new("https://accounts.google.com/o/oauth2/v2/auth"), new("https://oauth2.googleapis.com/token"),
             OAuthTokenStyle.Form, ["www.googleapis.com"],
-            ExtraAuthorizeParameters: new Dictionary<string, string> { ["access_type"] = "offline", ["prompt"] = "consent" }),
+            ExtraAuthorizeParameters: new Dictionary<string, string> { ["access_type"] = "offline", ["prompt"] = "consent" },
+            ImapHosts: ["imap.gmail.com"]),
+        // Outlook.com / Microsoft 365 mail over IMAP (scope https://outlook.office.com/IMAP.AccessAsUser.All). A public
+        // client: no secret, PKCE; the "common" tenant takes personal and work accounts.
+        ["microsoft"] = new("microsoft", "Microsoft",
+            new("https://login.microsoftonline.com/common/oauth2/v2.0/authorize"),
+            new("https://login.microsoftonline.com/common/oauth2/v2.0/token"),
+            OAuthTokenStyle.Form, [],
+            ExtraAuthorizeParameters: new Dictionary<string, string> { ["prompt"] = "select_account" },
+            ImapHosts: ["outlook.office365.com"]),
         ["feishu"] = new("feishu", "飞书",
             new("https://accounts.feishu.cn/open-apis/authen/v1/authorize"), new("https://open.feishu.cn/open-apis/authen/v2/oauth/token"),
             OAuthTokenStyle.Json, ["open.feishu.cn"]),
@@ -144,7 +155,9 @@ internal sealed class OAuthSessions(
             var handle = "oauth_" + Random(16);
             var session = new Session(provider, clientId, clientSecret, string.Join(' ', scopes), tokens.Access, tokens.Refresh, tokens.ExpiresAt);
             secrets.Set(_service, "oauth:" + handle, session.ToJson());
-            var account = new Account(handle, provider, Str(r, "label"), DateTimeOffset.UtcNow);
+            // Without a label from the plugin, the account is named by the e-mail in the id_token (scopes openid email):
+            // mail needs it as the XOAUTH2 user, and it is what the user recognises.
+            var account = new Account(handle, provider, Str(r, "label") ?? tokens.Email, DateTimeOffset.UtcNow);
             lock (_gate)
             {
                 SaveRegistry([.. LoadRegistry(), account]);
@@ -210,6 +223,35 @@ internal sealed class OAuthSessions(
     /// </summary>
     public LocalCredential CredentialFor(string handle, Uri uri)
     {
+        var (_, profile) = Find(handle);
+        if (!profile.AllowsHost(uri.IdnHost))
+        {
+            throw new PluginCapabilityException($"{profile.Name} 的登录凭据只能发送到 {string.Join("、", profile.ApiHosts)}，不能发送到 '{uri.IdnHost}'。");
+        }
+        var session = Current(handle, profile);
+        return new LocalCredential(session.Access, session.ExpiresAt, profile.TokenHeader);
+    }
+
+    /// <summary>
+    /// For mail (XOAUTH2): the provider's IMAP server, the account's e-mail and a fresh token. The server is fixed by
+    /// the provider — the plugin never names it — so the token cannot be sent anywhere else.
+    /// </summary>
+    public (string Host, string User, string Token) ImapLogin(string handle)
+    {
+        var (account, profile) = Find(handle);
+        if (profile.ImapHosts is not [var host, ..])
+        {
+            throw new PluginCapabilityException($"{profile.Name} 的登录不能用来收邮件。");
+        }
+        if (account.Label is not { Length: > 0 } user || !user.Contains('@'))
+        {
+            throw new PluginCapabilityException("不知道这个账户的邮箱地址：请重新登录（需要 email 权限）。");
+        }
+        return (host, user, Current(handle, profile).Access);
+    }
+
+    private (Account Account, OAuthProfile Profile) Find(string handle)
+    {
         Account? account;
         lock (_gate)
         {
@@ -219,16 +261,17 @@ internal sealed class OAuthSessions(
         {
             throw new PluginCapabilityException("账户句柄无效或已退出登录。");
         }
-        if (!profile.AllowsHost(uri.IdnHost))
-        {
-            throw new PluginCapabilityException($"{profile.Name} 的登录凭据只能发送到 {string.Join("、", profile.ApiHosts)}，不能发送到 '{uri.IdnHost}'。");
-        }
+        return (account, profile);
+    }
+
+    private Session Current(string handle, OAuthProfile profile)
+    {
         var session = Load(handle) ?? throw new PluginCapabilityException($"{profile.Name} 的登录已失效，请重新登录。");
         if (session.ExpiresAt is { } expires && expires - RefreshMargin <= DateTimeOffset.UtcNow)
         {
             session = Refresh(handle, profile, session);
         }
-        return new LocalCredential(session.Access, session.ExpiresAt, profile.TokenHeader);
+        return session;
     }
 
     private Session Refresh(string handle, OAuthProfile profile, Session session)
@@ -348,7 +391,31 @@ internal sealed class OAuthSessions(
         context.Response.Close();
     }
 
-    private sealed record Tokens(string Access, string? Refresh, DateTimeOffset? ExpiresAt);
+    private sealed record Tokens(string Access, string? Refresh, DateTimeOffset? ExpiresAt, string? Email = null);
+
+    /// <summary>
+    /// The e-mail in an OpenID id_token. It was just received from the provider's token endpoint over TLS, so it is not
+    /// re-verified here; it only names the account.
+    /// </summary>
+    private static string? EmailFromIdToken(string? idToken)
+    {
+        if (idToken?.Split('.') is not [_, var payload, ..])
+        {
+            return null;
+        }
+        try
+        {
+            var base64 = payload.Replace('-', '+').Replace('_', '/');
+            base64 = base64.PadRight(base64.Length + (4 - base64.Length % 4) % 4, '=');
+            using var doc = JsonDocument.Parse(Convert.FromBase64String(base64));
+            var email = Str(doc.RootElement, "email") ?? Str(doc.RootElement, "preferred_username");
+            return email is { Length: <= 320 } && email.Contains('@') ? email : null;
+        }
+        catch (Exception e) when (e is FormatException or JsonException)
+        {
+            return null;
+        }
+    }
 
     private async Task<Tokens> RequestTokens(OAuthProfile profile, Dictionary<string, string> fields, CancellationToken ct)
     {
@@ -395,7 +462,7 @@ internal sealed class OAuthSessions(
             }
             var seconds = Num(r, "expires_in") ?? Num(r, "expireIn");
             return new Tokens(access, Str(r, "refresh_token") ?? Str(r, "refreshToken"),
-                seconds is { } n ? DateTimeOffset.UtcNow.AddSeconds(n) : null);
+                seconds is { } n ? DateTimeOffset.UtcNow.AddSeconds(n) : null, EmailFromIdToken(Str(r, "id_token")));
         }
         catch (JsonException)
         {

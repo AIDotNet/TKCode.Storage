@@ -231,7 +231,7 @@ type VNode = { t: string; p?: Record<string, unknown>; c?: VNode[]; k?: string }
 | `files` | 暂存目录、拖出、在文件管理器中显示 | `files.shelf` |
 | `notifications` | 系统通知 | `notifications` |
 | `system` | 电池、勿扰、空闲时间、前台应用名 | `system.info` |
-| `mail` | IMAP/OAuth 邮箱会话（宿主用 MailKit 实现） | `mail` |
+| `mail` | 只读 IMAP：未读数、最近邮件（宿主自带精简 IMAP 客户端；授权码账户或 OAuth 账户经 XOAUTH2，见 05 §9） | `mail`（OAuth 账户另需 `oauth:google` / `oauth:microsoft`） |
 | `shell` | 打开 URL / 打开应用 | `shell.openUrl`（打开前提示一次） |
 | `sidecar` | 启动清单声明的 Sidecar 进程并 RPC | `sidecar` |
 | `localAuth` | 只读读取宿主登记的本机客户端登录配置（如 Claude Code、Codex CLI），返回不透明 `authHandle`，token 只在发往登记域名时由宿主注入 | `localAuth:<来源ID>`，每个来源首次使用需用户确认 |

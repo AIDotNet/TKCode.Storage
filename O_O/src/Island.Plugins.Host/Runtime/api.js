@@ -374,6 +374,33 @@ export const shell = has('shell.openUrl') ? Object.freeze({
   openUrl: (url) => call('shell.openUrl', { url: String(url) }),
 }) : undefined;
 
+// ---- mail (mail; docs 05 §9) -------------------------------------------------------------------------------------
+// Read-only IMAP. An account is { host | hostSetting, port?, user | userSetting, passwordSetting } — a known provider's
+// server or the one the user typed into a setting, and the password from the plugin's own password setting (the host
+// reads it; JS never sees it) — or { oauth: handle } for an account from oauth.signIn (Google, Microsoft), whose
+// server is fixed by the provider and whose token goes over XOAUTH2.
+const mailAccount = (a) => (a?.oauth ? { oauth: String(a.oauth) } : {
+  host: a?.host == null ? undefined : String(a.host),
+  hostSetting: a?.hostSetting == null ? undefined : String(a.hostSetting),
+  port: a?.port == null ? undefined : Number(a.port),
+  user: a?.user == null ? undefined : String(a.user),
+  userSetting: a?.userSetting == null ? undefined : String(a.userSetting),
+  passwordSetting: a?.passwordSetting == null ? undefined : String(a.passwordSetting),
+});
+export const mail = has('mail') ? Object.freeze({
+  /** Everything in one connection: Promise<{ host, user, unread, total, messages: [{ uid, from, address?, subject,
+   *  date?, unread, preview? }] }> (newest first). options: { limit (1-50, 10), unreadOnly }. */
+  check: (account, options) => call('mail.check', {
+    account: mailAccount(account), limit: options?.limit, unreadOnly: options?.unreadOnly === true, recent: true,
+  }),
+  /** Promise<{ host, user, unread, total }> */
+  status: (account) => call('mail.check', { account: mailAccount(account), recent: false }),
+  /** Promise<[message]>, newest first. options: { limit, unreadOnly } */
+  recent: async (account, options) => (await call('mail.check', {
+    account: mailAccount(account), limit: options?.limit, unreadOnly: options?.unreadOnly === true, recent: true,
+  })).messages,
+}) : undefined;
+
 // ---- settings (declared in plugin.json contributes.settings; edited by the user in the console) ------------------
 export const settings = Object.freeze({
   /** The value, the schema default, or undefined. Password settings: use getSecret. */

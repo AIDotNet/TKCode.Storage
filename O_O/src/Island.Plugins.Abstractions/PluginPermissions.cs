@@ -46,6 +46,7 @@ public sealed class PluginPermissions
         "google",
         "feishu",
         "dingtalk",
+        "microsoft",
     };
 
     /// <summary>The <c>network:</c> argument that allows plain-HTTP requests to this machine.</summary>

@@ -72,7 +72,8 @@ Setting types: `string` (optionally `enum`; `format`: `password` (keychain), `ur
 | `network:localhost` | http(s) to this machine |
 | `network:@<setting>` | only the site the user typed into that string setting (self-hosted services) |
 | `secrets` | `secrets.get/set/delete` in the OS keychain |
-| `oauth:google` / `oauth:feishu` / `oauth:dingtalk` | `oauth.signIn(...)`; pass the account as `auth` to `http.fetch` — the host adds the token for that provider's API hosts only |
+| `oauth:google` / `oauth:feishu` / `oauth:dingtalk` / `oauth:microsoft` | `oauth.signIn(...)`; pass the account as `auth` to `http.fetch` — the host adds the token for that provider's API hosts only (Microsoft: mail only) |
+| `mail` | read-only IMAP: `mail.check / status / recent(account)`. Account `{ host | hostSetting, port?, user, passwordSetting }` (a known provider's server or one the user typed; the host reads the password setting itself) or `{ oauth: handle }` (Google / Microsoft, XOAUTH2 on the provider's own server) |
 | `clipboard.read` / `.write` / `.watch` / `.paste` | the clipboard (`clipboard.*`); `.paste` pastes into the app the user was in |
 | `files.shelf` | files dropped on the island (`files.onDrop`), `files.info/reveal/open`, `ui.item({ dragFiles })` |
 | `media` | now playing + play/pause/next (`media.*`) |
