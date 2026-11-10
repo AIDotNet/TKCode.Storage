@@ -39,6 +39,12 @@ public interface IIslandWindowBridge : IDisposable
     /// <summary>The pointer position relative to the window's top-left corner, in DIPs, wherever the pointer is.</summary>
     bool TryGetCursor(out PointD position);
 
+    /// <summary>
+    /// Puts the window in front again at its level without activating it (risk R16: after launch at the very top of a
+    /// macOS screen the window was sometimes not drawn). Nothing to do on most platforms.
+    /// </summary>
+    void EnsureOnScreen() { }
+
     /// <summary>Called after every pointer sample with whether the pointer is on the interactive region.</summary>
     void OnPointerSample(bool insideRegion);
 

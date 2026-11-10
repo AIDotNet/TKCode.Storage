@@ -100,6 +100,13 @@ public sealed class MacIslandPlatform : IIslandPlatform
 
         public void UpdateScale(double scale) { }
 
+        public void EnsureOnScreen()
+        {
+            // Re-assert the level and order the window front without making it key or activating O_O.
+            ObjC.SendVoid(window, ObjC.Sel("setLevel:"), (nint)IslandWindowLevel);
+            _ = ObjC.Send(window, ObjC.Sel("orderFrontRegardless")); // returns void; the register value is ignored
+        }
+
         public string Describe()
         {
             var f = ObjC.SendRect(window, ObjC.Sel("frame"));

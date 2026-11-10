@@ -106,6 +106,8 @@ public class App(IIslandPlatform platform) : Application
             var window = new IslandWindow(metrics);
             _island = new IslandController(window, platform, metrics, new HoverOptions()) { Appearance = Appearance.Current };
             Appearance.Changed += a => Dispatcher.UIThread.Post(() => _island.Appearance = a);
+            // ⌥-drag on the island moves it; the new position is saved (and the 岛体 page follows).
+            _island.AppearanceEdited += a => Appearance.Set(a);
             if (Enum.TryParse<IslandPlacement>(Environment.GetEnvironmentVariable("O_O_PLACEMENT"), true, out var placement))
             {
                 _island.PlacementOverride = placement; // development aid

@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -71,14 +72,24 @@ public sealed class IslandController : IDisposable
         _sampler = new DispatcherTimer(SampleInterval, DispatcherPriority.Input, (_, _) => Sample());
 
         var view = window.View;
-        // Only the primary button expands; the secondary one opens the island's menu.
+        // Only the primary button expands; the secondary one opens the island's menu. With ⌥ (Alt) held, the primary
+        // button drags the island along its edge instead (docs 07 §5, 位置).
         view.Surface.PointerPressed += (_, e) =>
         {
-            if (e.GetCurrentPoint(view.Surface).Properties.IsLeftButtonPressed)
+            if (!e.GetCurrentPoint(view.Surface).Properties.IsLeftButtonPressed)
             {
-                _states.Click();
+                return;
             }
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Alt) && BeginDrag(e))
+            {
+                e.Handled = true;
+                return;
+            }
+            _states.Click();
         };
+        view.Surface.PointerMoved += (_, e) => Drag(e);
+        view.Surface.PointerReleased += (_, e) => EndDrag(e);
+        view.Surface.PointerCaptureLost += (_, _) => EndDrag(null);
 
         var menu = new IslandMenu(
             openConsole: () =>
@@ -129,6 +140,69 @@ public sealed class IslandController : IDisposable
 
     private IslandPlacement Placement => _placementOverride ?? _appearance.Placement;
 
+    /// <summary>
+    /// Raised when the user changed the appearance on the island itself (⌥-drag moved it); the app saves it.
+    /// </summary>
+    public event Action<IslandAppearance>? AppearanceEdited;
+
+    // ⌥-drag: where the drag started (desktop DIPs) and the offset at that moment.
+    private PointD? _dragStart;
+    private double _dragStartOffset;
+
+    /// <summary>Starts moving the island with the pointer, unless it wraps a physical notch (that cannot move).</summary>
+    private bool BeginDrag(PointerPressedEventArgs e)
+    {
+        if (_topology is null || (Dock == IslandDock.Top && IslandLayout.AroundNotch(IslandLayout.Resolve(_topology, Placement))))
+        {
+            return false;
+        }
+        _dragStart = DesktopPoint(e);
+        _dragStartOffset = _appearance.Offset;
+        e.Pointer.Capture(_window.View.Surface);
+        return true;
+    }
+
+    private void Drag(PointerEventArgs e)
+    {
+        if (_dragStart is not { } start || _topology is null)
+        {
+            return;
+        }
+        var now = DesktopPoint(e);
+        var delta = Dock == IslandDock.Top ? now.X - start.X : now.Y - start.Y;
+        // Keep the island on its screen: at most half the edge's length from the centre, less a margin.
+        var edge = Dock == IslandDock.Top ? _topology.Bounds.Width : _topology.Bounds.Height - _topology.TopInset;
+        var limit = Math.Max(0, edge / 2 - 80);
+        var offset = Math.Clamp(Math.Round(_dragStartOffset + delta), -limit, limit);
+        if (Math.Abs(offset - _appearance.Offset) >= 1)
+        {
+            _appearance = (_appearance with { Offset = offset }).Normalized();
+            ApplyLayout(animate: false);
+        }
+    }
+
+    private void EndDrag(PointerReleasedEventArgs? e)
+    {
+        if (_dragStart is null)
+        {
+            return;
+        }
+        _dragStart = null;
+        e?.Pointer.Capture(null);
+        if (Math.Abs(_appearance.Offset - _dragStartOffset) >= 1)
+        {
+            AppearanceEdited?.Invoke(_appearance);
+        }
+    }
+
+    /// <summary>The pointer in desktop DIPs: steady while the window moves under it.</summary>
+    private PointD DesktopPoint(PointerEventArgs e)
+    {
+        var p = e.GetPosition(_window);
+        var scale = _topology?.Scale ?? 1;
+        return new PointD(_window.Position.X / scale + p.X, _window.Position.Y / scale + p.Y);
+    }
+
     /// <summary>Shape, size and position (docs/design/07-home-and-layout.md §5). Applies at once.</summary>
     public IslandAppearance Appearance
     {
@@ -136,6 +210,10 @@ public sealed class IslandController : IDisposable
         set
         {
             _appearance = value.Normalized();
+            if (_presenter is not null)
+            {
+                _presenter.Minimal = _appearance.Minimal;
+            }
             Relayout();
             if (_launched)
             {
@@ -173,6 +251,10 @@ public sealed class IslandController : IDisposable
     private static readonly TimeSpan FadeDuration = TimeSpan.FromMilliseconds(200);
     private DispatcherTimer? _fullScreenTimer;
     private bool _hidden;
+    private bool _thinLine;
+
+    /// <summary>How thick the island is while it is a thin line for a full-screen app (DIPs).</summary>
+    private const double ThinLineThickness = 4;
     private int _followCountdown;
 
     /// <summary>
@@ -181,8 +263,20 @@ public sealed class IslandController : IDisposable
     /// </summary>
     private void CheckFullScreen()
     {
-        var hide = _appearance.FullScreen == FullScreenBehavior.Hide && _topology is { } t &&
-                   SafeIsFullScreen(t);
+        var fullScreen = _appearance.FullScreen != FullScreenBehavior.Show && _topology is { } t && SafeIsFullScreen(t);
+        // 贴边细线: a thin line at the edge that still opens on hover, instead of hiding.
+        var thin = fullScreen && _appearance.FullScreen == FullScreenBehavior.ThinLine;
+        if (thin != _thinLine)
+        {
+            _thinLine = thin;
+            Log($"full screen app: {(thin ? "thin line" : "normal island")}");
+            if (_launched)
+            {
+                _states.SetRestingState(thin || !_hasActivity ? IslandState.Idle : IslandState.Compact);
+            }
+            ApplyLayout(animate: true);
+        }
+        var hide = fullScreen && _appearance.FullScreen == FullScreenBehavior.Hide;
         if (hide == _hidden)
         {
             return;
@@ -221,13 +315,25 @@ public sealed class IslandController : IDisposable
         }
     }
 
-    /// <summary>The screen the island should be on: the primary one, or the one under the pointer (跟随鼠标).</summary>
+    /// <summary>
+    /// The screen the island should be on: the primary one, the one under the pointer (跟随鼠标), or the one the user
+    /// chose (指定屏) — the primary one while that is not connected.
+    /// </summary>
     private Screen? ChooseScreen()
     {
         if (_appearance.Display == IslandDisplay.FollowMouse && PointerOnDesktop() is { } point &&
             _window.Screens.ScreenFromPoint(point) is { } underPointer)
         {
             return underPointer;
+        }
+        if (_appearance.Display == IslandDisplay.Specific && _appearance.ScreenId is { } id)
+        {
+            var all = _window.Screens.All;
+            var index = ScreenIdentity.Find(id, [.. all.Select(s => (s.DisplayName, new RectD(s.Bounds.X, s.Bounds.Y, s.Bounds.Width, s.Bounds.Height)))]);
+            if (index >= 0)
+            {
+                return all[index];
+            }
         }
         return _window.Screens.Primary ?? _window.Screens.All.FirstOrDefault();
     }
@@ -376,6 +482,8 @@ public sealed class IslandController : IDisposable
                 Dispatcher.UIThread.Post(ApplyLayout, DispatcherPriority.Background);
             }
         };
+        // After the subscriptions: turning minimal mode on renders the time right away, and the island must hear that.
+        presenter.Minimal = _appearance.Minimal;
         return presenter;
     }
 
@@ -399,7 +507,8 @@ public sealed class IslandController : IDisposable
         _hasActivity = hasActivity;
         if (_launched)
         {
-            _states.SetRestingState(hasActivity ? IslandState.Compact : IslandState.Idle);
+            // While a full-screen app is in front the island rests as a thin line, whatever it has to show.
+            _states.SetRestingState(hasActivity && !_thinLine ? IslandState.Compact : IslandState.Idle);
         }
     }
 
@@ -422,6 +531,29 @@ public sealed class IslandController : IDisposable
         Log($"platform={_platform.Name} handle={handle.HandleDescriptor}");
     }
 
+    private static readonly TimeSpan[] RepresentDelays = [TimeSpan.FromSeconds(1.2), TimeSpan.FromSeconds(3)];
+
+    /// <summary>R16 mitigation: re-order the native window and draw a few fresh frames (opacity 1 → 0.99 → 1).</summary>
+    private void Represent()
+    {
+        if (_hidden)
+        {
+            return;
+        }
+        _bridge?.EnsureOnScreen();
+        var surface = _window.View.Surface;
+        surface.Transitions ??= [];
+        var fade = new Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(120) };
+        surface.Transitions.Add(fade);
+        surface.Opacity = 0.99;
+        DispatcherTimer.RunOnce(() =>
+        {
+            surface.Opacity = 1;
+            DispatcherTimer.RunOnce(() => surface.Transitions?.Remove(fade), TimeSpan.FromMilliseconds(200));
+        }, TimeSpan.FromMilliseconds(130));
+        Log($"represent: native={_bridge?.Describe()}");
+    }
+
     private void OnOpened()
     {
         // Platforms that create the native window only when it is shown are attached here instead.
@@ -442,6 +574,14 @@ public sealed class IslandController : IDisposable
             _launched = true;
             SetHasActivity(_hasActivity);
         }, LaunchDelay);
+
+        // R16 (docs 06): occasionally the island was not drawn after launch at the very top of a macOS screen. The
+        // grow-in above mostly avoids it; as a second line, once the window has surely been ordered on screen, put it
+        // in front again (without activating) and run a short, invisible transition so a fresh frame is presented.
+        foreach (var delay in RepresentDelays)
+        {
+            DispatcherTimer.RunOnce(Represent, delay);
+        }
 
         if (Environment.GetEnvironmentVariable("O_O_DEBUG_WINDOW_PNG") is { Length: > 0 } png)
         {
@@ -598,6 +738,17 @@ public sealed class IslandController : IDisposable
             SideCompactWidth = Math.Clamp(Math.Ceiling(Math.Max(chipsLeft.Width, chipsRight.Width) + SidePadding * 2), MinSideWidth, MaxSideWidth),
             SideCompactHeight = Math.Clamp(Math.Ceiling(chipsLeft.Height + chipsRight.Height + CompactGap), _metrics.SideIdleHeight, MaxSideHeight),
         };
+        if (_thinLine)
+        {
+            // 贴边细线: at rest the island is a thin pill against the edge (it still opens on hover).
+            metrics = metrics with
+            {
+                IdleHeight = ThinLineThickness,
+                IdleWidth = 120,
+                SideIdleWidth = ThinLineThickness,
+                FloatingGap = 0,
+            };
+        }
 
         var frame = IslandLayout.Compute(_topology, Placement, dock, state, metrics, offset, islandScale);
         var previous = _frame;
@@ -745,6 +896,11 @@ public sealed class IslandController : IDisposable
     private RectD HitArea(IslandFrame frame)
     {
         var area = frame.Surface.Inflate(_metrics.HitSlop);
+        if (_thinLine && frame.Dock == IslandDock.Top)
+        {
+            // A thin line is hard to hit: pushing the pointer against the top edge above it counts too.
+            area = area.Union(new RectD(area.X, 0, area.Width, Math.Max(1, area.Y)));
+        }
         return frame.Dock switch
         {
             IslandDock.Left => area.Union(new RectD(0, area.Y, 1, area.Height)),

@@ -29,6 +29,11 @@ public enum IslandDisplay
 
     /// <summary>The screen the pointer is on; the island moves when the pointer moves to another screen.</summary>
     FollowMouse,
+
+    /// <summary>
+    /// One chosen screen (<see cref="IslandAppearance.ScreenId"/>); the primary screen while that one is not connected.
+    /// </summary>
+    Specific,
 }
 
 /// <summary>What the island does while another application is full screen (docs 07 §5).</summary>
@@ -39,17 +44,24 @@ public enum FullScreenBehavior
 
     /// <summary>Stay on screen.</summary>
     Show,
+
+    /// <summary>Shrink to a thin line at the screen edge that still opens on hover.</summary>
+    ThinLine,
 }
 
 /// <param name="Scale">0.8–1.4; the whole island, text included. Ignored around a physical notch, which it must match.</param>
 /// <param name="Offset">DIPs along the docked edge from its centre (top: rightwards). Ignored around a physical notch.</param>
+/// <param name="ScreenId">With <see cref="IslandDisplay.Specific"/>: the chosen screen (<see cref="ScreenIdentity"/>).</param>
+/// <param name="Minimal">极简模式: collapsed, the island shows only the time and alerts (docs 07 §5).</param>
 public sealed record IslandAppearance(
     IslandShape Shape = IslandShape.Capsule,
     IslandDock Dock = IslandDock.Top,
     double Scale = 1.0,
     double Offset = 0,
     IslandDisplay Display = IslandDisplay.Primary,
-    FullScreenBehavior FullScreen = FullScreenBehavior.Hide)
+    FullScreenBehavior FullScreen = FullScreenBehavior.Hide,
+    string? ScreenId = null,
+    bool Minimal = false)
 {
     public const double MinScale = 0.8;
     public const double MaxScale = 1.4;
@@ -106,7 +118,9 @@ public sealed class IslandAppearanceStore
                 r.TryGetProperty("scale", out var s) && s.TryGetDouble(out var scale) ? scale : 1,
                 r.TryGetProperty("offset", out var o) && o.TryGetDouble(out var offset) ? offset : 0,
                 Enum.TryParse<IslandDisplay>(Str(r, "display"), true, out var display) ? display : IslandDisplay.Primary,
-                Enum.TryParse<FullScreenBehavior>(Str(r, "fullScreen"), true, out var fullScreen) ? fullScreen : FullScreenBehavior.Hide)
+                Enum.TryParse<FullScreenBehavior>(Str(r, "fullScreen"), true, out var fullScreen) ? fullScreen : FullScreenBehavior.Hide,
+                Str(r, "screen"),
+                r.TryGetProperty("minimal", out var m) && m.ValueKind == JsonValueKind.True)
                 .Normalized();
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
@@ -130,8 +144,13 @@ public sealed class IslandAppearanceStore
                 w.WriteString("dock", _current.Dock.ToString().ToLowerInvariant());
                 w.WriteNumber("scale", Math.Round(_current.Scale, 2));
                 w.WriteNumber("offset", Math.Round(_current.Offset));
-                w.WriteString("display", _current.Display == IslandDisplay.FollowMouse ? "followMouse" : "primary");
-                w.WriteString("fullScreen", _current.FullScreen.ToString().ToLowerInvariant());
+                w.WriteString("display", JsonNamingPolicy.CamelCase.ConvertName(_current.Display.ToString()));
+                w.WriteString("fullScreen", JsonNamingPolicy.CamelCase.ConvertName(_current.FullScreen.ToString()));
+                if (_current.ScreenId is { } screen)
+                {
+                    w.WriteString("screen", screen);
+                }
+                w.WriteBoolean("minimal", _current.Minimal);
                 w.WriteEndObject();
             }
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);

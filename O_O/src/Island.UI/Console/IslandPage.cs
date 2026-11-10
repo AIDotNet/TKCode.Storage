@@ -117,16 +117,13 @@ public sealed class IslandPage : StackPanel
             {
                 Field("形态", shape, shapeNote),
                 Field("停靠", dock, dockNote),
-                Field("显示器", Choice(
-                    [(nameof(IslandDisplay.Primary), "主屏"), (nameof(IslandDisplay.FollowMouse), "跟随鼠标")],
-                    a.Display.ToString(),
-                    v => Update(x => x with { Display = Enum.Parse<IslandDisplay>(v) })),
-                    Note("跟随鼠标：指针移到另一块屏幕时，岛随之移过去（展开时不移动）。")),
+                DisplayField(a),
                 Field("全屏时", Choice(
-                    [(nameof(FullScreenBehavior.Hide), "隐藏"), (nameof(FullScreenBehavior.Show), "显示")],
+                    [(nameof(FullScreenBehavior.Hide), "隐藏"), (nameof(FullScreenBehavior.ThinLine), "细线"), (nameof(FullScreenBehavior.Show), "显示")],
                     a.FullScreen.ToString(),
                     v => Update(x => x with { FullScreen = Enum.Parse<FullScreenBehavior>(v) })),
-                    Note("其他应用全屏（视频、游戏、演示）时隐藏岛，退出全屏后自动回来。")),
+                    Note("其他应用全屏（视频、游戏、演示）时：隐藏岛；或缩成贴边的一条细线，指针移上去仍能展开；退出全屏后自动恢复。")),
+                MinimalField(a),
             },
         }));
         Children.Add(Group(new StackPanel
@@ -135,7 +132,9 @@ public sealed class IslandPage : StackPanel
             Children =
             {
                 new StackPanel { Spacing = 6, Children = { size, Note("整个岛按比例缩放，文字一起变大或变小。") } },
-                new StackPanel { Spacing = 6, Children = { offset, Note("点刻度上的\"居中\"可回到正中。") } },
+                new StackPanel { Spacing = 6, Children = { offset, Note(OperatingSystem.IsMacOS()
+                    ? "点刻度上的\"居中\"可回到正中。也可以按住 ⌥ 直接拖动岛。"
+                    : "点刻度上的\"居中\"可回到正中。也可以按住 Alt 直接拖动岛。") } },
                 Note("停在顶部时，在有刘海的 Mac 上岛要罩住刘海，大小和位置不起作用。"),
             },
         }));
@@ -313,11 +312,12 @@ public sealed class IslandPage : StackPanel
     /// <summary>A segmented choice that reports the picked value.</summary>
     private static SegmentedControl Choice((string Value, string Label)[] options, string selected, Action<string> picked)
     {
-        var control = new SegmentedControl { SelectedValue = selected };
+        var control = new SegmentedControl();
         foreach (var (value, label) in options)
         {
             control.Items.Add(new SegmentedOption { Value = value, Label = label });
         }
+        control.SelectedValue = selected; // after the options exist, or the selection is lost
         control.SelectionChanged += (_, _) =>
         {
             if (control.SelectedValue is string v)
@@ -329,6 +329,77 @@ public sealed class IslandPage : StackPanel
     }
 
     private void Update(Func<IslandAppearance, IslandAppearance> change) => _store.Set(change(_store.Current));
+
+    /// <summary>显示器: 主屏 / 跟随鼠标 / 指定屏, with a list of the connected screens for the last.</summary>
+    private Control DisplayField(IslandAppearance a)
+    {
+        var screens = new Select { Label = "屏幕", IsVisible = a.Display == IslandDisplay.Specific, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 280 };
+        var note = Note(DisplayNote(a.Display));
+        var choice = Choice(
+            [(nameof(IslandDisplay.Primary), "主屏"), (nameof(IslandDisplay.FollowMouse), "跟随鼠标"), (nameof(IslandDisplay.Specific), "指定屏")],
+            a.Display.ToString(),
+            v =>
+            {
+                var display = Enum.Parse<IslandDisplay>(v);
+                screens.IsVisible = display == IslandDisplay.Specific;
+                note.Text = DisplayNote(display);
+                // Choosing 指定屏 without picking yet keeps the island where it is: the first screen in the list.
+                Update(x => x with { Display = display, ScreenId = display == IslandDisplay.Specific ? x.ScreenId ?? FirstScreenId() : x.ScreenId });
+            });
+        screens.SelectionChanged += (_, _) =>
+        {
+            if (screens.SelectedValue is string id && id != _store.Current.ScreenId)
+            {
+                Update(x => x with { ScreenId = id });
+            }
+        };
+        // The screens are known once the page is in a window.
+        screens.AttachedToVisualTree += (_, _) => FillScreens(screens);
+        return Field("显示器", choice, new StackPanel { Spacing = 8, Children = { screens, note } });
+    }
+
+    private static string DisplayNote(IslandDisplay display) => display switch
+    {
+        IslandDisplay.FollowMouse => "跟随鼠标：指针移到另一块屏幕时，岛随之移过去（展开时不移动）。",
+        IslandDisplay.Specific => "岛固定在选中的屏幕上；那块屏幕没有连接时暂时显示在主屏上，接回后自动回去。",
+        _ => "岛显示在系统的主屏幕上。",
+    };
+
+    private string? FirstScreenId() => TopLevel.GetTopLevel(this)?.Screens is { } s && (s.Primary ?? s.All.FirstOrDefault()) is { } screen
+        ? ScreenIdentity.Of(screen.DisplayName, new Island.Core.Geometry.RectD(screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height))
+        : null;
+
+    private void FillScreens(Select select)
+    {
+        if (TopLevel.GetTopLevel(this)?.Screens is not { } screens)
+        {
+            return;
+        }
+        select.Items.Clear();
+        var n = 0;
+        foreach (var screen in screens.All)
+        {
+            n++;
+            var id = ScreenIdentity.Of(screen.DisplayName, new Island.Core.Geometry.RectD(screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height));
+            var name = string.IsNullOrWhiteSpace(screen.DisplayName) ? $"屏幕 {n}" : screen.DisplayName;
+            select.Items.Add(new SelectItem
+            {
+                Content = $"{name}（{screen.Bounds.Width}×{screen.Bounds.Height}{(screen.IsPrimary ? "，主屏" : "")}）",
+                Value = id,
+            });
+        }
+        var all = screens.All.Select(s => (s.DisplayName, new Island.Core.Geometry.RectD(s.Bounds.X, s.Bounds.Y, s.Bounds.Width, s.Bounds.Height))).ToList();
+        var index = ScreenIdentity.Find(_store.Current.ScreenId, all);
+        select.SelectedValue = index >= 0 ? ((SelectItem)select.Items[index]!).Value : null;
+    }
+
+    /// <summary>极简模式: collapsed, only the time and alerts.</summary>
+    private Control MinimalField(IslandAppearance a)
+    {
+        var toggle = new ArcSwitch { Content = "收起时只显示时间与提醒", IsChecked = a.Minimal };
+        toggle.IsCheckedChanged += (_, _) => Update(x => x with { Minimal = toggle.IsChecked == true });
+        return Field("极简模式", toggle, Note("开启后，收起的岛不显示其他小项（\"收起时显示\"里的设置保留，关闭后恢复）。"));
+    }
 
     private static string ShapeNote(IslandShape shape) => shape == IslandShape.Capsule
         ? "四角圆润的胶囊。在有刘海的 Mac 上它罩住刘海、比刘海更宽，内容显示在刘海两侧；其他屏幕上悬浮在顶边下方。"
