@@ -1,0 +1,57 @@
+{
+  "id": "com.o_o.calendar",
+  "name": "日程",
+  "version": "0.1.0",
+  "description": "汇总各日历的日程，会前提醒",
+  "icon": "CalendarDays",
+  "optional": true,
+  "engines": {
+    "island": "^1.0.0"
+  },
+  "main": "main.js",
+  "permissions": [
+    "clipboard.write"
+  ],
+  "contributes": {
+    "pages": [
+      {
+        "id": "today",
+        "title": "日程",
+        "icon": "CalendarDays"
+      }
+    ],
+    "chips": [
+      {
+        "id": "next",
+        "title": "下一个日程",
+        "side": "right"
+      }
+    ],
+    "activities": [
+      {
+        "id": "soon",
+        "title": "日程即将开始"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "remindBefore": {
+          "type": "integer",
+          "title": "提前提醒（分钟）",
+          "description": "日程开始前这么久在岛上提醒一次，并在点开岛时直接显示日程页。",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 10
+        },
+        "lookaheadHours": {
+          "type": "integer",
+          "title": "收起时显示多久以内的日程（小时）",
+          "description": "下一个日程在这么久之内开始时，收起的岛上显示它。",
+          "minimum": 1,
+          "maximum": 24,
+          "default": 3
+        }
+      }
+    }
+  }
+}

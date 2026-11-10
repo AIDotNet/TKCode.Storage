@@ -1,0 +1,348 @@
+using System.Globalization;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using System.Collections.ObjectModel;
+using Avalonia.Automation;
+using Avalonia.Controls.Templates;
+using Island.Core.Layout;
+using Island.Core.Pages;
+using Island.Plugins;
+using Island.Plugins.Host;
+using ArcButton = TKCode.Arc.Button;
+using ArcSwitch = TKCode.Arc.Switch;
+using TKCode.Arc;
+using TKCode.Arc.DesignTokens;
+using static Island.UI.Console.ConsoleParts;
+using ArcSlider = TKCode.Arc.Slider;
+
+namespace Island.UI.Console;
+
+/// <summary>
+/// docs/design/07-home-and-layout.md §6, appearance block: the island's shape, docking edge, size and position.
+/// Every change is saved and applied to the island at once.
+/// </summary>
+public sealed class IslandPage : StackPanel
+{
+    private readonly IslandAppearanceStore _store;
+    private readonly PagePreferencesStore _pages;
+    private readonly PluginHost _plugins;
+    private readonly ChipPreferencesStore _chips;
+
+    public IslandPage(IslandAppearanceStore store, PagePreferencesStore pages, ChipPreferencesStore chips, PluginHost plugins)
+    {
+        _chips = chips;
+        _store = store;
+        _pages = pages;
+        _plugins = plugins;
+        var a = store.Current;
+        Children.Add(PageTitle("岛体", "灵动岛的形态、位置和大小。修改会立即生效。"));
+
+        var shape = new SegmentedControl
+        {
+            Items =
+            {
+                new SegmentedOption { Value = nameof(IslandShape.Capsule), Label = "胶囊" },
+                new SegmentedOption { Value = nameof(IslandShape.Notch), Label = "刘海" },
+            },
+            SelectedValue = a.Shape.ToString(),
+        };
+        var shapeNote = Note(ShapeNote(a.Shape));
+        shape.SelectionChanged += (_, _) =>
+        {
+            if (shape.SelectedValue is string v && Enum.TryParse<IslandShape>(v, out var s))
+            {
+                shapeNote.Text = ShapeNote(s);
+                Update(x => x with { Shape = s });
+            }
+        };
+
+        var dock = new SegmentedControl
+        {
+            Items =
+            {
+                new SegmentedOption { Value = nameof(IslandDock.Top), Label = "顶部" },
+                new SegmentedOption { Value = nameof(IslandDock.Left), Label = "左侧" },
+                new SegmentedOption { Value = nameof(IslandDock.Right), Label = "右侧" },
+            },
+            SelectedValue = a.Dock.ToString(),
+        };
+        var dockNote = Note(DockNote(a.Dock));
+
+        var size = new ArcSlider
+        {
+            Label = "大小",
+            Minimum = IslandAppearance.MinScale * 100,
+            Maximum = IslandAppearance.MaxScale * 100,
+            SmallChange = 5,
+            LargeChange = 10,
+            IsValueVisible = true,
+            ValueFormatter = v => $"{v:0}%",
+            Value = Math.Round(a.Scale * 100),
+            Marks = { new SliderMark { Value = 80, Label = "80%" }, new SliderMark { Value = 100, Label = "100%" }, new SliderMark { Value = 140, Label = "140%" } },
+        };
+        size.ValueCommitted += (_, _) => Update(x => x with { Scale = Math.Round(size.Value / 5) * 5 / 100 });
+
+        var offset = new ArcSlider
+        {
+            Label = OffsetLabel(a.Dock),
+            Minimum = -IslandAppearance.MaxOffset,
+            Maximum = IslandAppearance.MaxOffset,
+            SmallChange = 10,
+            LargeChange = 50,
+            IsValueVisible = true,
+            ValueFormatter = v => Math.Abs(v) < 0.5 ? "居中"
+                : _store.Current.Dock == IslandDock.Top ? (v < 0 ? $"左移 {-v:0}" : $"右移 {v:0}")
+                : (v < 0 ? $"上移 {-v:0}" : $"下移 {v:0}"),
+            Value = a.Offset,
+            Marks = { new SliderMark { Value = 0, Label = "居中" } },
+        };
+        offset.ValueCommitted += (_, _) => Update(x => x with { Offset = Math.Round(offset.Value / 10) * 10 });
+        dock.SelectionChanged += (_, _) =>
+        {
+            if (dock.SelectedValue is string v && Enum.TryParse<IslandDock>(v, out var d) && d != _store.Current.Dock)
+            {
+                dockNote.Text = DockNote(d);
+                offset.Label = OffsetLabel(d);
+                offset.Value = 0; // the old offset ran along another edge
+                Update(x => x with { Dock = d, Offset = 0 });
+            }
+        };
+
+        Children.Add(Group(new StackPanel
+        {
+            Spacing = 20,
+            Children =
+            {
+                Field("形态", shape, shapeNote),
+                Field("停靠", dock, dockNote),
+                Field("显示器", Choice(
+                    [(nameof(IslandDisplay.Primary), "主屏"), (nameof(IslandDisplay.FollowMouse), "跟随鼠标")],
+                    a.Display.ToString(),
+                    v => Update(x => x with { Display = Enum.Parse<IslandDisplay>(v) })),
+                    Note("跟随鼠标：指针移到另一块屏幕时，岛随之移过去（展开时不移动）。")),
+                Field("全屏时", Choice(
+                    [(nameof(FullScreenBehavior.Hide), "隐藏"), (nameof(FullScreenBehavior.Show), "显示")],
+                    a.FullScreen.ToString(),
+                    v => Update(x => x with { FullScreen = Enum.Parse<FullScreenBehavior>(v) })),
+                    Note("其他应用全屏（视频、游戏、演示）时隐藏岛，退出全屏后自动回来。")),
+            },
+        }));
+        Children.Add(Group(new StackPanel
+        {
+            Spacing = 20,
+            Children =
+            {
+                new StackPanel { Spacing = 6, Children = { size, Note("整个岛按比例缩放，文字一起变大或变小。") } },
+                new StackPanel { Spacing = 6, Children = { offset, Note("点刻度上的\"居中\"可回到正中。") } },
+                Note("停在顶部时，在有刘海的 Mac 上岛要罩住刘海，大小和位置不起作用。"),
+            },
+        }));
+
+        Children.Add(SectionLabel("页面"));
+        Children.Add(Group(PageList()));
+        Children.Add(SectionLabel("收起时显示"));
+        Children.Add(Group(ChipList()));
+    }
+
+    /// <summary>
+    /// docs 07 §6, 收起时显示: every chip — the ones plugins declare, plus each instance of "multiple" chips that is
+    /// showing now (e.g. one per signed-in AI account) — dragged into order, switched on or off, put left or right.
+    /// </summary>
+    private Control ChipList()
+    {
+        var offered = new List<(ChipInfo Info, string Plugin)> { (Island.UI.Plugins.IslandPresenter.MascotChip, "O_O") };
+        foreach (var package in _plugins.Packages)
+        {
+            foreach (var chip in package.Manifest.Contributes.Chips)
+            {
+                var side = chip.Side == "left" ? ChipSide.Left : ChipSide.Right;
+                if (!chip.Multiple)
+                {
+                    offered.Add((new ChipInfo(ChipSnapshot.ChipKey(package.Id, chip.Id, null), chip.Title ?? chip.Id, chip.Enabled ?? true, side), package.Manifest.Name));
+                    continue;
+                }
+                foreach (var live in _plugins.LiveChips.Where(c => c.PluginId == package.Id && c.ChipId == chip.Id).OrderBy(c => c.Title))
+                {
+                    offered.Add((new ChipInfo(live.Key, live.Title, chip.Enabled ?? true, side), package.Manifest.Name));
+                }
+            }
+        }
+        var panel = new StackPanel { Spacing = 12 };
+        if (offered.Count == 0)
+        {
+            panel.Children.Add(Note("还没有插件提供小项。"));
+            return panel;
+        }
+        var plugins = offered.ToDictionary(o => o.Info.Key, o => o.Plugin);
+        var rows = new ObservableCollection<ChipInfo>(_chips.Current.Arrange(offered.Select(o => o.Info).OrderBy(c => c.Key, StringComparer.Ordinal)));
+        var list = new ReorderableList { Label = "收起时显示", ItemsSource = rows };
+        list.ItemTemplate = new FuncDataTemplate<ChipInfo>((chip, _) => chip is null ? new Panel() : ChipRow(chip, plugins[chip.Key]));
+        list.Reordered += (_, _) => _chips.Set(_chips.Current with { Order = [.. rows.Select(r => r.Key)] });
+        panel.Children.Add(list);
+        panel.Children.Add(Note($"岛收起时在左右两侧显示打开的小项，每侧最多 {ChipPreferences.MaxPerSide} 个；在刘海两侧时，左、右即刘海的左翼和右翼。提醒会临时占据这里几秒。"));
+        return panel;
+    }
+
+    private Control ChipRow(ChipInfo chip, string plugin)
+    {
+        var prefs = _chips.Current;
+        var side = new SegmentedControl
+        {
+            Items =
+            {
+                new SegmentedOption { Value = nameof(ChipSide.Left), Label = "左" },
+                new SegmentedOption { Value = nameof(ChipSide.Right), Label = "右" },
+            },
+            SelectedValue = prefs.SideOf(chip).ToString(),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        side.SelectionChanged += (_, _) =>
+        {
+            if (side.SelectedValue is string v && Enum.TryParse<ChipSide>(v, out var s))
+            {
+                _chips.Set(_chips.Current.WithSide(chip.Key, s));
+            }
+        };
+        var toggle = new ArcSwitch { IsChecked = prefs.IsEnabled(chip), VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetName(toggle, $"显示{chip.Title}");
+        toggle.IsCheckedChanged += (_, _) => _chips.Set(_chips.Current.WithEnabled(chip.Key, toggle.IsChecked == true));
+
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 12 };
+        var titles = new StackPanel
+        {
+            Spacing = 2,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { Text(chip.Title, ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, FontWeight.Medium) },
+        };
+        if (plugin != chip.Title)
+        {
+            titles.Children.Add(Text(plugin, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary));
+        }
+        grid.Children.Add(titles);
+        Grid.SetColumn(side, 1);
+        Grid.SetColumn(toggle, 2);
+        grid.Children.Add(side);
+        grid.Children.Add(toggle);
+        return grid;
+    }
+
+    /// <summary>
+    /// docs 07 §6, 页面: every page the plugins offer, dragged into order, switched on or off, one of them home.
+    /// Hiding a page does not stop its plugin.
+    /// </summary>
+    private Control PageList()
+    {
+        var offered = _plugins.Packages
+            .SelectMany(p => p.Manifest.Contributes.Pages.Select(page => (Package: p, Page: page)))
+            .ToDictionary(
+                x => PageSnapshot.PageKey(x.Package.Id, x.Page.Id),
+                x => (Info: new PageInfo(PageSnapshot.PageKey(x.Package.Id, x.Page.Id), x.Page.Title ?? x.Page.Id, x.Page.Enabled ?? true, x.Page.Icon),
+                      Plugin: x.Package.Manifest.Name));
+        var panel = new StackPanel { Spacing = 12 };
+        if (offered.Count == 0)
+        {
+            panel.Children.Add(Note("还没有插件提供页面。"));
+            return panel;
+        }
+        var rows = new ObservableCollection<PageInfo>(_pages.Current.Arrange(offered.Values.Select(o => o.Info)));
+        var list = new ReorderableList { Label = "页面", ItemsSource = rows };
+        list.ItemTemplate = new FuncDataTemplate<PageInfo>((page, _) => page is null ? new Panel() : PageRow(page, offered[page.Key].Plugin));
+        list.Reordered += (_, _) => _pages.Set(_pages.Current with { Order = [.. rows.Select(r => r.Key)] });
+        _pages.Changed += _ => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            // Re-template the rows so the home marks follow the change.
+            list.ItemTemplate = new FuncDataTemplate<PageInfo>((page, _) => page is null ? new Panel() : PageRow(page, offered[page.Key].Plugin));
+        });
+        panel.Children.Add(list);
+        panel.Children.Add(Note("拖动左侧把手调整标签顺序。点开岛时，如果有正在进行的活动就显示它的页面，否则显示首页。关闭页面不会停用插件。"));
+        return panel;
+    }
+
+    private Control PageRow(PageInfo page, string plugin)
+    {
+        var prefs = _pages.Current;
+        var visible = prefs.Visible(_plugins.Packages.SelectMany(p => p.Manifest.Contributes.Pages
+            .Select(g => new PageInfo(PageSnapshot.PageKey(p.Id, g.Id), g.Title ?? g.Id, g.Enabled ?? true))));
+        var isHome = prefs.HomeOf(visible) == page.Key;
+        var toggle = new ArcSwitch { IsChecked = prefs.IsEnabled(page), VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetName(toggle, $"显示{page.Title}");
+        toggle.IsCheckedChanged += (_, _) => _pages.Set(_pages.Current.WithEnabled(page.Key, toggle.IsChecked == true));
+
+        Control home;
+        if (isHome)
+        {
+            home = new Badge { Content = "首页", Size = BadgeSize.Small, VerticalAlignment = VerticalAlignment.Center };
+        }
+        else
+        {
+            var set = new ArcButton { Content = "设为首页", Variant = ButtonVariant.Ghost, Size = ControlSize.Small, VerticalAlignment = VerticalAlignment.Center };
+            set.IsVisible = prefs.IsEnabled(page); // a hidden page cannot be home
+            set.Click += (_, _) => _pages.Set(_pages.Current with { Home = page.Key });
+            home = set;
+        }
+
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 12 };
+        grid.Children.Add(new StackPanel
+        {
+            Spacing = 2,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                Text(page.Title, ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, FontWeight.Medium),
+            },
+        });
+        if (plugin != page.Title)
+        {
+            ((StackPanel)grid.Children[0]).Children.Add(Text(plugin, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary));
+        }
+        Grid.SetColumn(home, 1);
+        Grid.SetColumn(toggle, 2);
+        grid.Children.Add(home);
+        grid.Children.Add(toggle);
+        return grid;
+    }
+
+    private static string OffsetLabel(IslandDock dock) => dock == IslandDock.Top ? "水平位置" : "垂直位置";
+
+    private static string DockNote(IslandDock dock) => dock == IslandDock.Top
+        ? "停在屏幕顶部正中。"
+        : "贴在屏幕边缘、上下居中：收起时是竖向胶囊（最多 4 个小项），展开时卡片从边缘展开。刘海形态在侧边时紧贴屏幕边。";
+
+    /// <summary>A segmented choice that reports the picked value.</summary>
+    private static SegmentedControl Choice((string Value, string Label)[] options, string selected, Action<string> picked)
+    {
+        var control = new SegmentedControl { SelectedValue = selected };
+        foreach (var (value, label) in options)
+        {
+            control.Items.Add(new SegmentedOption { Value = value, Label = label });
+        }
+        control.SelectionChanged += (_, _) =>
+        {
+            if (control.SelectedValue is string v)
+            {
+                picked(v);
+            }
+        };
+        return control;
+    }
+
+    private void Update(Func<IslandAppearance, IslandAppearance> change) => _store.Set(change(_store.Current));
+
+    private static string ShapeNote(IslandShape shape) => shape == IslandShape.Capsule
+        ? "四角圆润的胶囊。在有刘海的 Mac 上它罩住刘海、比刘海更宽，内容显示在刘海两侧；其他屏幕上悬浮在顶边下方。"
+        : "贴住屏幕顶边，两侧带内凹肩部；在有刘海的 Mac 上包住刘海，内容分在左右两翼。";
+
+    private static Control Field(string label, Control control, Control? note = null)
+    {
+        var panel = new StackPanel { Spacing = 8, Children = { Text(label, ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, FontWeight.Medium), control } };
+        if (note is not null)
+        {
+            panel.Children.Add(note);
+        }
+        return panel;
+    }
+
+    private static TextBlock Note(string text) => Text(text, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true);
+}

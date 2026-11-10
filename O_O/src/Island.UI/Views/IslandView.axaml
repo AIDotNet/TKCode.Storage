@@ -1,0 +1,83 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+             xmlns:lucide="https://github.com/AIDotNet/TKCode.Arc/lucide"
+             xmlns:ui="using:Island.UI.Controls"
+             x:Class="Island.UI.Views.IslandView"
+             arc:ArcThemeScope.Appearance="Dark">
+    <!-- The island is always dark (it is the notch's colour), so every Arc control in it is themed dark whatever
+         the app's appearance; accent and motion still follow the app. -->
+    <!-- The shell only: every piece of content comes from plugins: pages when expanded, activities when compact (docs 07). -->
+    <ui:IslandSurface x:Name="Surface" HorizontalAlignment="Left" VerticalAlignment="Top">
+        <Panel>
+            <!-- Compact: content only in the wings either side of the notch; the middle column is the notch. -->
+            <ui:IslandStatePanel x:Name="CompactPanel" HorizontalAlignment="Center" VerticalAlignment="Top">
+                <Grid x:Name="CompactGrid" ColumnDefinitions="*,Auto,*">
+                    <ContentControl x:Name="CompactLeading"
+                                    Margin="14,0,0,0"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center" />
+                    <Border x:Name="CompactNotchGap" Grid.Column="1" />
+                    <ContentControl x:Name="CompactTrailing"
+                                    Grid.Column="2"
+                                    Margin="0,0,22,0"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center" />
+                </Grid>
+            </ui:IslandStatePanel>
+
+            <ui:IslandStatePanel x:Name="ExpandedPanel" HorizontalAlignment="Center" VerticalAlignment="Top">
+                <DockPanel>
+                    <!-- The header row (docs 07 §3): page tabs on the left (the overflow behind "更多 ⌄"), date and time and
+                         the menu on the right. Around a notch the two halves sit in the wings either side of it. -->
+                    <Grid x:Name="ExpandedHeader" DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto">
+                        <StackPanel Orientation="Horizontal" Spacing="2" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <ui:TextTabs x:Name="PageTabs" VerticalAlignment="Center" />
+                            <arc:DropdownMenu x:Name="PageOverflow" IsVisible="False" Label="更多页面" Side="Bottom" Alignment="Start" />
+                            <TextBlock x:Name="ExpandedTitle"
+                                       Text="O_O"
+                                       Margin="8,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontFamily="{arc:ArcDesignTokenResource BodyFontFamily}"
+                                       FontSize="{arc:ArcDesignTokenResource TypeSM}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource IslandForegroundBrush}" />
+                        </StackPanel>
+                        <Border x:Name="ExpandedNotchGap" Grid.Column="1" />
+                        <StackPanel Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    Spacing="6"
+                                    Margin="0,0,14,0"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center">
+                            <!-- What the shown page says about itself (its status, from island.page(id).update(view, { status })). -->
+                            <ContentControl x:Name="HeaderStatus"
+                                            VerticalAlignment="Center"
+                                            FontFamily="{arc:ArcDesignTokenResource BodyFontFamily}"
+                                            FontSize="{arc:ArcDesignTokenResource TypeSM}"
+                                            Foreground="{DynamicResource IslandSecondaryBrush}" />
+                            <!-- The island's commands live in a menu (docs 02 §2.2): one quiet "⋯" trigger here, and the same
+                                 rows on right-click anywhere on the island. Collapsing needs no button: move away. -->
+                            <arc:DropdownMenu x:Name="MoreMenu"
+                                              VerticalAlignment="Center"
+                                              Label="更多"
+                                              Side="Bottom"
+                                              Alignment="End">
+                                <arc:DropdownMenu.Trigger>
+                                    <arc:Button Variant="Ghost"
+                                                Size="Small"
+                                                Width="32"
+                                                Padding="0"
+                                                AutomationProperties.Name="更多">
+                                        <lucide:LucideIcon Kind="Ellipsis" Size="16" Foreground="{DynamicResource IslandForegroundBrush}" />
+                                    </arc:Button>
+                                </arc:DropdownMenu.Trigger>
+                            </arc:DropdownMenu>
+                        </StackPanel>
+                    </Grid>
+                    <ContentControl x:Name="ExpandedContent" Margin="24,12,24,20" />
+                </DockPanel>
+            </ui:IslandStatePanel>
+        </Panel>
+    </ui:IslandSurface>
+</UserControl>

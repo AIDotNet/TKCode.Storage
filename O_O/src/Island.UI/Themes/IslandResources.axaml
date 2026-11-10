@@ -1,0 +1,82 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+                    xmlns:ui="using:Island.UI.Controls"
+                    x:Class="Island.UI.Themes.IslandResources">
+
+    <!-- The island's own tokens (docs/design/02-island-shell.md §3.2). Arc's tokens follow the app's light or dark
+         appearance, but around a notch the island must be the colour of the notch, so the island surface is always
+         dark. These are the only literal colours in the island; views read them by key. Theme packages may override
+         every key except IslandNotchSurfaceBrush. -->
+    <SolidColorBrush x:Key="IslandNotchSurfaceBrush" Color="#000000" />
+    <SolidColorBrush x:Key="IslandForegroundBrush" Color="#F5F5F7" />
+    <SolidColorBrush x:Key="IslandSecondaryBrush" Color="#A1A1A6" />
+    <SolidColorBrush x:Key="IslandDividerBrush" Color="#2C2C2E" />
+    <!-- Tiles on the island (ui.card): Apple's dark elevated greys, the only filled shapes allowed on it. -->
+    <SolidColorBrush x:Key="IslandCardBrush" Color="#1C1C1E" />
+    <SolidColorBrush x:Key="IslandCardHoverBrush" Color="#2C2C2E" />
+
+    <!-- Window controls in the Apple style, drawn on Windows and Linux (macOS shows its own). Fixed by design: they
+         are the same colours in both appearances, as on macOS. -->
+    <SolidColorBrush x:Key="TrafficCloseBrush" Color="#FF5F57" />
+    <SolidColorBrush x:Key="TrafficMinimizeBrush" Color="#FEBC2E" />
+    <SolidColorBrush x:Key="TrafficZoomBrush" Color="#28C840" />
+    <SolidColorBrush x:Key="TrafficGlyphBrush" Color="#99000000" />
+    <SolidColorBrush x:Key="TrafficInactiveBrush" Color="#33808080" />
+
+    <ControlTheme x:Key="{x:Type ui:IslandSurface}" TargetType="ui:IslandSurface">
+        <Setter Property="Background" Value="{DynamicResource IslandNotchSurfaceBrush}" />
+        <Setter Property="arc:ArcMotion.Tracks" Value="True" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <!-- Apple-style outline: continuous corners, and concave shoulders where it hangs from the top edge. -->
+                <ui:ContinuousBorder Background="{TemplateBinding Background}"
+                                     CornerRadius="{TemplateBinding CornerRadius}"
+                                     Shoulder="{TemplateBinding Shoulder}">
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </ui:ContinuousBorder>
+            </ControlTemplate>
+        </Setter>
+        <!-- Shape morphs: widths that follow content and shape changes are what Arc's Morph spring is for. -->
+        <Style Selector="^:motion-full">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <arc:SpringDoubleTransition Property="Width" Spring="Morph" />
+                    <arc:SpringDoubleTransition Property="Height" Spring="Morph" />
+                    <arc:SpringThicknessTransition Property="Margin" Spring="Morph" />
+                    <arc:SpringCornerRadiusTransition Property="CornerRadius" Spring="Morph" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <!-- Reduced motion: sizes change at once; the content panels still fade. -->
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type ui:IslandStatePanel}" TargetType="ui:IslandStatePanel">
+        <Setter Property="Opacity" Value="0" />
+        <Setter Property="arc:ArcMotion.Tracks" Value="True" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <ContentPresenter Content="{TemplateBinding Content}"
+                                  ContentTemplate="{TemplateBinding ContentTemplate}" />
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:active">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="^:motion-full">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <arc:SpringDoubleTransition Property="Opacity" Spring="Smooth" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="^:motion-reduced">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.16" />
+                </Transitions>
+            </Setter>
+        </Style>
+    </ControlTheme>
+</ResourceDictionary>

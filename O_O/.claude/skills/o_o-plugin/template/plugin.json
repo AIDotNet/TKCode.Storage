@@ -1,0 +1,18 @@
+{
+  "id": "com.example.hello",
+  "name": "你好",
+  "version": "0.1.0",
+  "description": "一个最小的 O_O 插件：一个页面、一个小项",
+  "icon": "Hand",
+  "main": "main.js",
+  "permissions": [],
+  "contributes": {
+    "pages": [{ "id": "main", "title": "你好", "icon": "Hand" }],
+    "chips": [{ "id": "count", "title": "点击次数", "side": "right" }],
+    "settings": {
+      "properties": {
+        "greeting": { "type": "string", "title": "问候语", "default": "你好，O_O" }
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "id": "com.o_o.ai.claude",
+  "name": "Claude 用量",
+  "version": "0.1.0",
+  "description": "读取本机 Claude Code 的套餐用量（通过状态栏，不读取登录凭据）",
+  "icon": "logo:claude",
+  "main": "main.js",
+  "permissions": [
+    "localAuth:claude-code"
+  ],
+  "contributes": {
+    "providers": [
+      {
+        "interface": "ai-usage",
+        "id": "claude",
+        "title": "Claude"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "configDirs": {
+          "type": "string",
+          "title": "其他配置目录",
+          "description": "通常不用填：O_O 会自动找到本机所有已登录的 Claude Code 配置目录。找不到时在这里每行填一个完整路径。",
+          "x-multiline": true,
+          "default": ""
+        }
+      }
+    }
+  }
+}

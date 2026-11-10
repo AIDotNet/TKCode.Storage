@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Plugins name icons in data, so every Lucide icon must be compiled in (docs 06, risk R4: measure the size). -->
+    <LucideIconsIncludeAll>true</LucideIconsIncludeAll>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Arc is built against this exact Avalonia version; keep every Avalonia package on it. -->
+    <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="TKCode.Arc" Version="1.0.0" />
+    <PackageReference Include="TKCode.Arc.Blocks" Version="1.0.0" />
+    <PackageReference Include="TKCode.Arc.Icons.Lucide" Version="1.0.0" />
+    <PackageReference Include="TKCode.Arc.Special" Version="1.0.0" />
+    <PackageReference Include="TKCode.Arc.Themes.Corners" Version="1.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Island.Platform.Abstractions\Island.Platform.Abstractions.csproj" />
+    <ProjectReference Include="..\Island.Plugins.Abstractions\Island.Plugins.Abstractions.csproj" />
+    <ProjectReference Include="..\Island.Plugins.Host\Island.Plugins.Host.csproj" />
+  </ItemGroup>
+</Project>

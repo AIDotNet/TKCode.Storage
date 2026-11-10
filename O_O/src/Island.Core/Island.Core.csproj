@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Pure logic: layout math, state machine, models. No Avalonia, no platform code, so it is unit-testable. -->
+</Project>

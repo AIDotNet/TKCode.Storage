@@ -1,0 +1,13 @@
+{
+  "id": "com.example.demo-usage",
+  "name": "示例用量来源",
+  "version": "0.1.0",
+  "main": "main.js",
+  "permissions": [],
+  "contributes": {
+    "providers": [
+      { "interface": "ai-usage", "id": "demo", "title": "Demo" },
+      { "interface": "ai-usage", "id": "demo-balance", "title": "Demo 余额" }
+    ]
+  }
+}

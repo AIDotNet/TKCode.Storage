@@ -1,0 +1,43 @@
+{
+  "id": "com.o_o.clipboard",
+  "name": "剪贴板历史",
+  "version": "0.1.0",
+  "description": "记录复制过的内容，点一下粘贴回去",
+  "icon": "ClipboardList",
+  "engines": {
+    "island": "^1.0.0"
+  },
+  "main": "main.js",
+  "permissions": [
+    "clipboard.watch",
+    "clipboard.write",
+    "clipboard.paste"
+  ],
+  "contributes": {
+    "pages": [
+      {
+        "id": "history",
+        "title": "剪贴板",
+        "icon": "ClipboardList"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "max": {
+          "type": "integer",
+          "title": "保留条数",
+          "description": "超出后从最旧的开始删除；置顶的不计入。",
+          "minimum": 1,
+          "maximum": 500,
+          "default": 30
+        },
+        "directPaste": {
+          "type": "boolean",
+          "title": "点击后直接粘贴",
+          "description": "粘贴到之前正在使用的应用。关闭后点击只复制。macOS 需要\"辅助功能\"权限。",
+          "default": true
+        }
+      }
+    }
+  }
+}

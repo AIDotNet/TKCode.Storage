@@ -1,0 +1,80 @@
+{
+  "id": "com.o_o.focus",
+  "name": "专注",
+  "version": "0.1.0",
+  "description": "番茄钟专注，可绑定待办",
+  "icon": "Timer",
+  "optional": true,
+  "engines": {
+    "island": "^1.0.0"
+  },
+  "main": "main.js",
+  "permissions": [],
+  "contributes": {
+    "pages": [
+      {
+        "id": "timer",
+        "title": "专注",
+        "icon": "Timer"
+      }
+    ],
+    "chips": [
+      {
+        "id": "remaining",
+        "title": "专注剩余时间",
+        "side": "left"
+      }
+    ],
+    "activities": [
+      {
+        "id": "session",
+        "title": "专注中"
+      }
+    ],
+    "providers": [
+      {
+        "interface": "focus",
+        "id": "focus",
+        "title": "专注"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "work": {
+          "type": "integer",
+          "title": "专注时长（分钟）",
+          "minimum": 1,
+          "maximum": 120,
+          "default": 25
+        },
+        "short": {
+          "type": "integer",
+          "title": "短休息（分钟）",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 5
+        },
+        "long": {
+          "type": "integer",
+          "title": "长休息（分钟）",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 15
+        },
+        "longEvery": {
+          "type": "integer",
+          "title": "每几个番茄后长休息",
+          "minimum": 2,
+          "maximum": 8,
+          "default": 4
+        },
+        "autoNext": {
+          "type": "boolean",
+          "title": "自动开始下一段",
+          "description": "专注结束后自动开始休息，休息结束后自动开始专注。",
+          "default": false
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+             xmlns:lucide="https://github.com/AIDotNet/TKCode.Arc/lucide"
+             xmlns:console="using:Island.UI.Console"
+             xmlns:mascot="using:Island.UI"
+             x:Class="Island.UI.Console.ConsoleView">
+    <!-- Backgrounds come from ConsoleView.Glass (code-behind): translucent over the window's system material when
+         the platform offers one, Arc's opaque tokens otherwise. -->
+    <!-- docs/design/04-console.md §2: navigation on the left, one page on the right. -->
+    <DockPanel>
+        <arc:Sidebar x:Name="Nav"
+                     DockPanel.Dock="Left"
+                     IsCollapseButtonVisible="False"
+                     SelectedKey="plugins"
+                     Label="控制台">
+            <arc:Sidebar.Header>
+                <StackPanel Spacing="10">
+                <!-- Room for the traffic lights over the sidebar (drawn here on Windows and Linux), and a drag strip. -->
+                <Panel Height="34">
+                    <console:WindowDragArea />
+                    <ContentControl x:Name="TrafficLightsSlot" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                </Panel>
+                <StackPanel Orientation="Horizontal" Spacing="10" Margin="6,0,0,0">
+                    <mascot:MascotHost x:Name="SidebarMascot" Size="28" Wander="True" />
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="O_O"
+                                   FontWeight="SemiBold"
+                                   Foreground="{arc:ArcDesignTokenResource Foreground}" />
+                        <TextBlock Text="控制台"
+                                   FontSize="{arc:ArcDesignTokenResource TypeXS}"
+                                   Foreground="{arc:ArcDesignTokenResource TextSecondary}" />
+                    </StackPanel>
+                </StackPanel>
+                </StackPanel>
+            </arc:Sidebar.Header>
+            <arc:SidebarSection Header="通用">
+                <arc:SidebarItem Key="appearance" Label="外观">
+                    <arc:SidebarItem.Icon>
+                        <lucide:LucideIcon Kind="Palette" Size="16" />
+                    </arc:SidebarItem.Icon>
+                </arc:SidebarItem>
+                <arc:SidebarItem Key="island" Label="岛体">
+                    <arc:SidebarItem.Icon>
+                        <lucide:LucideIcon Kind="PanelTop" Size="16" />
+                    </arc:SidebarItem.Icon>
+                </arc:SidebarItem>
+                <arc:SidebarItem Key="shortcuts" Label="快捷键">
+                    <arc:SidebarItem.Icon>
+                        <lucide:LucideIcon Kind="Keyboard" Size="16" />
+                    </arc:SidebarItem.Icon>
+                </arc:SidebarItem>
+            </arc:SidebarSection>
+            <arc:SidebarSection Header="扩展">
+                <arc:SidebarItem Key="plugins" Label="插件">
+                    <arc:SidebarItem.Icon>
+                        <lucide:LucideIcon Kind="Puzzle" Size="16" />
+                    </arc:SidebarItem.Icon>
+                </arc:SidebarItem>
+            </arc:SidebarSection>
+            <arc:SidebarSection>
+                <arc:SidebarItem Key="about" Label="关于">
+                    <arc:SidebarItem.Icon>
+                        <lucide:LucideIcon Kind="Info" Size="16" />
+                    </arc:SidebarItem.Icon>
+                </arc:SidebarItem>
+            </arc:SidebarSection>
+        </arc:Sidebar>
+
+        <Panel>
+            <ScrollViewer x:Name="ContentPane" HorizontalScrollBarVisibility="Disabled">
+                <ContentControl x:Name="Page" Margin="40,56,40,40" MaxWidth="760" HorizontalAlignment="Stretch" />
+            </ScrollViewer>
+            <!-- The top of the content pane moves the window, as a title bar would. -->
+            <console:WindowDragArea Height="40" VerticalAlignment="Top" />
+        </Panel>
+    </DockPanel>
+</UserControl>

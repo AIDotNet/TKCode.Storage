@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Island.App/Island.App.csproj" />
+    <Project Path="src/Island.Core/Island.Core.csproj" />
+    <Project Path="src/Island.Platform.Abstractions/Island.Platform.Abstractions.csproj" />
+    <Project Path="src/Island.Platform.Linux/Island.Platform.Linux.csproj" />
+    <Project Path="src/Island.Platform.MacOS/Island.Platform.MacOS.csproj" />
+    <Project Path="src/Island.Platform.Windows/Island.Platform.Windows.csproj" />
+    <Project Path="src/Island.Plugins.Abstractions/Island.Plugins.Abstractions.csproj" />
+    <Project Path="src/Island.Plugins.Host/Island.Plugins.Host.csproj" />
+    <Project Path="src/Island.UI/Island.UI.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Island.Core.Tests/Island.Core.Tests.csproj" />
+    <Project Path="tests/Island.Platform.Tests/Island.Platform.Tests.csproj" />
+    <Project Path="tests/Island.Plugins.Host.Tests/Island.Plugins.Host.Tests.csproj" />
+  </Folder>
+</Solution>

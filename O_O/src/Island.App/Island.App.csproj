@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <AssemblyName>O_O</AssemblyName>
+        <!-- Generated from the mascot by the app itself; see docs/dev.md (render the icon). -->
+        <ApplicationIcon>..\..\assets\icon\O_O.ico</ApplicationIcon>
+        <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+        <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+        <!-- The .NET 11 SDK's optimized AOT publish drops Avalonia's compiled XAML ("No precompiled XAML found" at start). -->
+        <UseOptimizedPublish>false</UseOptimizedPublish>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- First-party plugins ship next to the executable, in plugins/<id>/. -->
+        <None Include="..\..\plugins\**\*" LinkBase="plugins" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
+        <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.4" />
+        <PackageReference Include="TKCode.Arc" Version="1.0.0" />
+        <PackageReference Include="TKCode.Arc.Fonts" Version="1.0.0" />
+        <PackageReference Include="TKCode.Arc.Icons.Lucide" Version="1.0.0" />
+        <PackageReference Include="TKCode.Arc.Special" Version="1.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Island.UI\Island.UI.csproj" />
+        <ProjectReference Include="..\Island.Plugins.Host\Island.Plugins.Host.csproj" />
+        <ProjectReference Include="..\Island.Platform.MacOS\Island.Platform.MacOS.csproj" />
+        <ProjectReference Include="..\Island.Platform.Windows\Island.Platform.Windows.csproj" />
+        <ProjectReference Include="..\Island.Platform.Linux\Island.Platform.Linux.csproj" />
+    </ItemGroup>
+</Project>

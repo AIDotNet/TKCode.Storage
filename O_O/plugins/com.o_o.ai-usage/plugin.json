@@ -1,0 +1,57 @@
+{
+  "id": "com.o_o.ai-usage",
+  "name": "AI 用量",
+  "version": "0.1.0",
+  "description": "把各家 AI 订阅的用量和余额集中显示在岛上",
+  "icon": "Gauge",
+  "main": "main.js",
+  "permissions": [],
+  "contributes": {
+    "pages": [
+      {
+        "id": "usage",
+        "title": "AI 用量",
+        "icon": "Gauge"
+      }
+    ],
+    "chips": [
+      {
+        "id": "summary",
+        "title": "AI 用量（最高）",
+        "side": "right"
+      },
+      {
+        "id": "account",
+        "title": "AI 账户",
+        "multiple": true,
+        "enabled": false,
+        "side": "right"
+      }
+    ],
+    "activities": [
+      {
+        "id": "usage",
+        "title": "AI 用量"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "every": {
+          "type": "integer",
+          "title": "刷新间隔（分钟）",
+          "minimum": 5,
+          "maximum": 120,
+          "default": 10
+        },
+        "alertAt": {
+          "type": "integer",
+          "title": "提醒阈值（%）",
+          "description": "任一额度用到这个比例时，在岛上提醒。",
+          "minimum": 50,
+          "maximum": 100,
+          "default": 90
+        }
+      }
+    }
+  }
+}

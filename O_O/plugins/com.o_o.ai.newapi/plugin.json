@@ -1,0 +1,76 @@
+{
+  "id": "com.o_o.ai.newapi",
+  "name": "NewAPI 余额",
+  "version": "0.1.0",
+  "description": "查询 NewAPI / OneAPI 中转站令牌的剩余额度",
+  "icon": "Wallet",
+  "optional": true,
+  "main": "main.js",
+  "permissions": [
+    "network:@baseUrl"
+  ],
+  "contributes": {
+    "providers": [
+      {
+        "interface": "ai-usage",
+        "id": "newapi",
+        "title": "NewAPI"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "format": "url",
+          "title": "站点地址",
+          "description": "NewAPI / OneAPI 兼容站点的地址，例如 https://api.example.com（不含 /v1）。O_O 只会把请求发往这个地址。",
+          "default": ""
+        },
+        "currency": {
+          "type": "string",
+          "title": "额度单位",
+          "description": "与站点后台的“额度显示方式”一致：美元或人民币。",
+          "enum": [
+            "USD",
+            "CNY"
+          ],
+          "default": "USD"
+        },
+        "key1": {
+          "type": "string",
+          "format": "password",
+          "title": "API Key",
+          "description": "站点“令牌”页里以 sk- 开头的令牌。只保存在系统钥匙串里，只发送给上面的站点。"
+        },
+        "name1": {
+          "type": "string",
+          "title": "名称",
+          "description": "可选，用来区分多个 Key（如“工作”“个人”）。",
+          "default": ""
+        },
+        "key2": {
+          "type": "string",
+          "format": "password",
+          "title": "API Key 2",
+          "description": "可选：第二个账户的 Key。"
+        },
+        "name2": {
+          "type": "string",
+          "title": "名称 2",
+          "default": ""
+        },
+        "key3": {
+          "type": "string",
+          "format": "password",
+          "title": "API Key 3",
+          "description": "可选：第三个账户的 Key。"
+        },
+        "name3": {
+          "type": "string",
+          "title": "名称 3",
+          "default": ""
+        }
+      }
+    }
+  }
+}

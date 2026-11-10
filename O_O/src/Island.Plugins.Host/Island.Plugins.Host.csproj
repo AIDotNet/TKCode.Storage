@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Jaunt" Version="1.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Injected into every plugin realm; read with GetManifestResourceStream (AOT safe). -->
+    <EmbeddedResource Include="Runtime\*.js" LogicalName="Island.Plugins.Host.Runtime.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Island.Plugins.Host.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Island.Plugins.Abstractions\Island.Plugins.Abstractions.csproj" />
+    <ProjectReference Include="..\Island.Core\Island.Core.csproj" />
+    <ProjectReference Include="..\Island.Platform.Abstractions\Island.Platform.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

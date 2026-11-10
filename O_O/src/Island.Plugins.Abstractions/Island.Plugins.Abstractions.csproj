@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Plugin-facing models shared by the host and the UI: manifest, VNode tree, activity snapshots. No Avalonia. -->
+</Project>

@@ -1,0 +1,70 @@
+{
+  "id": "com.o_o.todo",
+  "name": "待办",
+  "version": "0.1.0",
+  "description": "轻量待办清单，到期前提醒",
+  "icon": "ListTodo",
+  "optional": true,
+  "engines": {
+    "island": "^1.0.0"
+  },
+  "main": "main.js",
+  "permissions": [
+    "clipboard.read"
+  ],
+  "contributes": {
+    "pages": [
+      {
+        "id": "list",
+        "title": "待办",
+        "icon": "ListTodo"
+      }
+    ],
+    "chips": [
+      {
+        "id": "count",
+        "title": "待办数量",
+        "side": "right"
+      }
+    ],
+    "activities": [
+      {
+        "id": "due",
+        "title": "待办到期"
+      }
+    ],
+    "providers": [
+      {
+        "interface": "todo",
+        "id": "todo",
+        "title": "待办"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "add": {
+          "type": "string",
+          "x-multiline": true,
+          "title": "添加待办",
+          "description": "每行一项，保存后加入岛上的待办。可以写日期和时间：今天、明天、后天、周五、11月12日、11/12、15:30、下午3点半；行首加 ! 表示重要。加入后这些行可以删掉，也可以留着（不会重复加入）。",
+          "default": ""
+        },
+        "remindBefore": {
+          "type": "integer",
+          "title": "提前提醒（分钟）",
+          "description": "有时间的待办在到期前这么久出现在岛上。",
+          "minimum": 1,
+          "maximum": 120,
+          "default": 10
+        },
+        "keepDoneDays": {
+          "type": "integer",
+          "title": "已完成保留天数",
+          "minimum": 1,
+          "maximum": 90,
+          "default": 7
+        }
+      }
+    }
+  }
+}

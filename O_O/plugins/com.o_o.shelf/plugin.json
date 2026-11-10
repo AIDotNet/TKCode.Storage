@@ -1,0 +1,42 @@
+{
+  "id": "com.o_o.shelf",
+  "name": "文件暂存",
+  "version": "0.1.0",
+  "description": "把文件拖到岛上暂存，随时拖出到其他应用",
+  "icon": "Paperclip",
+  "engines": {
+    "island": "^1.0.0"
+  },
+  "main": "main.js",
+  "permissions": [
+    "files.shelf"
+  ],
+  "contributes": {
+    "pages": [
+      {
+        "id": "files",
+        "title": "文件",
+        "icon": "Files"
+      }
+    ],
+    "chips": [
+      {
+        "id": "count",
+        "title": "暂存的文件数",
+        "side": "right"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "keepDays": {
+          "type": "integer",
+          "title": "保留天数",
+          "description": "暂存超过这么多天的文件会从列表移除（只移除记录，不删除文件）。",
+          "minimum": 1,
+          "maximum": 90,
+          "default": 7
+        }
+      }
+    }
+  }
+}

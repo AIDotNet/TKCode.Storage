@@ -1,0 +1,21 @@
+{
+  "id": "com.o_o.ai.codex",
+  "name": "Codex 用量",
+  "version": "0.1.0",
+  "description": "读取本机 Codex 登录的套餐用量",
+  "icon": "logo:codex",
+  "main": "main.js",
+  "permissions": [
+    "localAuth:codex-cli",
+    "network:chatgpt.com"
+  ],
+  "contributes": {
+    "providers": [
+      {
+        "interface": "ai-usage",
+        "id": "codex",
+        "title": "Codex"
+      }
+    ]
+  }
+}
