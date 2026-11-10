@@ -159,7 +159,17 @@ public sealed class IslandController : IDisposable
         context.Opened += (_, _) => SetMenuOpen(true);
         context.Closed += (_, _) => SetMenuOpen(false);
 
-        window.Opened += (_, _) => OnOpened();
+        window.Opened += (_, _) =>
+        {
+            OnOpened();
+            ApplyThemeMotion();
+        };
+        // A theme's island layer (surface, corners, spring) applies at once (docs/design/09-island-v2.md §4).
+        Island.UI.Themes.IslandTheme.Changed += () => Dispatcher.UIThread.Post(() =>
+        {
+            ApplyThemeMotion();
+            ApplyLayout();
+        });
         window.Screens.Changed += (_, _) => Relayout();
         window.ScalingChanged += (_, _) => _bridge?.UpdateScale(window.RenderScaling);
     }
@@ -763,6 +773,34 @@ public sealed class IslandController : IDisposable
 
     private void ApplyLayout() => ApplyLayout(animate: true);
 
+    /// <summary>
+    /// The theme's spring for the shape (docs/design/09-island-v2.md §4), in place of the island's own (Arc's Morph). Only
+    /// with full motion: with reduced motion the island's style (sizes change at once) stays in charge.
+    /// </summary>
+    private void ApplyThemeMotion()
+    {
+        var surface = _window.View.Surface;
+        if (Island.UI.Themes.IslandTheme.Current.Spring is not { } spring || !surface.Classes.Contains(":motion-full"))
+        {
+            if (_themedMotion)
+            {
+                surface.ClearValue(Avalonia.Animation.Animatable.TransitionsProperty);
+                _themedMotion = false;
+            }
+            return;
+        }
+        surface.Transitions =
+        [
+            new TKCode.Arc.Motion.SpringDoubleTransition { Property = Layoutable.WidthProperty, Spring = spring },
+            new TKCode.Arc.Motion.SpringDoubleTransition { Property = Layoutable.HeightProperty, Spring = spring },
+            new TKCode.Arc.Motion.SpringThicknessTransition { Property = Layoutable.MarginProperty, Spring = spring },
+            new TKCode.Arc.Motion.SpringCornerRadiusTransition { Property = Island.UI.Controls.IslandSurface.CornerRadiusProperty, Spring = spring },
+        ];
+        _themedMotion = true;
+    }
+
+    private bool _themedMotion;
+
     private void ApplyLayout(bool animate)
     {
         if (_topology is null || _screen is null)
@@ -858,12 +896,22 @@ public sealed class IslandController : IDisposable
         surface.Width = frame.Surface.Width;
         surface.Height = frame.Surface.Height;
         surface.Margin = new Thickness(frame.Surface.X, frame.Surface.Y, 0, 0);
+        // Around a real notch the island is the notch's black and its shape the notch's; elsewhere the theme's
+        // surface and corner scale apply (docs/design/09-island-v2.md §4).
+        var atNotch = frame.NotchGap > 0 || widthFrame.NotchGap > 0;
+        surface.Classes.Set("notch", atNotch);
         var c = frame.Corners;
+        if (!atNotch && Island.UI.Themes.IslandTheme.Current.CornerScale is var k and not 1)
+        {
+            var most = Math.Min(frame.Surface.Width, frame.Surface.Height) / 2; // never beyond a capsule
+            c = new Corners(Math.Min(c.TopLeft * k, most), Math.Min(c.TopRight * k, most), Math.Min(c.BottomRight * k, most), Math.Min(c.BottomLeft * k, most));
+        }
         surface.CornerRadius = new CornerRadius(c.TopLeft, c.TopRight, c.BottomRight, c.BottomLeft);
         surface.Shoulder = frame.Shoulder;
         if (!animate)
         {
             surface.ClearValue(Avalonia.Animation.Animatable.TransitionsProperty);
+            ApplyThemeMotion();
         }
 
         var compact = IslandLayout.Compute(_topology, Placement, dock, IslandState.Compact, metrics, offset, islandScale);

@@ -16,7 +16,8 @@ namespace Island.UI.Themes;
 /// <summary>A theme an enabled plugin offers (docs/design/03-plugin-system.md §9).</summary>
 /// <param name="Key"><c>plugin/theme</c>.</param>
 public sealed record ThemeOption(string Key, string Title, string? Description, string Plugin, Color? Accent,
-    ArcAppearance? Appearance, double? Corners, IReadOnlyDictionary<string, Color>? Tokens = null);
+    ArcAppearance? Appearance, double? Corners, IReadOnlyDictionary<string, Color>? Tokens = null,
+    Island.Plugins.IslandThemeSpec? Island = null);
 
 /// <summary>
 /// Themes for every O_O window (docs/design/05-builtin-plugins.md §3): theme packs from plugins, chosen in the
@@ -62,6 +63,7 @@ public sealed class ThemeService
             ArcTheme.Apply(t => t.Corners(ArcCornerStyle.Scale(corners)));
         }
         ApplyTokens(service.Selected?.Tokens);
+        IslandTheme.Apply(service.Selected?.Island);
         service.Evaluate();
         service._timer.Start();
         ThemeMenu.Refresh();
@@ -113,6 +115,7 @@ public sealed class ThemeService
             t.Corners(ArcCornerStyle.Scale(theme.Corners ?? 0.6));
         });
         ApplyTokens(theme.Tokens);
+        IslandTheme.Apply(theme.Island);
         Changed?.Invoke();
     }
 
@@ -266,5 +269,6 @@ public sealed class ThemeService
         t.Accent is { } a && Color.TryParse(a, out var color) ? color : null,
         t.Appearance switch { "light" => ArcAppearance.Light, "dark" => ArcAppearance.Dark, "system" => ArcAppearance.System, _ => null },
         t.Corners,
-        t.Tokens?.Where(kv => Color.TryParse(kv.Value, out _)).ToDictionary(kv => kv.Key, kv => Color.Parse(kv.Value)));
+        t.Tokens?.Where(kv => Color.TryParse(kv.Value, out _)).ToDictionary(kv => kv.Key, kv => Color.Parse(kv.Value)),
+        t.Island);
 }

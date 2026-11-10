@@ -129,6 +129,103 @@ public sealed class PageContribution
 }
 
 /// <summary>
+/// The island layer of a theme (docs/design/09-island-v2.md §4). Declarative: the host draws it, so every plugin follows,
+/// and the host keeps the limits (around a real notch the surface stays black; reduced motion wins over the spring).
+/// </summary>
+public sealed class IslandThemeSpec
+{
+    public IslandSurfaceSpec? Surface { get; init; }
+    public IslandShapeSpec? Shape { get; init; }
+    public IslandContentSpec? Content { get; init; }
+    public IslandMotionSpec? Motion { get; init; }
+
+    public static readonly IReadOnlySet<string> Materials = new HashSet<string>(StringComparer.Ordinal) { "solid", "gradient", "translucent" };
+    public static readonly IReadOnlySet<string> Springs = new HashSet<string>(StringComparer.Ordinal) { "calm", "default", "snappy", "bouncy" };
+
+    /// <summary>Accent names plugins use for activities; a theme may colour any of them (or others).</summary>
+    public static readonly IReadOnlyList<string> AccentNames = ["music", "timer", "calendar", "message", "reminder", "warning"];
+
+    public void Validate(string where, List<string> problems)
+    {
+        if (Surface is { } surface)
+        {
+            if (surface.Material is { } m && !Materials.Contains(m))
+            {
+                problems.Add($"{where}: island.surface.material must be solid, gradient or translucent");
+            }
+            if (surface.Color is { } c && !ThemeContribution.IsHexColor(c))
+            {
+                problems.Add($"{where}: island.surface.color must be #RRGGBB");
+            }
+            if (surface.Colors is { } colors && (colors.Count is < 2 or > 4 || colors.Any(x => !ThemeContribution.IsHexColor(x))))
+            {
+                problems.Add($"{where}: island.surface.colors must be 2 to 4 colours #RRGGBB");
+            }
+            if (surface.Material == "gradient" && surface.Colors is null)
+            {
+                problems.Add($"{where}: a gradient surface needs island.surface.colors");
+            }
+            if (surface.Opacity is { } o && (double.IsNaN(o) || o < 0.5 || o > 1))
+            {
+                problems.Add($"{where}: island.surface.opacity must be between 0.5 and 1");
+            }
+        }
+        if (Shape?.Radius is { } r && (double.IsNaN(r) || r < 0.5 || r > 1.5))
+        {
+            problems.Add($"{where}: island.shape.radius must be between 0.5 and 1.5");
+        }
+        foreach (var (name, color) in Content?.Accents ?? [])
+        {
+            if (!ThemeContribution.IsHexColor(color))
+            {
+                problems.Add($"{where}: island.content.accents.{name} must be #RRGGBB");
+            }
+        }
+        if (Motion?.Spring is { } spring && !Springs.Contains(spring))
+        {
+            problems.Add($"{where}: island.motion.spring must be calm, default, snappy or bouncy");
+        }
+    }
+}
+
+/// <summary>The island's surface away from a notch: one colour, a gradient, or a see-through tint.</summary>
+public sealed class IslandSurfaceSpec
+{
+    /// <summary>solid (default), gradient or translucent.</summary>
+    public string? Material { get; init; }
+
+    /// <summary>The colour of a solid or translucent surface, #RRGGBB (default black).</summary>
+    public string? Color { get; init; }
+
+    /// <summary>A gradient's colours, 2 to 4, from start to end.</summary>
+    public IReadOnlyList<string>? Colors { get; init; }
+
+    /// <summary>A gradient's direction in degrees (0: left to right; default 135).</summary>
+    public double? Angle { get; init; }
+
+    /// <summary>How opaque a translucent surface is, 0.5–1 (default 0.85).</summary>
+    public double? Opacity { get; init; }
+}
+
+public sealed class IslandShapeSpec
+{
+    /// <summary>The island's corners scaled, 0.5–1.5 (default 1); never beyond a capsule, and not around a notch.</summary>
+    public double? Radius { get; init; }
+}
+
+public sealed class IslandContentSpec
+{
+    /// <summary>Activity accent names (music, timer, …) → #RRGGBB.</summary>
+    public Dictionary<string, string>? Accents { get; init; }
+}
+
+public sealed class IslandMotionSpec
+{
+    /// <summary>calm, default, snappy or bouncy: how the island's shape springs between sizes.</summary>
+    public string? Spring { get; init; }
+}
+
+/// <summary>
 /// A theme (docs 03 §9): an accent seed, optionally an appearance and a corner scale, applied through Arc's own levers
 /// so every Arc control follows. The island itself stays black (it is the notch's colour).
 /// </summary>
@@ -154,6 +251,9 @@ public sealed class ThemeContribution
     /// <see cref="TokenKeys"/>; the notch's black surface cannot be overridden.
     /// </summary>
     public Dictionary<string, string>? Tokens { get; init; }
+
+    /// <summary>The island's own look (docs/design/09-island-v2.md §4): surface, shape, accents, motion.</summary>
+    public IslandThemeSpec? Island { get; init; }
 
     /// <summary>The island colour tokens a theme may override.</summary>
     public static readonly IReadOnlySet<string> TokenKeys = new HashSet<string>(StringComparer.Ordinal)
@@ -183,6 +283,7 @@ public sealed class ThemeContribution
             {
                 problems.Add($"theme '{t.Id}': corners must be between 0.2 and 2");
             }
+            t.Island?.Validate($"theme '{t.Id}'", problems);
             foreach (var (key, value) in t.Tokens ?? [])
             {
                 if (!TokenKeys.Contains(key))

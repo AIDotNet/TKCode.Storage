@@ -50,6 +50,45 @@ public sealed partial class PluginHostTests
     }
 
     [Fact]
+    public void The_island_layer_of_a_theme_is_read_and_its_limits_are_checked()
+    {
+        WritePluginWithManifest("com.example.neon", """
+            , "contributes": { "themes": [
+              { "id": "neon", "island": {
+                  "surface": { "material": "gradient", "colors": ["#1A1033", "#3B0A45"], "angle": 90 },
+                  "shape": { "radius": 1.3 },
+                  "content": { "accents": { "music": "#FF2D95" } },
+                  "motion": { "spring": "bouncy" } } }
+            ] }
+            """, "", "export function activate() {}");
+        WritePluginWithManifest("com.example.badneon", """
+            , "contributes": { "themes": [
+              { "id": "x", "island": {
+                  "surface": { "material": "lava", "colors": ["#123456"], "opacity": 0.2 },
+                  "shape": { "radius": 3 },
+                  "content": { "accents": { "music": "pink" } },
+                  "motion": { "spring": "wobbly" } } },
+              { "id": "y", "island": { "surface": { "material": "gradient" } } }
+            ] }
+            """, "", "export function activate() {}");
+        _host = new PluginHost(Services, FastRestart);
+        var problem = Assert.Single(_host.Discover(_root, bundled: true));
+        Assert.Contains("island.surface.material must be solid, gradient or translucent", problem);
+        Assert.Contains("island.surface.colors must be 2 to 4 colours", problem);
+        Assert.Contains("island.surface.opacity must be between 0.5 and 1", problem);
+        Assert.Contains("island.shape.radius must be between 0.5 and 1.5", problem);
+        Assert.Contains("island.content.accents.music must be #RRGGBB", problem);
+        Assert.Contains("island.motion.spring must be calm, default, snappy or bouncy", problem);
+        Assert.Contains("a gradient surface needs island.surface.colors", problem);
+
+        var island = Assert.Single(_host.Packages).Manifest.Contributes.Themes.Single().Island!;
+        Assert.Equal(["#1A1033", "#3B0A45"], island.Surface!.Colors);
+        Assert.Equal(1.3, island.Shape!.Radius);
+        Assert.Equal("#FF2D95", island.Content!.Accents!["music"]);
+        Assert.Equal("bouncy", island.Motion!.Spring);
+    }
+
+    [Fact]
     public void The_bundled_theme_packs_are_valid_and_only_the_default_is_on()
     {
         foreach (var dir in Directory.GetDirectories(Path.Combine(RepoRoot(), "plugins"), "com.o_o.theme.*"))

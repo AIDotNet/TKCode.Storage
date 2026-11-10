@@ -416,7 +416,7 @@ public sealed class SatelliteHost
             inner.Children.Add(badge);
             var pill = new Border
             {
-                Background = Resource("IslandNotchSurfaceBrush") ?? Brushes.Black,
+                Background = Resource(Island.UI.Themes.IslandTheme.SurfaceBrushKey) ?? Brushes.Black,
                 ClipToBounds = true,
                 MaxWidth = MaxNoticeWidth,
                 Child = inner,

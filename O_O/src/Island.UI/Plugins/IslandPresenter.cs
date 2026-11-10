@@ -204,6 +204,7 @@ public sealed partial class IslandPresenter
     private void RefreshCompact()
     {
         Control? leading, trailing;
+        SetAccent(_view.CompactPanel, null); // the first activity sets its own below; chips and alerts use the app's
         if (LiveCompact() is { } live)
         {
             (leading, trailing) = live;

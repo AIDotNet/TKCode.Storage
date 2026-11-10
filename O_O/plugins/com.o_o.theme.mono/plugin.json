@@ -10,7 +10,11 @@
   "permissions": [],
   "contributes": {
     "themes": [
-      { "id": "mono", "title": "黑白", "description": "中性色，跟随系统的浅色或深色", "accent": "#353535", "corners": 0.4 }
+      { "id": "mono", "title": "黑白", "description": "中性色，跟随系统的浅色或深色；岛上的活动不着彩色", "accent": "#353535", "corners": 0.4,
+        "island": {
+          "shape": { "radius": 0.8 },
+          "content": { "accents": { "music": "#D1D1D6", "timer": "#D1D1D6", "calendar": "#D1D1D6", "message": "#D1D1D6", "reminder": "#D1D1D6", "warning": "#F2F2F7" } },
+          "motion": { "spring": "snappy" } } }
     ]
   }
 }

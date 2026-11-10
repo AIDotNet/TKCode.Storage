@@ -10,7 +10,8 @@
   "permissions": [],
   "contributes": {
     "themes": [
-      { "id": "glass", "title": "玻璃", "description": "浅色 · 湖蓝", "accent": "#32ADE6", "appearance": "light", "corners": 1.0 }
+      { "id": "glass", "title": "玻璃", "description": "浅色 · 湖蓝；岛体半透明", "accent": "#32ADE6", "appearance": "light", "corners": 1.0,
+        "island": { "surface": { "material": "translucent", "color": "#1B2633", "opacity": 0.8 }, "shape": { "radius": 1.25 } } }
     ]
   }
 }

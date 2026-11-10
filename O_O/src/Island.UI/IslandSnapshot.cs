@@ -27,6 +27,13 @@ public static class IslandSnapshot
         var expanded = IslandLayout.Compute(screen, placement, IslandState.Expanded, metrics);
         var compact = IslandLayout.Compute(screen, placement, IslandState.Compact, metrics);
 
+        // Development aid: O_O_RENDER_THEME=plugin/theme draws the island in that theme's island layer.
+        if (Environment.GetEnvironmentVariable("O_O_RENDER_THEME") is { Length: > 0 } themeKey &&
+            host.Packages.SelectMany(p => p.Manifest.Contributes.Themes.Select(t => (Key: $"{p.Id}/{t.Id}", t.Island)))
+                .FirstOrDefault(t => t.Key == themeKey) is { Key: not null } chosen)
+        {
+            Island.UI.Themes.IslandTheme.Apply(chosen.Island);
+        }
         var view = new IslandView();
         // Default page settings (a file nobody writes), so the image shows what a new user sees.
         var pages = new Island.Core.Pages.PagePreferencesStore(Path.Combine(Path.GetTempPath(), $"o_o-render-pages-{Guid.NewGuid():N}.json"));
@@ -61,6 +68,11 @@ public static class IslandSnapshot
         // Attached: flush with the top edge of the image, with the shoulders reaching into the margin either side.
         view.Surface.Margin = attached ? new Thickness(16, 0, 16, 16) : new Thickness(16);
         var c = frame.Corners;
+        if (!attached && Island.UI.Themes.IslandTheme.Current.CornerScale is var k and not 1)
+        {
+            var most = Math.Min(frame.Surface.Width, frame.Surface.Height) / 2;
+            c = new Island.Core.Layout.Corners(Math.Min(c.TopLeft * k, most), Math.Min(c.TopRight * k, most), Math.Min(c.BottomRight * k, most), Math.Min(c.BottomLeft * k, most));
+        }
         view.Surface.CornerRadius = new CornerRadius(c.TopLeft, c.TopRight, c.BottomRight, c.BottomLeft);
         view.Surface.Shoulder = frame.Shoulder;
         view.CompactPanel.Width = compact.Surface.Width;

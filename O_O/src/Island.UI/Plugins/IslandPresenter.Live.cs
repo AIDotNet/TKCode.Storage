@@ -234,6 +234,7 @@ public sealed partial class IslandPresenter
         }
         if (_arrangement.Primary is { } primary && _live.TryGetValue(primary.Key, out var s))
         {
+            SetAccent(_view.CompactPanel, s.Accent);
             var lead = Renderer(s.Key + ":leading", s.PluginId);
             var trail = Renderer(s.Key + ":trailing", s.PluginId);
             var compact = s.View.Compact;
@@ -243,6 +244,22 @@ public sealed partial class IslandPresenter
             return (leading, trailing);
         }
         return null;
+    }
+
+    /// <summary>
+    /// Colours <c>tone: 'accent'</c> inside <paramref name="panel"/> with the activity's accent (09 §4): the theme's
+    /// colour for its name, else the default one; without an accent the app's accent applies.
+    /// </summary>
+    private static void SetAccent(Control panel, string? accent)
+    {
+        if (Island.UI.Themes.IslandTheme.Current.Accent(accent) is { } color)
+        {
+            panel.Resources[TKCode.Arc.DesignTokens.ArcDesignTokenKind.Accent] = new SolidColorBrush(color);
+        }
+        else
+        {
+            panel.Resources.Remove(TKCode.Arc.DesignTokens.ArcDesignTokenKind.Accent);
+        }
     }
 
     private (VNodeRenderer Renderer, Control? Control) Renderer(string key, string pluginId)
@@ -310,6 +327,10 @@ public sealed partial class IslandPresenter
 
     private void SetHomeChrome(bool home)
     {
+        if (home)
+        {
+            SetAccent(_view.ExpandedPanel, null);
+        }
         _view.PageTabs.IsVisible = home;
         _view.PageOverflow.IsVisible = home && _view.PageOverflow.Items.Count > 0;
         if (home)
@@ -358,6 +379,7 @@ public sealed partial class IslandPresenter
         _view.ExpandedContent.Content = _card;
 
         SetHomeChrome(false);
+        SetAccent(_view.ExpandedPanel, s.Accent);
         _view.ExpandedTitle.Text = s.Title;
         _view.ExpandedTitle.IsVisible = true;
         var home = new ArcButton { Content = "主页", Variant = TKCode.Arc.ButtonVariant.Ghost, Size = TKCode.Arc.ControlSize.Small };

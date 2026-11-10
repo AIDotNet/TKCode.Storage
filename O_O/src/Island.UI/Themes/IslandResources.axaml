@@ -7,8 +7,10 @@
     <!-- The island's own tokens (docs/design/02-island-shell.md §3.2). Arc's tokens follow the app's light or dark
          appearance, but around a notch the island must be the colour of the notch, so the island surface is always
          dark. These are the only literal colours in the island; views read them by key. Theme packages may override
-         every key except IslandNotchSurfaceBrush. -->
+         every key except IslandNotchSurfaceBrush: IslandSurfaceBrush is the island away from a notch (a theme's
+         surface, docs/design/09-island-v2.md §4); around a real notch the surface is IslandNotchSurfaceBrush. -->
     <SolidColorBrush x:Key="IslandNotchSurfaceBrush" Color="#000000" />
+    <SolidColorBrush x:Key="IslandSurfaceBrush" Color="#000000" />
     <SolidColorBrush x:Key="IslandForegroundBrush" Color="#F5F5F7" />
     <SolidColorBrush x:Key="IslandSecondaryBrush" Color="#A1A1A6" />
     <SolidColorBrush x:Key="IslandDividerBrush" Color="#2C2C2E" />
@@ -25,7 +27,7 @@
     <SolidColorBrush x:Key="TrafficInactiveBrush" Color="#33808080" />
 
     <ControlTheme x:Key="{x:Type ui:IslandSurface}" TargetType="ui:IslandSurface">
-        <Setter Property="Background" Value="{DynamicResource IslandNotchSurfaceBrush}" />
+        <Setter Property="Background" Value="{DynamicResource IslandSurfaceBrush}" />
         <Setter Property="arc:ArcMotion.Tracks" Value="True" />
         <Setter Property="Template">
             <ControlTemplate>
@@ -50,6 +52,10 @@
             </Setter>
         </Style>
         <!-- Reduced motion: sizes change at once; the content panels still fade. -->
+        <!-- Around a real notch the island is the notch's own black, whatever the theme. -->
+        <Style Selector="^.notch">
+            <Setter Property="Background" Value="{DynamicResource IslandNotchSurfaceBrush}" />
+        </Style>
     </ControlTheme>
 
     <ControlTheme x:Key="{x:Type ui:IslandStatePanel}" TargetType="ui:IslandStatePanel">
