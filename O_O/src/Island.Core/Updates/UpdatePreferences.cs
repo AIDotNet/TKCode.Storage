@@ -15,16 +15,27 @@ public sealed class UpdatePreferences
             using var doc = JsonDocument.Parse(File.ReadAllBytes(path));
             var r = doc.RootElement;
             AutoCheck = !r.TryGetProperty("autoCheck", out var a) || a.ValueKind != JsonValueKind.False;
+            AutoInstall = !r.TryGetProperty("autoInstall", out var i) || i.ValueKind != JsonValueKind.False;
             AnnouncedVersion = r.TryGetProperty("announced", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
             AutoCheck = true;
+            AutoInstall = true;
         }
     }
 
     /// <summary>Check at start and once a day (on by default).</summary>
     public bool AutoCheck { get; private set; }
+
+    /// <summary>Download a newer version by itself and install it when O_O quits or restarts (on by default).</summary>
+    public bool AutoInstall { get; private set; }
+
+    public void SetAutoInstall(bool on)
+    {
+        AutoInstall = on;
+        Save();
+    }
 
     /// <summary>The newest version the island already announced, so each version is announced once.</summary>
     public string? AnnouncedVersion { get; private set; }
@@ -50,6 +61,7 @@ public sealed class UpdatePreferences
             {
                 w.WriteStartObject();
                 w.WriteBoolean("autoCheck", AutoCheck);
+                w.WriteBoolean("autoInstall", AutoInstall);
                 if (AnnouncedVersion is not null)
                 {
                     w.WriteString("announced", AnnouncedVersion);

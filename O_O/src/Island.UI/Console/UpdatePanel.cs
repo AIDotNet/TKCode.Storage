@@ -36,6 +36,21 @@ public sealed class UpdatePanel : StackPanel
         });
         Children.Add(_status);
         Children.Add(auto);
+        if (UpdateInstaller.Supported)
+        {
+            var install = new ArcSwitch { Content = "自动下载并安装更新", IsChecked = updates.Preferences.AutoInstall };
+            install.IsCheckedChanged += (_, _) =>
+            {
+                _updates.Preferences.SetAutoInstall(install.IsChecked == true);
+                if (install.IsChecked == true && _updates.UpdateAvailable)
+                {
+                    _ = _updates.DownloadAsync();
+                }
+                Fill();
+            };
+            Children.Add(install);
+            Children.Add(Note("打开后，新版本会在后台下载，退出 O_O 时自动安装；也可以随时「立即重启并更新」。"));
+        }
         Fill();
         updates.Changed += OnChanged;
         DetachedFromVisualTree += (_, _) => updates.Changed -= OnChanged;
@@ -87,9 +102,42 @@ public sealed class UpdatePanel : StackPanel
         {
             _status.Children.Add(Note(latest.Notes!));
         }
+        if (u.Ready)
+        {
+            var restart = new ArcButton { Content = "立即重启并更新", Variant = ButtonVariant.Primary, Size = ControlSize.Small, HorizontalAlignment = HorizontalAlignment.Left };
+            restart.Click += (_, _) => u.RestartToUpdate();
+            _status.Children.Add(restart);
+            _status.Children.Add(Note(u.Preferences.AutoInstall ? "已下载，退出 O_O 时会自动安装。" : "已下载。"));
+            if (u.Installer.Problem is { } installProblem)
+            {
+                _status.Children.Add(Note(installProblem));
+            }
+            return;
+        }
+        if (u.IsDownloading)
+        {
+            _status.Children.Add(Note("正在下载新版本…"));
+            return;
+        }
+        if (u.Installer.Problem is { } downloadProblem)
+        {
+            _status.Children.Add(Note($"{downloadProblem}。也可以在浏览器里下载安装。"));
+        }
+        else if (UpdateInstaller.Supported && !u.Preferences.AutoInstall)
+        {
+            var get = new ArcButton { Content = "下载并安装", Variant = ButtonVariant.Primary, Size = ControlSize.Small, HorizontalAlignment = HorizontalAlignment.Left };
+            get.Click += async (_, _) => await u.DownloadAsync();
+            _status.Children.Add(get);
+        }
         if (latest.Download is { Length: > 0 } link && Uri.TryCreate(link, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps)
         {
-            var download = new ArcButton { Content = "下载新版本", Variant = ButtonVariant.Primary, Size = ControlSize.Small, HorizontalAlignment = HorizontalAlignment.Left };
+            var download = new ArcButton
+            {
+                Content = "在浏览器中下载",
+                Variant = UpdateInstaller.Supported ? ButtonVariant.Secondary : ButtonVariant.Primary,
+                Size = ControlSize.Small,
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
             download.Click += (_, _) => OpenInBrowser(url);
             _status.Children.Add(download);
             _status.Children.Add(Note("在浏览器中下载安装包，退出 O_O 后安装即可。"));
