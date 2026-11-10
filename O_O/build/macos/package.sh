@@ -73,8 +73,17 @@ if [[ "$NOTARIZE" == 1 ]]; then
   : "${APPLE_ID:?APPLE_ID is required to notarize}"
   : "${APPLE_APP_SPECIFIC_PASSWORD:?APPLE_APP_SPECIFIC_PASSWORD is required to notarize}"
   : "${APPLE_TEAM_ID:?APPLE_TEAM_ID is required to notarize}"
-  xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-    --team-id "$APPLE_TEAM_ID" --wait --timeout 30m
+  AUTH=(--apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID")
+  RESULT="$(xcrun notarytool submit "$DMG" "${AUTH[@]}" --wait --timeout 30m --output-format json)"
+  echo "$RESULT"
+  STATUS="$(/usr/bin/plutil -extract status raw - <<< "$RESULT" 2>/dev/null || true)"
+  if [[ "$STATUS" != "Accepted" ]]; then
+    # Apple's report says which file and why (unsigned binary, no hardened runtime, ...).
+    ID="$(/usr/bin/plutil -extract id raw - <<< "$RESULT" 2>/dev/null || true)"
+    [[ -n "$ID" ]] && xcrun notarytool log "$ID" "${AUTH[@]}" || true
+    echo "Notarization failed: ${STATUS:-no status}" >&2
+    exit 1
+  fi
   xcrun stapler staple "$DMG"
   xcrun stapler validate "$DMG"
   spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
