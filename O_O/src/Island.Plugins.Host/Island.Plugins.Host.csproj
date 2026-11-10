@@ -5,6 +5,8 @@
   <ItemGroup>
     <!-- Injected into every plugin realm; read with GetManifestResourceStream (AOT safe). -->
     <EmbeddedResource Include="Runtime\*.js" LogicalName="Island.Plugins.Host.Runtime.%(Filename)%(Extension)" />
+    <!-- The agent skill the console installs into ~/.agents/skills (SkillInstaller); SkillInstaller also writes the runtime api.js next to it as a reference. -->
+    <EmbeddedResource Include="..\..\.claude\skills\o_o-plugin\**\*" LogicalName="Island.Skills.o_o-plugin/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Island.Plugins.Host.Tests" />

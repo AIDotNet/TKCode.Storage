@@ -337,6 +337,16 @@ export const files = has('files.shelf')
     })
   : undefined;
 
+// ---- system (system.info) ----------------------------------------------------------------------------------------
+// { cpu (%), cores, memTotal, memUsed (bytes), battery (%)?, charging?, netIn, netOut (bytes/s) }. A figure the platform
+// cannot tell is missing; cpu and the net rates need two calls (the first has none).
+export const system = has('system.info')
+  ? Object.freeze({
+      /** Promise<the figures above> */
+      stats: () => call('system.stats', {}),
+    })
+  : undefined;
+
 // ---- media (media; docs 05 §1) ----------------------------------------------------------------------------------
 // What is playing: { app, title?, artist?, album?, playing, position? (s), duration? (s) } or null. The position is as of
 // the moment it was reported; while playing, add the time since.

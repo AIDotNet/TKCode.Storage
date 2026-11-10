@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -37,6 +38,8 @@ public sealed class PluginsPage : Panel
     private readonly Dialog _addDialog = new() { Title = "添加插件", Size = ControlSize.Large };
     private string? _drawerPlugin;
     private Control? _addError;
+    private string? _skillFolder;   // set once the skill is installed
+    private string? _skillError;
 
     // One panel, reused when the drawer is rebuilt (state changes), so its discovery does not run again each time.
     private ClaudeConnectionPanel? _claudePanel;
@@ -265,12 +268,57 @@ public sealed class PluginsPage : Panel
     private void FillAdd()
     {
         var body = new StackPanel { Spacing = 8 };
+        var list = new StackPanel { Spacing = 8 };
         var available = _host.Packages.Where(p => !_host.IsEnabled(p.Id))
             .OrderBy(p => p.Bundled ? 0 : 1).ThenBy(p => p.Manifest.Name, StringComparer.CurrentCulture).ToList();
-        body.Children.Add(SectionLabel("可添加的插件"));
+        body.Children.Add(SectionLabel("安装"));
+        var pick = new ArcButton { Content = "选择文件", Variant = ButtonVariant.Secondary, Size = ControlSize.Small, VerticalAlignment = VerticalAlignment.Center };
+        pick.Click += async (_, _) => await PickAndInstall();
+        body.Children.Add(ActionRow(TKCode.Arc.Icons.Lucide.LucideIconKind.PackagePlus, "安装插件包（.zip）",
+            "选择插件作者提供的插件包。安装后它会请求所需的权限，你同意之前它不会运行。", pick));
+        if (_addError is not null)
+        {
+            body.Children.Add(_addError);
+        }
+
+        var install = new ArcButton
+        {
+            Content = _skillFolder is null ? "安装技能" : "重新安装",
+            Variant = _skillFolder is null ? ButtonVariant.Primary : ButtonVariant.Secondary,
+            Size = ControlSize.Small,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        install.Click += (_, _) => InstallSkill();
+        body.Children.Add(ActionRow(TKCode.Arc.Icons.Lucide.LucideIconKind.Sparkles, "让 AI 帮你写插件",
+            "把 O_O 插件开发技能安装到 ~/.agents/skills，Claude Code、Codex 等 AI 助手就能写出可安装的插件包。", install));
+        if (_skillError is not null)
+        {
+            body.Children.Add(new Alert { Tone = AlertTone.Danger, Title = _skillError });
+        }
+        if (_skillFolder is not null)
+        {
+            body.Children.Add(new Alert { Tone = AlertTone.Success, Title = $"已安装到 {_skillFolder}" });
+            var prompt = SkillInstaller.Prompt(_skillFolder);
+            var copy = new ArcButton { Content = "复制", Variant = ButtonVariant.Primary, Size = ControlSize.Small, VerticalAlignment = VerticalAlignment.Center };
+            copy.Click += async (_, _) =>
+            {
+                if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+                {
+                    await clipboard.SetTextAsync(prompt);
+                    copy.Content = "已复制";
+                }
+            };
+            var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 4, 0, 0) };
+            DockPanel.SetDock(copy, Dock.Right);
+            header.Children.Add(copy);
+            header.Children.Add(Text("发给你的 AI 助手的提示词（先改掉尖括号里的描述）", ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true));
+            body.Children.Add(header);
+            body.Children.Add(new Input { Text = prompt, AcceptsReturn = true, IsReadOnly = true, MinHeight = 120 });
+        }
+        list.Children.Add(SectionLabel("可添加的插件"));
         if (available.Count == 0)
         {
-            body.Children.Add(Text("所有插件都已启用。", ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.TextSecondary));
+            list.Children.Add(Text("所有插件都已启用。", ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.TextSecondary));
         }
         foreach (var package in available)
         {
@@ -293,20 +341,47 @@ public sealed class PluginsPage : Panel
             row.Children.Add(icon);
             row.Children.Add(words);
             row.Children.Add(add);
-            body.Children.Add(row);
+            list.Children.Add(row);
         }
 
-        body.Children.Add(SectionLabel("安装插件包"));
-        body.Children.Add(Text("选择插件作者提供的 .zip 插件包。安装后它会请求所需的权限，你同意之前它不会运行。",
-            ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true));
-        var pick = new ArcButton { Content = "选择 .zip 插件包…", Variant = ButtonVariant.Secondary, Size = ControlSize.Small, HorizontalAlignment = HorizontalAlignment.Left };
-        pick.Click += async (_, _) => await PickAndInstall();
-        body.Children.Add(pick);
-        if (_addError is not null)
-        {
-            body.Children.Add(_addError);
-        }
+        body.Children.Add(list);
         _addDialog.Content = new ScrollViewer { Content = body, MaxHeight = 480 };
+    }
+
+    private static Control ActionRow(TKCode.Arc.Icons.Lucide.LucideIconKind kind, string title, string description, Control button)
+    {
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 12, Margin = new Thickness(0, 4) };
+        var icon = new TKCode.Arc.Icons.Lucide.LucideIcon { Kind = kind, Size = 20, VerticalAlignment = VerticalAlignment.Center };
+        var words = new StackPanel
+        {
+            Spacing = 2,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                Text(title, ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, FontWeight.Medium),
+                Text(description, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true),
+            },
+        };
+        Grid.SetColumn(words, 1);
+        Grid.SetColumn(button, 2);
+        row.Children.Add(icon);
+        row.Children.Add(words);
+        row.Children.Add(button);
+        return row;
+    }
+
+    private void InstallSkill()
+    {
+        try
+        {
+            _skillFolder = SkillInstaller.Install();
+            _skillError = null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _skillError = $"安装失败：{e.Message}";
+        }
+        FillAdd();
     }
 
     private async Task PickAndInstall()
@@ -445,7 +520,7 @@ public sealed class PluginsPage : Panel
             "clipboard.watch" => "持续记录剪贴板变化",
             "clipboard.paste" => "粘贴到当前应用",
             "files.shelf" => "使用文件暂存区",
-            "system.info" => "读取电池、勿扰等系统状态",
+            "system.info" => "读取电池、CPU、内存、网速等系统状态（只读）",
             "mail" => "访问你连接的邮箱",
             "shell.openUrl" => "在浏览器中打开链接",
             "sidecar" => "运行附带的本机程序",

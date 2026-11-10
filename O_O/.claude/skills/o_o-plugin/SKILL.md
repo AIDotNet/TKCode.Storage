@@ -9,8 +9,8 @@ An O_O plugin is a folder with `plugin.json` and an ES module (`main.js`). It ru
 (Jaunt) inside O_O and talks to the island only through `@island/api`. It cannot touch the file system, the
 network or other apps except through capabilities its manifest declares and the user grants.
 
-The authoritative API is `src/Island.Plugins.Host/Runtime/api.js` (every export has a doc comment) — read it before
-writing code. Good references are the bundled plugins in `plugins/`: `com.o_o.clipboard` (page + list + settings),
+The authoritative API is `src/Island.Plugins.Host/Runtime/api.js` (every export has a doc comment; when this skill
+was installed outside the repo, the same file sits next to this one as `api.js`) — read it before writing code. Good references are the bundled plugins in `plugins/`: `com.o_o.clipboard` (page + list + settings),
 `com.o_o.shelf` (files, chips, alerts), `com.o_o.todo` / `com.o_o.focus` (providers, activities, timers),
 `com.o_o.ai.deepseek` (network + password settings), `com.o_o.calendar` (aggregator over providers).
 

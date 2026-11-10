@@ -34,6 +34,8 @@ const startOfDay = (ms) => { const d = new Date(ms); return new Date(d.getFullYe
 const dayOf = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : null; };
 const instant = (s) => dayOf(s) ?? new Date(s).getTime();
 
+const monthStart = (ms) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
+const addMonths = (ms, n) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth() + n, 1).getTime(); };
 const cut = (s, n) => ([...s].length > n ? `${[...s].slice(0, n).join('')}…` : s);
 
 export async function activate() {
@@ -42,7 +44,8 @@ export async function activate() {
   let errors = cached.errors;           // [{ source, message }]
   let fetchedAt = cached.at;
   let providers = [];
-  let tab = 'today';
+  let monthOf = null;                    // first day of the month shown in the 月历 tab (ms)
+  let picked = startOfDay(Date.now());                     // the day chosen in the 月历 tab (start of day, ms)
   let page = 0;
   let notice = null;
   let alerted = new Set(storage.get('alerted') ?? []); // "key|startMs" of events already announced
@@ -86,7 +89,7 @@ export async function activate() {
     try {
       providers = await island.providers.list(IFACE);
       const from = startOfDay(Date.now());
-      const range = { from: new Date(from).toISOString(), to: new Date(from + 2 * DAY).toISOString() };
+      const range = { from: new Date(from - 7 * DAY).toISOString(), to: new Date(from + 45 * DAY).toISOString() }; // a month either way for the 月历 tab
       const lists = [];
       const failures = [];
       const waiting = [];
@@ -155,7 +158,8 @@ export async function activate() {
       act ??= island.activity.create('soon', { title: '日程即将开始', page: 'today' });
       act.setPriority(now >= s.startMs ? 'active' : 'passive');
       act.update({});
-      tab = startOfDay(s.startMs) === startOfDay(now) ? 'today' : 'tomorrow';
+      picked = startOfDay(s.startMs);
+      monthOf = monthStart(picked);
     } else if (act) {
       act.end();
       act = null;
@@ -261,9 +265,51 @@ export async function activate() {
     return minutes < 60 ? `${minutes} 分钟后开始` : `下一个 ${hm(upcoming.startMs)}`;
   };
 
+  // Month grid on the left (a dot under every day that has events), the picked day's events on the right.
+  const monthGrid = (now, today) => {
+    const first = monthOf ?? monthStart(picked ?? today);
+    const lead = (new Date(first).getDay() + 6) % 7; // weeks start on Monday
+    const days = new Date(new Date(first).getFullYear(), new Date(first).getMonth() + 1, 0).getDate();
+    const weeks = Math.ceil((lead + days) / 7);
+    const busy = new Set();
+    for (const e of events) {
+      for (let d = startOfDay(e.startMs); d < Math.max(e.endMs, e.startMs + 1); d += DAY) busy.add(d);
+    }
+    const cell = (d) => {
+      if (d == null) return ui.text(' ', { width: 34 });
+      const ms = new Date(new Date(first).getFullYear(), new Date(first).getMonth(), d).getTime();
+      const isPicked = ms === (picked ?? today);
+      return ui.item({ key: `d${ms}`, width: 34, align: 'center', onClick: () => { picked = ms; page = 0; render(Date.now()); } }, [
+        ui.stack({ gap: 'xs', align: 'center' }, [
+          isPicked ? ui.badge(String(d), { tone: 'info', small: true })
+            : ui.text(String(d), { size: 'sm', tabular: true, align: 'center', weight: ms === today ? 'bold' : 'regular', tone: ms === today ? 'accent' : ms < today ? 'secondary' : undefined }),
+          ui.text(busy.has(ms) ? '•' : ' ', { size: 'xs', tone: 'accent', align: 'center' }),
+        ]),
+      ]);
+    };
+    const rows = [];
+    for (let w = 0; w < weeks; w++) {
+      rows.push(ui.row({ gap: 'xs', align: 'center', key: `w${w}` }, Array.from({ length: 7 }, (_, i) => {
+        const d = w * 7 + i - lead + 1;
+        return cell(d >= 1 && d <= days ? d : null);
+      })));
+    }
+    const fd = new Date(first);
+    return ui.stack({ gap: 'xs', align: 'stretch' }, [
+      ui.row({ gap: 'xs', align: 'center' }, [
+        ui.text(`${fd.getFullYear()}年${fd.getMonth() + 1}月`, { weight: 'semibold' }),
+        ui.spacer(),
+        ui.iconButton('ChevronLeft', { label: '上个月', onClick: () => { monthOf = addMonths(first, -1); render(Date.now()); } }),
+        ui.iconButton('ChevronRight', { label: '下个月', onClick: () => { monthOf = addMonths(first, 1); render(Date.now()); } }),
+      ]),
+      ui.row({ gap: 'xs', align: 'center' }, ['一', '二', '三', '四', '五', '六', '日'].map((w) => ui.text(w, { size: 'xs', tone: 'secondary', width: 34, align: 'center' }))),
+      ...rows,
+    ]);
+  };
+
   function render(now) {
     const today = startOfDay(now);
-    const dayStart = tab === 'today' ? today : today + DAY;
+    const dayStart = picked;
     const shown = events.filter((e) => e.startMs < dayStart + DAY && (e.endMs > dayStart || (e.endMs === e.startMs && e.startMs >= dayStart)));
     const pages = Math.max(1, Math.ceil(shown.length / PER_PAGE));
     page = Math.min(page, pages - 1);
@@ -277,23 +323,26 @@ export async function activate() {
         ui.text('在控制台的"插件"页添加 Google、飞书、钉钉日历，或"CalDAV 日历"（企业微信、iCloud 等）、"日历订阅（ICS）"。', { tone: 'secondary', size: 'sm', wrap: true }),
       ]);
     } else if (shown.length === 0) {
-      body = ui.text(fetchedAt ? `${tab === 'today' ? '今天' : '明天'}没有日程。` : '正在读取…', { tone: 'secondary' });
+      body = ui.text(fetchedAt ? `${dayStart === today ? '今天' : '这一天'}没有日程。` : '正在读取…', { tone: 'secondary' });
     } else {
       body = ui.stack({ gap: 'xs', align: 'stretch' }, shown.slice(page * PER_PAGE, (page + 1) * PER_PAGE).map((e) => row(e, now)));
     }
 
     island.page('today').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
-      ui.row({ gap: 'xs', align: 'center' }, [
-        ui.tabs({ value: tab, onChange: (v) => { tab = v; page = 0; render(Date.now()); } },
-          [ui.option('today', '今天'), ui.option('tomorrow', '明天')]),
-        ui.text(`${date.getMonth() + 1}月${date.getDate()}日 ${WEEK[date.getDay()]}`, { tone: 'secondary', size: 'sm' }),
-        ui.spacer(),
-        pages > 1 ? ui.iconButton('ChevronLeft', { label: '上一页', disabled: page === 0, onClick: () => { page--; render(Date.now()); } }) : null,
-        pages > 1 ? ui.iconButton('ChevronRight', { label: '下一页', disabled: page >= pages - 1, onClick: () => { page++; render(Date.now()); } }) : null,
+      ui.row({ gap: 'lg', align: 'start' }, [
+        ui.stack({ width: 270 }, [monthGrid(now, today)]),
+        ui.stack({ gap: 'sm', align: 'stretch', grow: true }, [
+          ui.row({ gap: 'xs', align: 'center' }, [
+            ui.text(`${date.getMonth() + 1}月${date.getDate()}日 ${WEEK[date.getDay()]}`, { tone: 'secondary', size: 'sm' }),
+            ui.spacer(),
+            pages > 1 ? ui.iconButton('ChevronLeft', { label: '上一页', disabled: page === 0, onClick: () => { page--; render(Date.now()); } }) : null,
+            pages > 1 ? ui.iconButton('ChevronRight', { label: '下一页', disabled: page >= pages - 1, onClick: () => { page++; render(Date.now()); } }) : null,
+          ]),
+          body,
+          pages > 1 ? ui.dots({ count: pages, index: page }) : null,
+        ]),
       ]),
-      body,
       ...signIns.map(signInRow),
-      pages > 1 ? ui.dots({ count: pages, index: page }) : null,
       notice ? ui.text(notice, { tone: 'secondary', size: 'xs', wrap: true }) : null,
       ...errors.map((e) => ui.text(`${e.source}：${e.message}`, { tone: 'secondary', size: 'xs', wrap: true })),
     ]), { status: ui.text(status(now), { tone: 'secondary', size: 'sm' }) });

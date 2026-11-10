@@ -1,0 +1,21 @@
+{
+  "id": "com.o_o.monitor",
+  "name": "系统监控",
+  "version": "0.1.0",
+  "description": "CPU、内存、电量和网速；收起的岛上显示 CPU，负载过高时提醒",
+  "icon": "Activity",
+  "optional": true,
+  "engines": { "island": "^1.0.0" },
+  "main": "main.js",
+  "permissions": ["system.info"],
+  "contributes": {
+    "pages": [{ "id": "stats", "title": "系统", "icon": "Activity" }],
+    "chips": [{ "id": "cpu", "title": "CPU 占用", "side": "right" }],
+    "settings": {
+      "properties": {
+        "chip": { "type": "boolean", "title": "在收起的岛上显示 CPU", "default": true },
+        "alertAt": { "type": "integer", "title": "CPU 持续高于多少 % 时提醒（0 为不提醒）", "minimum": 0, "maximum": 100, "default": 0 }
+      }
+    }
+  }
+}

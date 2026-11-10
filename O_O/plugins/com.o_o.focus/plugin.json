@@ -81,6 +81,13 @@
           "title": "系统通知",
           "description": "除了岛上的提醒，也发送一条系统通知（看不到岛时也能知道）。",
           "default": true
+        },
+        "dailyGoal": {
+          "type": "integer",
+          "title": "每日番茄目标",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 8
         }
       }
     }

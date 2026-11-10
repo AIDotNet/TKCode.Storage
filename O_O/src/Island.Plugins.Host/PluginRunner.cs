@@ -38,6 +38,7 @@ internal sealed partial class PluginRunner : IDisposable
     private readonly IPluginRunnerSink _sink;
     private readonly PluginRunnerOptions _options;
     private readonly PluginServices _services;
+    private readonly Services.SystemStats Stats = new();
     private readonly PluginPermissions _permissions;
     private readonly PluginSettingsStore _settings;
     private readonly PluginStorage _storage;
@@ -493,6 +494,9 @@ internal sealed partial class PluginRunner : IDisposable
                 }
                 : throw new UnreachableException(),
             "media.nowPlaying" or "media.command" => MediaCall(op, payload, ref c),
+            "system.stats" => _permissions.Has("system.info")
+                ? ct => Task.FromResult(Stats.Sample())
+                : throw c.TypeError("This plugin has no system.info permission."),
             "mail.check" => MailCall(payload, ref c),
             "files.info" or "files.reveal" or "files.open" => _permissions.Has("files.shelf")
                 ? _ => Task.Run(() => op switch

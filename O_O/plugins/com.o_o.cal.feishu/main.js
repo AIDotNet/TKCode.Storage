@@ -151,8 +151,9 @@ export function activate() {
       const fromMs = new Date(range.from).getTime();
       const toMs = new Date(range.to).getTime();
       if (!(toMs > fromMs)) throw new Error('时间范围无效');
-      const out = [];
-      for (const cal of await calendars(account)) {
+      // The calendars are read side by side: the 月历 tab asks for about seven weeks at once.
+      const one = async (cal) => {
+        const out = [];
         let pageToken = '';
         for (let i = 0; i < 10; i++) {
           const q = `start_time=${Math.floor(fromMs / 1000)}&end_time=${Math.ceil(toMs / 1000)}&page_size=500` +
@@ -169,7 +170,9 @@ export function activate() {
           if (!data.has_more || !data.page_token) break;
           pageToken = data.page_token;
         }
-      }
+        return out;
+      };
+      const out = (await Promise.all((await calendars(account)).map(one))).flat();
       return out;
     },
   });

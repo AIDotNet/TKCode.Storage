@@ -14,6 +14,7 @@ const MINUTE = 60 * 1000;
 const PHASES = { work: '专注', short: '短休息', long: '长休息' };
 const pad = (n) => String(n).padStart(2, '0');
 const clock = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
+const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const dayKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 export function activate() {
@@ -22,6 +23,7 @@ export function activate() {
   const days = storage.get('days') ?? {};   // 'YYYY-MM-DD' → finished pomodoros
   let tasks = [];                           // open to-dos, for binding
   let todoAvailable = false;
+  let view = 'timer';                       // 'timer' | 'stats'
   let session = null;
   let ticker = null;
 
@@ -113,6 +115,41 @@ export function activate() {
     render();
   };
 
+  // Last seven days, this week's total and the run of days (ending today or yesterday) with at least one pomodoro.
+  const stats = () => {
+    const last7 = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      last7.push({ key: dayKey(d), label: i === 0 ? '今' : WEEK[d.getDay()], n: days[dayKey(d)] ?? 0 });
+    }
+    let streak = 0;
+    const d = new Date();
+    if (!(days[dayKey(d)] > 0)) d.setDate(d.getDate() - 1);
+    while (days[dayKey(d)] > 0) { streak++; d.setDate(d.getDate() - 1); }
+    const month = Object.values(days).reduce((a, b) => a + b, 0);
+    return { last7, week: last7.reduce((a, x) => a + x.n, 0), streak, month };
+  };
+
+  const statsView = () => {
+    const st = stats();
+    const goal = settings.get('dailyGoal') ?? 8;
+    const peak = Math.max(goal, ...st.last7.map((x) => x.n), 1);
+    return ui.stack({ gap: 'md', align: 'stretch' }, [
+      ui.row({ gap: 'lg', align: 'center' }, [
+        ui.gauge({ value: Math.min(today(), goal), max: goal, label: `${today()}/${goal}`, detail: '今日目标', size: 88 }),
+        ui.stack({ gap: 'xs', grow: true }, [
+          ui.text(`本周 ${st.week} 个番茄 · 约 ${Math.round(st.week * settings.get('work') / 6) / 10} 小时`, { weight: 'medium' }),
+          ui.text(`连续 ${st.streak} 天 · 近 30 天共 ${st.month} 个`, { size: 'sm', tone: 'secondary' }),
+        ]),
+      ]),
+      ui.row({ gap: 'sm', align: 'end' }, st.last7.map((x) => ui.stack({ gap: 'xs', align: 'center', grow: true, key: x.key }, [
+        ui.text(String(x.n), { size: 'xs', tone: x.n >= goal ? 'accent' : 'secondary', tabular: true, align: 'center' }),
+        ui.progress({ value: Math.round((x.n / peak) * 100), max: 100 }),
+        ui.text(x.label, { size: 'xs', tone: x.label === '今' ? 'accent' : 'secondary', align: 'center' }),
+      ]))),
+    ]);
+  };
+
   function render() {
     const total = length(state.phase);
     const remaining = left();
@@ -130,7 +167,7 @@ export function activate() {
         ])
       : state.task ? ui.text(state.task.title, { tone: 'secondary', size: 'sm' }) : null;
 
-    island.page('timer').update(ui.stack({ gap: 'md', align: 'stretch' }, [
+    const timerView = ui.stack({ gap: 'md', align: 'stretch' }, [
       ui.row({ gap: 'md', align: 'end' }, [
         ui.stack({ gap: 'xs' }, [
           ui.text(PHASES[state.phase], { tone: state.phase === 'work' ? 'accent' : 'secondary', weight: 'semibold', size: 'sm' }),
@@ -147,6 +184,10 @@ export function activate() {
         ui.spacer(),
         ui.text(n > 0 ? `今天完成 ${n} 个番茄` : '今天还没有完成番茄', { tone: 'secondary', size: 'xs' }),
       ]),
+    ]);
+    island.page('timer').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
+      ui.tabs({ value: view, onChange: (v) => { view = v; render(); } }, [ui.option('timer', '计时'), ui.option('stats', '统计')]),
+      view === 'stats' ? statsView() : timerView,
     ]), { status: ui.text(n > 0 ? `今日 ${n} 🍅` : '', { tone: 'secondary', size: 'sm' }) });
 
     // Collapsed: the time left, while a phase is under way (running or paused part-way).

@@ -69,6 +69,14 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
             }
         }),
         "progress" => new ArcProgress(),
+        // Arc's month calendar: value (YYYY-MM-DD) is the picked day; onChange gets the day the user picks.
+        "calendar" => Wire(new TKCode.Arc.Calendar { ShowToday = true }, static (r, c) => c.DateSelected += (_, _) =>
+        {
+            if (!r._applying && c.SelectedDate is { } d)
+            {
+                r.Fire(c, "onChange", System.Text.Json.JsonSerializer.Serialize(d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), UiJson.Default.String));
+            }
+        }),
         "badge" => new ArcBadge(),
         "mascot" => new MascotHost(),
         "gauge" => new Gauge(),
@@ -200,6 +208,11 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
                     counter.Decimals = (int)Math.Clamp(node.GetNumber("decimals") ?? 0, 0, 6);
                     counter.Label = node.GetString("label");
                     ArcTokens.Bind(counter, Avalonia.Controls.Primitives.TemplatedControl.FontSizeProperty, TypeToken(node.GetString("size") ?? "3xl"));
+                    break;
+                case (TKCode.Arc.Calendar calendar, "calendar"):
+                    calendar.SelectedDate = DateOnly.TryParseExact(node.GetString("value"), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var picked) ? picked : null;
+                    calendar.FirstDayOfWeek = DayOfWeek.Monday;
+                    calendar.MaxWidth = 328;
                     break;
                 case (SegmentedControl segmented, _):
                     ApplySegmented(segmented, node);

@@ -281,8 +281,8 @@ public sealed partial class PluginHostTests
         WriteFakeCalendarProvider("test.cal.b", "b", $"[{meeting}]");
         StartDiscovered();
 
-        var page = WaitForPage(s => s.PluginId == "com.o_o.calendar" && Nodes(s.View.Expanded).Any(n => n.Type == "item"), "events listed");
-        var rows = Nodes(page.View.Expanded).Where(n => n.Type == "item").ToList();
+        var page = WaitForPage(s => s.PluginId == "com.o_o.calendar" && Nodes(s.View.Expanded).Any(n => n.Type == "item" && Texts(n).Contains("周会")), "events listed");
+        var rows = Nodes(page.View.Expanded).Where(n => n.Type == "item").ToList(); // the month's day cells are items too
         Assert.Single(rows, r => Texts(r).Contains("周会"));                                     // merged
         var activity = WaitForUpdate(s => s.PluginId == "com.o_o.calendar" && s.ActivityId == "soon", "starting-soon activity");
         Assert.Equal(ActivityPriority.Passive, activity.Priority);
