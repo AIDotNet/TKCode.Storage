@@ -72,6 +72,9 @@ public sealed class PluginEngines
 {
     /// <summary>The <c>@island/api</c> version range the plugin needs, e.g. <c>^1.0.0</c>.</summary>
     public string Island { get => field ?? "^1.0.0"; init; }
+
+    /// <summary>The major version of the island API asked for: 2 for <c>^2.0.0</c> (docs/design/09-island-v2.md §3), else 1.</summary>
+    public int ApiMajor => Island.TrimStart('^', '~', '>', '=', ' ').Split('.')[0] is var major && int.TryParse(major, out var m) && m >= 2 ? 2 : 1;
 }
 
 public sealed class PluginContributions
@@ -83,6 +86,12 @@ public sealed class PluginContributions
 
     /// <summary>Small items for the collapsed island (docs/design/07-home-and-layout.md §4).</summary>
     public IReadOnlyList<ChipContribution> Chips { get => field ?? []; init; }
+
+    /// <summary>Items beside the idle island (docs/design/09-island-v2.md §3).</summary>
+    public IReadOnlyList<AmbientContribution> Ambient { get => field ?? []; init; }
+
+    /// <summary>Pages of the home dashboard (09 §2), one tab each.</summary>
+    public IReadOnlyList<PageContribution> Home { get => field ?? []; init; }
 
     /// <summary>Looks for every O_O window (docs/design/03-plugin-system.md §9), chosen on the console's 外观 page.</summary>
     public IReadOnlyList<ThemeContribution> Themes { get => field ?? []; init; }
@@ -219,7 +228,7 @@ public sealed class ThemeContribution
         }
     }
 
-    private static bool IsHexColor(string s) =>
+    internal static bool IsHexColor(string s) =>
         s.Length is 7 or 9 && s[0] == '#' && s.Skip(1).All(Uri.IsHexDigit);
 }
 
@@ -310,6 +319,70 @@ public sealed class ActivityContribution
 {
     public required string Id { get; init; }
     public string? Title { get; init; }
+
+    /// <summary>One activity per instance (one per account, per timer): <c>island.activity(id, spec, { instance })</c>.</summary>
+    public bool Multiple { get; init; }
+
+    /// <summary>passive, normal (default), high or critical: what the activity claims unless an update says otherwise.</summary>
+    public string? Priority { get; init; }
+
+    /// <summary>The accent's semantic name (music, timer, message…) or #RRGGBB.</summary>
+    public string? Accent { get; init; }
+}
+
+/// <summary>Checks the 2.0 contributions (docs/design/09-island-v2.md §3): activities, ambient items, home pages.</summary>
+public static class IslandContributions
+{
+    public static readonly IReadOnlySet<string> Priorities = new HashSet<string>(StringComparer.Ordinal) { "passive", "normal", "high", "critical" };
+
+    public static void Validate(PluginContributions c, List<string> problems)
+    {
+        static bool IsId(string? id) => id is { Length: > 0 and <= 64 } && id.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.');
+
+        void Ids(IEnumerable<string?> ids, string what)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var id in ids)
+            {
+                if (!IsId(id) || !seen.Add(id!))
+                {
+                    problems.Add($"{what} '{id}': id missing, invalid or used twice");
+                }
+            }
+        }
+
+        Ids(c.Activities.Select(a => a.Id), "activity");
+        foreach (var a in c.Activities)
+        {
+            if (a.Priority is { } p && !Priorities.Contains(p))
+            {
+                problems.Add($"activity '{a.Id}': priority must be passive, normal, high or critical");
+            }
+            if (a.Accent is { } accent && accent.StartsWith('#') && !ThemeContribution.IsHexColor(accent))
+            {
+                problems.Add($"activity '{a.Id}': accent must be a name or #RRGGBB");
+            }
+        }
+        Ids(c.Ambient.Select(a => a.Id), "ambient item");
+        foreach (var a in c.Ambient.Where(a => a.Side is { } side && side is not ("left" or "right")))
+        {
+            problems.Add($"ambient item '{a.Id}': side must be left or right");
+        }
+        Ids(c.Home.Select(h => h.Id), "home page");
+    }
+}
+
+/// <summary>An ambient item (docs/design/09-island-v2.md §3): a small piece beside the idle island.</summary>
+public sealed class AmbientContribution
+{
+    public required string Id { get; init; }
+    public string? Title { get; init; }
+
+    /// <summary>"left" or "right" (default).</summary>
+    public string? Side { get; init; }
+
+    /// <summary>Whether it shows until the user decides otherwise.</summary>
+    public bool? Enabled { get; init; }
 }
 
 [JsonSourceGenerationOptions(

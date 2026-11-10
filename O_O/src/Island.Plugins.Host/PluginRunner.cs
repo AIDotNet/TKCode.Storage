@@ -23,6 +23,10 @@ internal interface IPluginRunnerSink
     void ChipUpdated(ChipSnapshot snapshot);
     void Alert(AlertSnapshot alert);
     void Satellite(SatelliteSnapshot snapshot);
+    void LiveActivityUpdated(LiveActivitySnapshot snapshot);
+    void LiveActivityEnded(string pluginId, string key);
+    void LiveAlert(LiveAlertSnapshot alert);
+    void AmbientUpdated(AmbientSnapshot snapshot);
     void StateChanged(string pluginId, PluginState state, string? reason);
     void Log(PluginLogEntry entry);
 }
@@ -196,6 +200,7 @@ internal sealed partial class PluginRunner : IDisposable
             _engine = engine;
             RegisterNatives(engine, generation);
             engine.SetValue("__island_permissions", PermissionsJson());
+            engine.SetValue("__island_api", _package.Manifest.Engines.ApiMajor);
 
             // The prelude takes the natives into a closure and removes them from globalThis; the host then keeps its
             // own reference to the dispatcher and removes that global too. Plugin code never sees the natives.
@@ -328,6 +333,7 @@ internal sealed partial class PluginRunner : IDisposable
             _sink.ChipUpdated(new ChipSnapshot(Id, chip, instance, "", null, ++_sequence));
         }
         _chips.Clear();
+        TearDownLive();
         _lastViews.Clear();
         TearDownSatellites();
         _dispatch = null;
@@ -978,6 +984,10 @@ internal sealed partial class PluginRunner : IDisposable
         {
             var op = Arg(ref c, 0);
             var activityId = Arg(ref c, 1);
+            if (IsLiveOp(op))
+            {
+                return Live(ref c, op, activityId);
+            }
             if (op is "chip" or "chipEnd")
             {
                 return Chip(ref c, op == "chipEnd", activityId);
@@ -1002,12 +1012,14 @@ internal sealed partial class PluginRunner : IDisposable
                     TimeSpan.FromSeconds(Math.Clamp(double.IsFinite(s) ? seconds : 3, 1, 10)), ++_sequence));
                 return JsValue.Undefined;
             }
-            if (op == "page")
+            if (op is "page" or "home")
             {
-                // A page: declared in plugin.json, titled there, and only its expanded view is used.
-                if (_package.Manifest.Contributes.Pages.FirstOrDefault(p => p.Id == activityId) is not { } declared)
+                // A page (a home page in 2.0): declared in plugin.json, titled there, and only its expanded view is used.
+                if (_package.Manifest.Contributes.Home.Concat(_package.Manifest.Contributes.Pages).FirstOrDefault(p => p.Id == activityId) is not { } declared)
                 {
-                    throw c.TypeError($"Page '{activityId}' is not declared in plugin.json (contributes.pages).");
+                    throw c.TypeError(op == "home"
+                        ? $"Home page '{activityId}' is not declared in plugin.json (contributes.home)."
+                        : $"Page '{activityId}' is not declared in plugin.json (contributes.pages).");
                 }
                 var pageKey = "page\u0001" + activityId;
                 var pageArgs = ViewArgs(ref c);

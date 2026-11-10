@@ -80,12 +80,16 @@ public sealed partial class PluginHostTests : IDisposable
     /// <summary>The next plugin's <c>contributes</c> object as JSON, e.g. <c>{ "pages": [...] }</c>.</summary>
     private string _contributes = "{}";
 
+    /// <summary>The next plugin's <c>engines.island</c>, e.g. <c>^2.0.0</c> for the 2.0 island API; null for the default.</summary>
+    private string? _engine;
+
     private string WritePlugin(string id, string js, string main = "main.js")
     {
         var dir = Path.Combine(_root, id);
         Directory.CreateDirectory(dir);
+        var engines = _engine is null ? "" : $$""", "engines": { "island": "{{_engine}}" }""";
         File.WriteAllText(Path.Combine(dir, "plugin.json"),
-            $$"""{ "id": "{{id}}", "name": "Test", "version": "1.0.0", "main": "{{main}}", "permissions": [{{_permissions}}], "contributes": {{_contributes}} }""");
+            $$"""{ "id": "{{id}}", "name": "Test", "version": "1.0.0", "main": "{{main}}", "permissions": [{{_permissions}}], "contributes": {{_contributes}}{{engines}} }""");
         File.WriteAllText(Path.Combine(dir, main), js);
         return dir;
     }

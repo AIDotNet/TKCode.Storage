@@ -141,6 +141,10 @@ public static class VNodeJson
         return ParseNode(doc.RootElement, 0, ref budget);
     }
 
+    /// <summary>One node of a larger view, counting against that view's <paramref name="budget"/> of nodes.</summary>
+    /// <exception cref="InvalidDataException">The node breaks a limit.</exception>
+    public static VNode ParseNode(JsonElement e, ref int budget) => ParseNode(e, 0, ref budget);
+
     private static JsonDocument Parse(string json)
     {
         try

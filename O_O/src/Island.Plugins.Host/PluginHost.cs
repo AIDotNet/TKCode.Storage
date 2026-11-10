@@ -92,6 +92,7 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
                 var settings = SettingsSchema.Parse(manifest.Contributes.Settings, manifestProblems);
                 ThemeContribution.Validate(manifest.Contributes.Themes, manifestProblems);
                 LayoutContribution.Validate(manifest.Contributes.Layouts, manifestProblems);
+                IslandContributions.Validate(manifest.Contributes, manifestProblems);
                 manifest.ValidateTargets(manifestProblems);
                 foreach (var key in permissions?.HostSettings ?? [])
                 {
@@ -594,6 +595,56 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
     void IPluginRunnerSink.Alert(AlertSnapshot alert) => AlertRaised?.Invoke(alert);
 
     void IPluginRunnerSink.Satellite(SatelliteSnapshot snapshot) => SatelliteUpdated?.Invoke(snapshot);
+
+    // ---- the 2.0 island API (docs/design/09-island-v2.md) ------------------------------------------------------
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, LiveActivitySnapshot> _liveActivities = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, AmbientSnapshot> _liveAmbient = new();
+
+    /// <summary>A live activity started or changed (<c>island.activity</c>).</summary>
+    public event Action<LiveActivitySnapshot>? LiveActivityUpdated;
+
+    /// <summary>A live activity ended: (plugin, key).</summary>
+    public event Action<string, string>? LiveActivityEnded;
+
+    /// <summary>An alert (<c>island.alert</c>, <c>activity.alert</c>).</summary>
+    public event Action<LiveAlertSnapshot>? LiveAlertRaised;
+
+    /// <summary>An ambient item changed; a null view means it was removed.</summary>
+    public event Action<AmbientSnapshot>? AmbientUpdated;
+
+    /// <summary>The running live activities, for a view that starts after they did.</summary>
+    public IReadOnlyList<LiveActivitySnapshot> LiveActivities => [.. _liveActivities.Values];
+
+    /// <summary>The ambient items shown now.</summary>
+    public IReadOnlyList<AmbientSnapshot> LiveAmbient => [.. _liveAmbient.Values];
+
+    void IPluginRunnerSink.LiveActivityUpdated(LiveActivitySnapshot snapshot)
+    {
+        _liveActivities[snapshot.Key] = snapshot;
+        LiveActivityUpdated?.Invoke(snapshot);
+    }
+
+    void IPluginRunnerSink.LiveActivityEnded(string pluginId, string key)
+    {
+        _liveActivities.TryRemove(key, out _);
+        LiveActivityEnded?.Invoke(pluginId, key);
+    }
+
+    void IPluginRunnerSink.LiveAlert(LiveAlertSnapshot alert) => LiveAlertRaised?.Invoke(alert);
+
+    void IPluginRunnerSink.AmbientUpdated(AmbientSnapshot snapshot)
+    {
+        if (snapshot.View is null)
+        {
+            _liveAmbient.TryRemove(snapshot.Key, out _);
+        }
+        else
+        {
+            _liveAmbient[snapshot.Key] = snapshot;
+        }
+        AmbientUpdated?.Invoke(snapshot);
+    }
 
     void IPluginRunnerSink.StateChanged(string pluginId, PluginState state, string? reason)
     {

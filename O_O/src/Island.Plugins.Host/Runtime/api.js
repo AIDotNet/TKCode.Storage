@@ -1,7 +1,7 @@
 // The `@island/api` module (docs/design/03-plugin-system.md §7). The host loads it before any plugin code; it takes
 // the natives from the prelude's one-shot handoff, and exports a capability only when the plugin holds its permission
 // (otherwise the export is undefined). The host checks permissions again on every call.
-const { natives, internal, permissions, call } = globalThis.__island_handoff();
+const { natives, internal, permissions, call, apiMajor } = globalThis.__island_handoff();
 const host = { activity: natives.activity };
 const has = (p) => permissions.includes(p);
 
@@ -242,7 +242,180 @@ class Satellite {
 }
 const satellites = new Map();
 
-export const island = Object.freeze({
+// ---- the 2.0 island API (docs/design/09-island-v2.md §3) --------------------------------------------------------
+
+// Walks view nodes, replacing function props with { $h: 0 } refs and collecting the functions; `done(key, json)`
+// registers them under `key` and fills in the ids.
+const walker = () => {
+  const fns = [];
+  const refs = [];
+  const walk = (n) => {
+    if (n == null || typeof n !== 'object') return undefined;
+    const p = {};
+    for (const [name, value] of Object.entries(n.p ?? {})) {
+      if (typeof value === 'function') {
+        const ref = { $h: 0 };
+        fns.push(value);
+        refs.push(ref);
+        p[name] = ref;
+      } else {
+        p[name] = value;
+      }
+    }
+    const out = { t: n.t, p, c: (n.c ?? []).map(walk).filter((x) => x !== undefined) };
+    if (n.k !== undefined) out.k = n.k;
+    return out;
+  };
+  const done = (key, shaped) => {
+    // Every ref is still { $h: 0 } here: the JSON is the view's shape without its handler ids.
+    const ids = internal.registerHandlers(key, fns, JSON.stringify(shaped));
+    refs.forEach((ref, i) => { ref.$h = ids[i]; });
+    return JSON.stringify(shaped);
+  };
+  return { walk, done };
+};
+
+const regionsOf = (walk, r) => r == null ? undefined
+  : { leading: walk(r.leading), trailing: walk(r.trailing), center: walk(r.center), bottom: walk(r.bottom) };
+
+/** { compact, minimal, expanded } → JSON with handler refs, registered under `key`. */
+const serializeActivity = (key, spec) => {
+  const { walk, done } = walker();
+  return done(key, { compact: regionsOf(walk, spec.compact), minimal: walk(spec.minimal), expanded: regionsOf(walk, spec.expanded) });
+};
+
+/** { leading, center, trailing } → JSON with handler refs, registered under `key`. */
+const serializeAlert = (key, spec) => {
+  const { walk, done } = walker();
+  return done(key, { leading: walk(spec?.leading), center: walk(spec?.center), trailing: walk(spec?.trailing) });
+};
+
+/** One node → JSON with handler refs, registered under `key`. */
+const serializeNode = (key, view) => {
+  const { walk, done } = walker();
+  return done(key, walk(view) ?? null);
+};
+
+const LIVE_PRIORITIES = ['passive', 'normal', 'high', 'critical'];
+const liveOptions = (spec) => JSON.stringify({
+  priority: LIVE_PRIORITIES.includes(spec?.priority) ? spec.priority : undefined,
+  accent: spec?.accent == null ? undefined : String(spec.accent),
+  title: spec?.title == null ? undefined : String(spec.title),
+  open: spec?.open == null ? undefined : {
+    app: spec.open.app == null ? undefined : String(spec.open.app),
+    url: spec.open.url == null ? undefined : String(spec.open.url),
+  },
+});
+
+class LiveActivity {
+  #id;
+  #instance;
+  #spec = {};
+  #ended = false;
+
+  constructor(id, spec, options) {
+    this.#id = id;
+    this.#instance = options?.instance == null ? '' : String(options.instance);
+    this.update(spec);
+  }
+
+  get id() { return this.#id; }
+  get instance() { return this.#instance || undefined; }
+
+  #key() { return `live:${this.#id}#${this.#instance}`; }
+
+  /** Changes the activity: any of priority, accent, title, open, compact, minimal, expanded (each given replaces
+   *  the one before; the rest stay). */
+  update(spec) {
+    if (this.#ended) throw new Error(`Activity '${this.#id}' has ended`);
+    this.#spec = { ...this.#spec, ...spec };
+    const s = this.#spec;
+    host.activity('live', this.#id, this.#instance, liveOptions(s),
+      serializeActivity(this.#key(), s));
+  }
+
+  /** Opens the island briefly for this activity: { leading, center, trailing, seconds (1-10, 3), priority }.
+   *  Returns false when over the limit of 30 alerts a minute. */
+  alert(spec) {
+    if (this.#ended) throw new Error(`Activity '${this.#id}' has ended`);
+    return host.activity('liveAlert', this.#id, this.#instance,
+      JSON.stringify({ seconds: spec?.seconds, priority: LIVE_PRIORITIES.includes(spec?.priority) ? spec.priority : undefined }),
+      serializeAlert(`${this.#key()}:alert`, spec)) === true;
+  }
+
+  /** Takes the activity off the island. */
+  end() {
+    if (this.#ended) return;
+    this.#ended = true;
+    internal.dropHandlers(this.#key());
+    internal.dropHandlers(`${this.#key()}:alert`);
+    host.activity('liveEnd', this.#id, this.#instance, '', '');
+  }
+}
+
+class Ambient {
+  #id;
+
+  constructor(id) { this.#id = id; }
+
+  /** Shows `view` (one small node: an icon and a short text) beside the idle island. */
+  update(view) {
+    host.activity('ambient', this.#id, '', '', serializeNode(`ambient:${this.#id}`, view));
+  }
+
+  /** Takes it away. */
+  remove() {
+    internal.dropHandlers(`ambient:${this.#id}`);
+    host.activity('ambientEnd', this.#id, '', '', '');
+  }
+}
+const ambients = new Map();
+
+class HomePage {
+  #id;
+
+  constructor(id) { this.#id = id; }
+
+  /** Shows `view` as this home page; options.status: a short node for the header while it is on show. */
+  update(view, options) {
+    host.activity('home', this.#id, '', '', serialize(`home:${this.#id}`, { expanded: view, status: options?.status }));
+  }
+}
+const homePages = new Map();
+
+const island2 = Object.freeze({
+  /** A live activity declared in plugin.json (contributes.activities), started with `spec`:
+   *  { priority, accent, title, open: { app, url }, compact: { leading, trailing }, minimal, expanded: { leading, trailing,
+   *  center, bottom } }. options.instance for activities declared multiple. The host decides where it shows. */
+  activity: (id, spec, options) => new LiveActivity(String(id), spec, options),
+  /** The ambient item `id` declared in plugin.json (contributes.ambient): shown beside the idle island. */
+  ambient: (id) => {
+    id = String(id);
+    if (!ambients.has(id)) ambients.set(id, new Ambient(id));
+    return ambients.get(id);
+  },
+  home: Object.freeze({
+    /** The home page `id` declared in plugin.json (contributes.home). */
+    page: (id) => {
+      id = String(id);
+      if (!homePages.has(id)) homePages.set(id, new HomePage(id));
+      return homePages.get(id);
+    },
+  }),
+  /** A one-off alert: { leading, center, trailing, seconds (1-10, 3), priority }. False when over 30 a minute. */
+  alert: (spec) => host.activity('liveAlert', '', '',
+    JSON.stringify({ seconds: spec?.seconds, priority: LIVE_PRIORITIES.includes(spec?.priority) ? spec.priority : undefined }),
+    serializeAlert('alert', spec)) === true,
+  provide: (iface, id, impl) => internal.provide(String(iface), String(id), impl),
+  providers: Object.freeze({
+    onChange: (fn) => internal.onProvidersChanged(fn),
+    list: (iface) => call('providers.list', { interface: String(iface) }),
+    call: (iface, id, method, ...args) =>
+      call('providers.call', { interface: String(iface), id: String(id), method: String(method), args }),
+  }),
+});
+
+const island1 = Object.freeze({
   /** The satellite `id` declared in plugin.json (contributes.satellites). */
   satellite: (id) => {
     id = String(id);
@@ -278,6 +451,9 @@ export const island = Object.freeze({
     create: (id, options) => new Activity(String(id), options),
   }),
 });
+
+/** The island: the 2.0 API for plugins whose plugin.json asks for engines.island ^2.0.0, the 1.x API otherwise. */
+export const island = apiMajor === 2 ? island2 : island1;
 
 // ---- storage (no permission needed; per plugin, persisted, quota-limited) --------------------------------------
 export const storage = Object.freeze({
