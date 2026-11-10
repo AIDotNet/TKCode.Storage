@@ -24,7 +24,7 @@ public sealed partial class PluginHostTests
         Assert.Contains(Nodes(rows.First(r => Texts(r).Contains("report.pdf"))), n => n.Type == "icon" && n.GetString("name") == "FileText");
         // A picture shows itself (a thumbnail of the file), not a generic icon.
         Assert.Equal(photo, Nodes(rows.First(r => Texts(r).Contains("photo.png"))).Single(n => n.Type == "image").GetString("path"));
-        var chip = WaitFor(() => _chipViews.LastOrDefault(c => c.Key == "com.o_o.shelf/count" && c.View is not null), "count chip");
+        var chip = WaitFor(() => _ambientSeen.LastOrDefault(c => c.Key == "com.o_o.shelf/count" && c.View is not null), "count chip");
         Assert.Contains("2", Texts(chip.View).ToList());
 
         File.Delete(photo);

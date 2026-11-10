@@ -84,7 +84,7 @@ export function activate() {
   function render() {
     const pages = Math.max(1, Math.ceil(shelf.length / PER_PAGE));
     page = Math.min(page, pages - 1);
-    island.page('files').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
+    island.home.page('files').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
       shelf.length === 0
         ? ui.stack({ gap: 'xs' }, [
             ui.text('把文件拖到岛上暂存', { weight: 'semibold' }),
@@ -101,8 +101,8 @@ export function activate() {
       notice ? ui.text(notice, { tone: 'secondary', size: 'xs', wrap: true }) : null,
     ]), { status: ui.text(shelf.length === 0 ? '' : `${shelf.length} 个文件`, { tone: 'secondary', size: 'sm' }) });
 
-    if (shelf.length === 0) island.chip('count').remove();
-    else island.chip('count').update(ui.row({ gap: 'xs', align: 'center' }, [
+    if (shelf.length === 0) island.ambient('count').remove();
+    else island.ambient('count').update(ui.row({ gap: 'xs', align: 'center' }, [
       ui.icon('Paperclip', { tone: 'secondary', size: 14 }),
       ui.text(String(shelf.length), { size: 'sm', weight: 'semibold', tabular: true }),
     ]));
@@ -111,7 +111,7 @@ export function activate() {
   files.onDrop((paths) => {
     notice = null;
     add(paths);
-    island.alert({ leading: ui.icon('Paperclip'), trailing: ui.text(`已暂存 ${paths.length} 个`, { size: 'sm', weight: 'semibold' }) }, { seconds: 2 });
+    island.alert({ leading: ui.icon('Paperclip'), trailing: ui.text(`已暂存 ${paths.length} 个`, { size: 'sm', weight: 'semibold' }), seconds: 2 });
   });
   settings.onChange(() => refresh());
   refresh();

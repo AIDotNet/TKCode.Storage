@@ -198,7 +198,7 @@ public sealed class IslandPage : StackPanel
         // Only running plugins: a stopped plugin never sends its chip, so switching it on here would show nothing.
         foreach (var package in _plugins.Packages.Where(p => _plugins.IsEnabled(p.Id)))
         {
-            foreach (var chip in package.Manifest.Contributes.Chips)
+            foreach (var chip in package.Manifest.Contributes.CollapsedItems)
             {
                 var side = chip.Side == "left" ? ChipSide.Left : ChipSide.Right;
                 if (!chip.Multiple)
@@ -280,7 +280,7 @@ public sealed class IslandPage : StackPanel
         // Only running plugins: a stopped plugin's page never appears on the island.
         var offered = _plugins.Packages
             .Where(p => _plugins.IsEnabled(p.Id))
-            .SelectMany(p => p.Manifest.Contributes.Pages.Select(page => (Package: p, Page: page)))
+            .SelectMany(p => p.Manifest.Contributes.AllPages.Select(page => (Package: p, Page: page)))
             .ToDictionary(
                 x => PageSnapshot.PageKey(x.Package.Id, x.Page.Id),
                 x => (Info: new PageInfo(PageSnapshot.PageKey(x.Package.Id, x.Page.Id), x.Page.Title ?? x.Page.Id, x.Page.Enabled ?? true, x.Page.Icon),
@@ -319,7 +319,7 @@ public sealed class IslandPage : StackPanel
     private Control PageRow(PageInfo page, string plugin)
     {
         var prefs = _pages.Current;
-        var visible = prefs.Visible(_plugins.Packages.Where(p => _plugins.IsEnabled(p.Id)).SelectMany(p => p.Manifest.Contributes.Pages
+        var visible = prefs.Visible(_plugins.Packages.Where(p => _plugins.IsEnabled(p.Id)).SelectMany(p => p.Manifest.Contributes.AllPages
             .Select(g => new PageInfo(PageSnapshot.PageKey(p.Id, g.Id), g.Title ?? g.Id, g.Enabled ?? true))));
         var isHome = prefs.HomeOf(visible) == page.Key;
         var toggle = new ArcSwitch { IsChecked = prefs.IsEnabled(page), VerticalAlignment = VerticalAlignment.Center };

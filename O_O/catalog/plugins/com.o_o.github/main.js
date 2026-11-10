@@ -52,7 +52,7 @@ export async function activate() {
       // One alert when a review request that was not there before shows up.
       const fresh = reviews.filter((x) => !known.has(x.id));
       if (fresh.length > 0) {
-        if (known.size > 0) island.alert({ leading: ui.icon('GitPullRequest'), trailing: ui.text(`待 review · ${cut(fresh[0].title, 10)}`, { size: 'sm', weight: 'semibold' }) }, { seconds: 5 });
+        if (known.size > 0) island.alert({ leading: ui.icon('GitPullRequest'), trailing: ui.text(`待 review · ${cut(fresh[0].title, 10)}`, { size: 'sm', weight: 'semibold' }), seconds: 5 });
         known = new Set(reviews.map((x) => x.id));
         storage.set('seen', [...known]);
       }
@@ -67,12 +67,12 @@ export async function activate() {
   const render = () => {
     const unread = notes.length;
     if (unread > 0 || reviews.length > 0) {
-      island.chip('unread').update(ui.row({ gap: 'xs', align: 'center' }, [
+      island.ambient('unread').update(ui.row({ gap: 'xs', align: 'center' }, [
         ui.icon(reviews.length > 0 ? 'GitPullRequest' : 'Bell', { tone: 'secondary', size: 14 }),
         ui.text(String(unread + reviews.length), { size: 'sm', weight: 'semibold', tabular: true }),
       ]));
     } else {
-      island.chip('unread').remove();
+      island.ambient('unread').remove();
     }
 
     const list = tab === 'notes' ? notes : reviews;
@@ -84,7 +84,7 @@ export async function activate() {
       ui.text(cut(x.repo, 22), { size: 'xs', tone: 'secondary' }),
     ]));
 
-    island.page('inbox').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
+    island.home.page('inbox').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
       ui.row({ gap: 'xs', align: 'center' }, [
         ui.tabs({ value: tab, onChange: (v) => { tab = v; page = 0; render(); } },
           [ui.option('notes', `通知 ${notes.length}`), ui.option('reviews', `待 review ${reviews.length}`)]),

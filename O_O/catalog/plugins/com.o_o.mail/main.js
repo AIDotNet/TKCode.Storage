@@ -99,7 +99,7 @@ export function activate() {
       }
       storage.set('seen', seen);
       if (fresh > 0) {
-        island.alert({ leading: ui.icon('Mail'), trailing: ui.text(`${fresh} 封新邮件`, { size: 'sm', weight: 'semibold' }) }, { seconds: 4 });
+        island.alert({ leading: ui.icon('Mail'), trailing: ui.text(`${fresh} 封新邮件`, { size: 'sm', weight: 'semibold' }), seconds: 4 });
         systemNotify(`${fresh} 封新邮件`, '');
       }
     } catch (e) {
@@ -161,12 +161,12 @@ export function activate() {
   function render() {
     const totalUnread = accounts.reduce((sum, a) => sum + (results.get(a.key)?.unread ?? 0), 0);
     if (totalUnread > 0) {
-      island.chip('unread').update(ui.row({ gap: 'xs', align: 'center' }, [
+      island.ambient('unread').update(ui.row({ gap: 'xs', align: 'center' }, [
         ui.icon('Mail', { tone: 'secondary', size: 14 }),
         ui.text(totalUnread > 999 ? '999+' : String(totalUnread), { size: 'sm', weight: 'semibold', tabular: true }),
       ]));
     } else {
-      island.chip('unread').remove();
+      island.ambient('unread').remove();
     }
 
     const account = accounts.find((a) => a.key === current);
@@ -191,7 +191,7 @@ export function activate() {
       body = ui.stack({ gap: 'xs', align: 'stretch' }, messages.slice(page * PER_PAGE, (page + 1) * PER_PAGE).map((m) => row(m, account.web)));
     }
 
-    island.page('inbox').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
+    island.home.page('inbox').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
       accounts.length > 1
         ? ui.tabs({ value: current, onChange: (v) => { current = v; storage.set('current', v); page = 0; render(); } },
             accounts.map((a) => ui.option(a.key, a.title)))

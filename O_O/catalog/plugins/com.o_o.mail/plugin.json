@@ -1,9 +1,10 @@
 {
   "id": "com.o_o.mail",
   "name": "邮件",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "收件箱未读数、新邮件提醒和最近的邮件（只读，IMAP）",
   "icon": "Mail",
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "permissions": [
     "mail",
@@ -13,14 +14,14 @@
     "notifications"
   ],
   "contributes": {
-    "pages": [
+    "home": [
       {
         "id": "inbox",
         "title": "邮件",
         "icon": "Mail"
       }
     ],
-    "chips": [
+    "ambient": [
       {
         "id": "unread",
         "title": "未读邮件数",

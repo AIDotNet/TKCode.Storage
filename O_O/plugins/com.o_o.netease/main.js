@@ -1,7 +1,7 @@
-// NetEase Cloud Music (网易云音乐). Listens to what the media capability reports; while the NetEase client plays, a chip
-// on the right of the collapsed island shows bars that dance (ui.spectrum, a made-up motion: reading the real loudness would mean tapping the app's audio, which
-// lights macOS's recording indicator). The page shows the song, a scrolling lyric and the
-// charts. Songs and lyrics come from NetEase's unofficial public web endpoints (no login); every call may fail, and
+// NetEase Cloud Music (网易云音乐), on the 2.0 island (docs/design/09-island-v2.md). While the NetEase client plays or is
+// paused, a live activity shows the song and bars that dance (ui.spectrum, a made-up motion: reading the real loudness
+// would mean tapping the app's audio, which lights macOS's recording indicator); its card has the lyric, the progress
+// and the controls. The home page has the song and the charts. Songs and lyrics come from NetEase's unofficial public web endpoints (no login); every call may fail, and
 // the plugin then simply shows less. Only the song title and artist are ever sent.
 import { island, ui, media, http, settings, shell } from '@island/api';
 
@@ -210,7 +210,7 @@ export async function activate() {
   };
 
   function render() {
-    island.page('now').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
+    island.home.page('now').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
       ui.tabs({ value: view, onChange: (v) => { view = v; if (v === 'charts') loadChart(chart); render(); } },
         [ui.option('now', '正在播放'), ui.option('charts', '榜单')]),
       view === 'now' ? nowView() : chartView(),
@@ -218,26 +218,65 @@ export async function activate() {
     ]), { status: now ? ui.text(now.playing ? '播放中' : '已暂停', { tone: 'secondary', size: 'sm' }) : undefined });
   }
 
-  // ---- the island ---------------------------------------------------------------------------------------------------
+  // ---- the island: a live activity while NetEase plays or is paused ---------------------------------------------------
+
+  const controls = () => ui.row({ gap: 'xs', align: 'center' }, [
+    ui.iconButton('SkipBack', { label: '上一首', onClick: () => send('previous') }),
+    ui.iconButton(now?.playing ? 'Pause' : 'Play', { label: now?.playing ? '暂停' : '播放', onClick: () => send('toggle') }),
+    ui.iconButton('SkipForward', { label: '下一首', onClick: () => send('next') }),
+  ]);
+
+  const activityView = () => {
+    const playing = !!now.playing;
+    const bars = Math.min(9, Math.max(3, settings.get('bars') ?? 5));
+    const p = position();
+    const i = p == null || lyrics.state !== 'ready' ? -1 : lineAt(lyrics.lines, p);
+    const line = settings.get('chipLyric') && playing && i >= 0 ? lyrics.lines[i].text : null;
+    const total = now.duration ?? lyrics.duration;
+    return {
+      priority: playing ? 'normal' : 'passive',
+      open: { app: 'com.netease.163music' },
+      compact: {
+        leading: ui.row({ gap: 'xs', align: 'center' }, [
+          ui.icon('Music2', { size: 14 }),
+          ui.text(cut(now.title ?? '网易云', 6), { size: 'sm', weight: 'semibold' }),
+        ]),
+        trailing: ui.row({ gap: 'xs', align: 'center' }, [
+          line ? ui.text(cut(line, 6), { size: 'xs', tone: 'secondary' }) : null,
+          ui.spectrum({ bars, active: playing }),
+        ]),
+      },
+      minimal: ui.spectrum({ bars: 3, active: playing }),
+      expanded: {
+        leading: ui.spectrum({ bars: 9, active: playing }),
+        center: ui.stack({ gap: 'xs' }, [
+          ui.text(now.title ?? '网易云音乐', { size: 'lg', weight: 'semibold', lines: 1 }),
+          now.artist ? ui.text(now.artist, { tone: 'secondary', size: 'sm', lines: 1 }) : null,
+        ]),
+        trailing: controls(),
+        bottom: ui.stack({ gap: 'sm', align: 'stretch' }, [
+          total && p != null ? ui.progress({ value: Math.min(p, total), max: total }) : null,
+          total && p != null ? ui.row({}, [ui.text(time(p), { tone: 'secondary', size: 'xs', tabular: true }), ui.spacer(),
+                                           ui.text(time(total), { tone: 'secondary', size: 'xs', tabular: true })]) : null,
+          lyricBlock(),
+        ]),
+      },
+    };
+  };
 
   function sync() {
-    const playing = !!now?.playing;
-    if (playing) {
-      const p = position();
-      const i = p == null || lyrics.state !== 'ready' ? -1 : lineAt(lyrics.lines, p);
-      const line = settings.get('chipLyric') && i >= 0 ? lyrics.lines[i].text : null;
-      island.chip('wave').update(ui.row({ gap: 'xs', align: 'center' }, [
-        ui.spectrum({ bars: Math.min(9, Math.max(3, settings.get('bars') ?? 5)), active: true }),
-        line ? ui.text(cut(line, 6), { size: 'xs', tone: 'secondary' }) : null,
-      ]));
-      act ??= island.activity.create('playing', { title: '网易云播放中', priority: 'passive', page: 'now' });
-      act.update({});
-      ticker ??= setInterval(sync, 1000);   // lyric lines and the progress move
+    if (now) {
+      if (act) act.update(activityView()); else act = island.activity('playing', activityView());
     } else {
-      island.chip('wave').remove();
       act?.end();
       act = null;
-      if (ticker !== null) { clearInterval(ticker); ticker = null; }
+    }
+    const playing = !!now?.playing;
+    if (playing) {
+      ticker ??= setInterval(sync, 1000);   // lyric lines and the progress move
+    } else if (ticker !== null) {
+      clearInterval(ticker);
+      ticker = null;
     }
     render();
   }

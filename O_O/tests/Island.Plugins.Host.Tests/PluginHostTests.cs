@@ -47,6 +47,7 @@ public sealed partial class PluginHostTests : IDisposable
         _host.PageUpdated += MirrorPage;
         _host.ChipUpdated += _chipViews.Enqueue;
         _host.AlertRaised += _alertsSeen.Enqueue;
+        SubscribeLive(_host);
         _host.ActivityEnded += (p, a) => _ended.Enqueue((p, a));
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
         _host.PluginLog += _logs.Enqueue;
@@ -301,6 +302,7 @@ public sealed partial class PluginHostTests : IDisposable
         _host.PageUpdated += MirrorPage;
         _host.ChipUpdated += _chipViews.Enqueue;
         _host.AlertRaised += _alertsSeen.Enqueue;
+        SubscribeLive(_host);
         _host.PluginLog += _logs.Enqueue;
         _host.Discover(_root, bundled: true);
         EnableOptional();

@@ -144,6 +144,7 @@ public sealed partial class PluginHostTests
         _host.PageUpdated += MirrorPage;
         _host.ChipUpdated += _chipViews.Enqueue;
         _host.AlertRaised += _alertsSeen.Enqueue;
+        SubscribeLive(_host);
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
         _host.PluginLog += _logs.Enqueue;
         Assert.Empty(_host.Discover(_root, bundled: true));

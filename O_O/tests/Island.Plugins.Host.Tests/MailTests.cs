@@ -416,26 +416,26 @@ public sealed partial class PluginHostTests
         SetSetting("com.o_o.mail", "password1", JsonSerializer.Serialize(imap.Password));
         SetSetting("com.o_o.mail", "user1", "\"me@qq.com\"");                       // preset1 defaults to QQ 邮箱
 
-        var chip = WaitFor(() => _chipViews.LastOrDefault(c => c.Key == "com.o_o.mail/unread" && c.View is not null && Texts(c.View).Contains("2")), "unread chip");
+        var chip = WaitFor(() => _ambientSeen.LastOrDefault(c => c.Key == "com.o_o.mail/unread" && c.View is not null && Texts(c.View).Contains("2")), "unread chip");
         Assert.NotNull(chip);
         var page = WaitForPage(s => s.PluginId == "com.o_o.mail" && Nodes(s.View.Expanded).Count(n => n.Type == "item") == 3, "three mails");
         var rows = Nodes(page.View.Expanded).Where(n => n.Type == "item").Select(r => string.Join("|", Texts(r))).ToList();
         Assert.StartsWith("●|bob@example.org|Hello", rows[0]);
         Assert.Contains("周报", rows[2]);
         Assert.Contains("imap.qq.com:993", imap.Hosts);
-        Assert.Empty(_alertsSeen);                                                   // what was there is not "new"
+        Assert.Empty(_liveAlerts);                                                   // what was there is not "new"
 
         imap.Add(104, seen: false,
             "ENVELOPE (\"Mon, 10 Nov 2026 11:00:00 +0800\" \"Lunch?\" ((\"Amy\" NIL \"amy\" \"example.com\")) NIL NIL NIL NIL NIL NIL \"<4@x>\") " +
             "BODYSTRUCTURE (\"TEXT\" \"PLAIN\" (\"CHARSET\" \"utf-8\") NIL NIL \"7BIT\" 5 1 NIL NIL NIL NIL)", Encoding.UTF8.GetBytes("12:00"));
         SetSetting("com.o_o.mail", "every", "2");                                  // any change checks again
-        var alert = WaitFor(() => _alertsSeen.FirstOrDefault(a => a.PluginId == "com.o_o.mail"), "new mail alert");
-        Assert.Equal("1 封新邮件", Text(alert.Trailing));
-        WaitFor(() => _chipViews.LastOrDefault(c => c.Key == "com.o_o.mail/unread" && Texts(c.View).Contains("3")), "chip counts the new one");
+        var alert = WaitFor(() => _liveAlerts.FirstOrDefault(a => a.PluginId == "com.o_o.mail"), "new mail alert");
+        Assert.Equal("1 封新邮件", Text(alert.View.Trailing));
+        WaitFor(() => _ambientSeen.LastOrDefault(c => c.Key == "com.o_o.mail/unread" && Texts(c.View).Contains("3")), "chip counts the new one");
 
         SetSetting("com.o_o.mail", "every", "3");                                  // checked again: nothing new
         WaitFor(() => imap.Commands.Count(c => c.Contains("STATUS")) >= 4 ? "ok" : null, "third check");
         Thread.Sleep(300);
-        Assert.Single(_alertsSeen, a => a.PluginId == "com.o_o.mail");
+        Assert.Single(_liveAlerts, a => a.PluginId == "com.o_o.mail");
     }
 }

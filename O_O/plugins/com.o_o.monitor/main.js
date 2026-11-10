@@ -20,7 +20,7 @@ export async function activate() {
         high++;
         if (high >= 4 && !alerted) {
           alerted = true;
-          island.alert({ leading: ui.icon('Cpu', { tone: 'accent' }), trailing: ui.text(`CPU ${Math.round(s.cpu)}%`, { size: 'sm', weight: 'semibold' }) }, { seconds: 5 });
+          island.alert({ leading: ui.icon('Cpu', { tone: 'accent' }), trailing: ui.text(`CPU ${Math.round(s.cpu)}%`, { size: 'sm', weight: 'semibold' }), seconds: 5 });
         }
       } else { high = 0; alerted = false; }
     } catch (e) {
@@ -31,19 +31,19 @@ export async function activate() {
 
   const render = () => {
     if (s?.cpu != null && settings.get('chip') !== false) {
-      island.chip('cpu').update(ui.row({ gap: 'xs', align: 'center' }, [
+      island.ambient('cpu').update(ui.row({ gap: 'xs', align: 'center' }, [
         ui.icon('Cpu', { tone: 'secondary', size: 14 }),
         ui.text(`${Math.round(s.cpu)}%`, { size: 'sm', weight: 'semibold', tabular: true }),
       ]));
     } else {
-      island.chip('cpu').remove();
+      island.ambient('cpu').remove();
     }
     if (!s) {
-      island.page('stats').update(ui.text(error ?? '正在读取…', { tone: 'secondary', wrap: true }));
+      island.home.page('stats').update(ui.text(error ?? '正在读取…', { tone: 'secondary', wrap: true }));
       return;
     }
     const memPct = s.memTotal ? (s.memUsed / s.memTotal) * 100 : null;
-    island.page('stats').update(ui.stack({ gap: 'md', align: 'stretch' }, [
+    island.home.page('stats').update(ui.stack({ gap: 'md', align: 'stretch' }, [
       ui.row({ gap: 'lg', align: 'center' }, [
         s.cpu != null ? ui.gauge({ value: s.cpu, max: 100, label: `${Math.round(s.cpu)}%`, detail: `CPU · ${s.cores} 核`, warnAt: 70, dangerAt: 90, size: 96 }) : null,
         memPct != null ? ui.gauge({ value: memPct, max: 100, label: `${Math.round(memPct)}%`, detail: `内存 ${(s.memUsed / GB).toFixed(1)}/${(s.memTotal / GB).toFixed(0)} GB`, warnAt: 80, dangerAt: 92, size: 96 }) : null,

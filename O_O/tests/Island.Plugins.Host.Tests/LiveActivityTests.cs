@@ -16,12 +16,16 @@ public sealed partial class PluginHostTests
     {
         _engine = "^2.0.0";
         _contributes = contributes;
-        var host = Start(js);
+        return Start(js);
+    }
+
+    /// <summary>Records the 2.0 events (every test host subscribes, next to the 1.x alerts).</summary>
+    private void SubscribeLive(PluginHost host)
+    {
         host.LiveActivityUpdated += _live.Enqueue;
         host.LiveActivityEnded += (_, key) => _liveEnded.Enqueue(key);
         host.LiveAlertRaised += _liveAlerts.Enqueue;
         host.AmbientUpdated += _ambientSeen.Enqueue;
-        return host;
     }
 
     [Fact]

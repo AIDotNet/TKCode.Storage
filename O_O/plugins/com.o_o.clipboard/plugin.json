@@ -1,11 +1,11 @@
 {
   "id": "com.o_o.clipboard",
   "name": "剪贴板历史",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "记录复制过的内容，点一下粘贴回去",
   "icon": "ClipboardList",
   "engines": {
-    "island": "^1.0.0"
+    "island": "^2.0.0"
   },
   "main": "main.js",
   "permissions": [
@@ -14,7 +14,7 @@
     "clipboard.paste"
   ],
   "contributes": {
-    "pages": [
+    "home": [
       {
         "id": "history",
         "title": "剪贴板",

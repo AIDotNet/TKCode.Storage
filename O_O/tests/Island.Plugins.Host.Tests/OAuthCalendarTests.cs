@@ -153,6 +153,7 @@ public sealed partial class PluginHostTests
         _host = new PluginHost(services, FastRestart);
         _host.ActivityUpdated += _updates.Enqueue;
         _host.ChipUpdated += _chipViews.Enqueue;
+        SubscribeLive(_host);
         _host.PageUpdated += MirrorPage;
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
         _host.PluginLog += _logs.Enqueue;

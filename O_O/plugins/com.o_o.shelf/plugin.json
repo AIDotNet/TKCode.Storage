@@ -1,25 +1,25 @@
 {
   "id": "com.o_o.shelf",
   "name": "文件暂存",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "把文件拖到岛上暂存，随时拖出到其他应用",
   "icon": "Paperclip",
   "engines": {
-    "island": "^1.0.0"
+    "island": "^2.0.0"
   },
   "main": "main.js",
   "permissions": [
     "files.shelf"
   ],
   "contributes": {
-    "pages": [
+    "home": [
       {
         "id": "files",
         "title": "文件",
         "icon": "Files"
       }
     ],
-    "chips": [
+    "ambient": [
       {
         "id": "count",
         "title": "暂存的文件数",

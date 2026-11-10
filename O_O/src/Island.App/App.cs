@@ -64,7 +64,7 @@ public class App(IIslandPlatform platform) : Application
 
     public static Island.Core.Pages.PageInfo DescribePage(PluginHost plugins, string pluginId, string pageId, string title)
     {
-        var declared = plugins.Packages.FirstOrDefault(p => p.Id == pluginId)?.Manifest.Contributes.Pages
+        var declared = plugins.Packages.FirstOrDefault(p => p.Id == pluginId)?.Manifest.Contributes.AllPages
             .FirstOrDefault(p => p.Id == pageId);
         return new(Island.Plugins.PageSnapshot.PageKey(pluginId, pageId), declared?.Title ?? title, declared?.Enabled ?? true, declared?.Icon);
     }
@@ -76,7 +76,7 @@ public class App(IIslandPlatform platform) : Application
     /// <summary>A chip as its plugin's manifest declares it.</summary>
     public static Island.Core.Pages.ChipInfo DescribeChip(PluginHost plugins, Island.Plugins.ChipSnapshot s)
     {
-        var declared = plugins.Packages.FirstOrDefault(p => p.Id == s.PluginId)?.Manifest.Contributes.Chips
+        var declared = plugins.Packages.FirstOrDefault(p => p.Id == s.PluginId)?.Manifest.Contributes.CollapsedItems
             .FirstOrDefault(c => c.Id == s.ChipId);
         return new(s.Key, s.Title, declared?.Enabled ?? true,
             declared?.Side == "left" ? Island.Core.Pages.ChipSide.Left : Island.Core.Pages.ChipSide.Right);

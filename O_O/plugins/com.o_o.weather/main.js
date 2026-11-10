@@ -56,12 +56,12 @@ export async function activate() {
     const cur = state?.data?.current;
     if (cur) {
       const w = describe(cur.weather_code);
-      island.chip('temp').update(ui.row({ gap: 'xs', align: 'center' }, [
+      island.ambient('temp').update(ui.row({ gap: 'xs', align: 'center' }, [
         ui.icon(w.icon, { tone: 'secondary', size: 14 }),
         ui.text(deg(cur.temperature_2m), { size: 'sm', weight: 'semibold', tabular: true }),
       ]));
     } else {
-      island.chip('temp').remove();
+      island.ambient('temp').remove();
     }
 
     let body;
@@ -89,7 +89,7 @@ export async function activate() {
         error ? ui.text(`更新失败：${error}`, { size: 'xs', tone: 'secondary', wrap: true }) : null,
       ]);
     }
-    island.page('now').update(body, { status: ui.text(state?.at ? `更新于 ${state.at.slice(11, 16)}` : '', { tone: 'secondary', size: 'sm' }) });
+    island.home.page('now').update(body, { status: ui.text(state?.at ? `更新于 ${state.at.slice(11, 16)}` : '', { tone: 'secondary', size: 'sm' }) });
   };
 
   const schedule = () => {

@@ -93,6 +93,18 @@ public sealed class PluginContributions
     /// <summary>Pages of the home dashboard (09 §2), one tab each.</summary>
     public IReadOnlyList<PageContribution> Home { get => field ?? []; init; }
 
+    /// <summary>Every page of the expanded island's home: 2.0 home pages and 1.x pages.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IEnumerable<PageContribution> AllPages => Home.Concat(Pages);
+
+    /// <summary>
+    /// Every item of the collapsed island the user arranges in 收起时显示: 1.x chips and 2.0 ambient items (as chips, under
+    /// the same <c>plugin/id</c> keys).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IEnumerable<ChipContribution> CollapsedItems =>
+        Chips.Concat(Ambient.Select(a => new ChipContribution { Id = a.Id, Title = a.Title, Enabled = a.Enabled, Side = a.Side }));
+
     /// <summary>Looks for every O_O window (docs/design/03-plugin-system.md §9), chosen on the console's 外观 page.</summary>
     public IReadOnlyList<ThemeContribution> Themes { get => field ?? []; init; }
 

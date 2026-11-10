@@ -1,16 +1,16 @@
 {
   "id": "com.o_o.weather",
   "name": "天气",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "当前天气和未来几小时预报（Open-Meteo，无需密钥）；收起的岛上显示温度",
   "icon": "CloudSun",
   "optional": true,
-  "engines": { "island": "^1.0.0" },
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "permissions": ["network:api.open-meteo.com", "network:geocoding-api.open-meteo.com"],
   "contributes": {
-    "pages": [{ "id": "now", "title": "天气", "icon": "CloudSun" }],
-    "chips": [{ "id": "temp", "title": "当前温度", "side": "right" }],
+    "home": [{ "id": "now", "title": "天气", "icon": "CloudSun" }],
+    "ambient": [{ "id": "temp", "title": "当前温度", "side": "right" }],
     "settings": {
       "properties": {
         "city": { "type": "string", "title": "城市", "description": "城市名，例如 上海、Beijing。", "default": "上海" },

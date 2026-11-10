@@ -101,7 +101,7 @@ export function activate() {
     page = Math.min(page, pages - 1);
     const slice = shown.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
 
-    island.page('history').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
+    island.home.page('history').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
       ui.input({
         key: 'search', kind: 'search', placeholder: '搜索剪贴板', value: query,
         onChange: (text) => { query = text.trim(); page = 0; render(); },

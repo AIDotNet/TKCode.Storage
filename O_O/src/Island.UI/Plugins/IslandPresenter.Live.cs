@@ -273,7 +273,11 @@ public sealed partial class IslandPresenter
         return row;
     }
 
-    private static string AmbientChipKey(string key) => "ambient:" + key;
+    /// <summary>
+    /// An ambient item is arranged under the same key (<c>plugin/id</c>) as the chip it replaces, so the user's order,
+    /// sides and switches in 收起时显示 — and layout presets — carry over to the 2.0 plugins unchanged.
+    /// </summary>
+    private static string AmbientChipKey(string key) => key;
 
     /// <summary>Ambient items, offered with the chips (the user arranges both in 收起时显示).</summary>
     private IEnumerable<(VNode View, string PluginId, ChipInfo Info)> AmbientChips() =>
