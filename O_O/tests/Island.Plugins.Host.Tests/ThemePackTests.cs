@@ -73,7 +73,7 @@ public sealed partial class PluginHostTests
             """, "", "export function activate() {}");
         _host = new PluginHost(Services, FastRestart);
         var problem = Assert.Single(_host.Discover(_root, bundled: true));
-        Assert.Contains("island.surface.material must be solid, gradient or translucent", problem);
+        Assert.Contains("island.surface.material must be solid, gradient, translucent or animated", problem);
         Assert.Contains("island.surface.colors must be 2 to 4 colours", problem);
         Assert.Contains("island.surface.opacity must be between 0.5 and 1", problem);
         Assert.Contains("island.shape.radius must be between 0.5 and 1.5", problem);
