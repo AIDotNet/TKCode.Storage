@@ -1,0 +1,45 @@
+# O_O's own CI: builds and tests O_O when something under O_O/ (or this workflow) changes. Other projects in this
+# repository get their own workflows and are not affected by this one.
+name: O_O CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "O_O/**"
+      - ".github/workflows/o_o-*.yml"
+  pull_request:
+    paths:
+      - "O_O/**"
+      - ".github/workflows/o_o-*.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: o_o-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test (macOS)
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: O_O
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: O_O/global.json
+
+      - name: Build
+        run: dotnet build O_O.slnx -c Release
+
+      - name: Test
+        run: dotnet test O_O.slnx -c Release --no-build --logger "trx;LogFilePrefix=o_o" --results-directory TestResults
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: o_o-test-results
+          path: O_O/TestResults
