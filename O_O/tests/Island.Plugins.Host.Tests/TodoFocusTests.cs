@@ -36,7 +36,7 @@ public sealed partial class PluginHostTests
     public void To_dos_come_from_the_console_box_and_the_clipboard_and_are_ticked_off_on_the_island()
     {
         var clipboard = new FakeClipboard();
-        CopyPlugin(Path.Combine(RepoPlugins(), Todo), Path.Combine(_root, Todo));
+        CopyPlugin(RepoPlugin(Todo), Path.Combine(_root, Todo));
         StartWith(null, Services with { Clipboard = clipboard });
         WaitForPage(s => s.PluginId == Todo && Texts(s.View.Expanded).Contains("没有待办"), "empty list");
 
@@ -70,7 +70,7 @@ public sealed partial class PluginHostTests
     [Fact]
     public void A_task_due_soon_shows_on_the_collapsed_island_and_opens_its_page()
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), Todo), Path.Combine(_root, Todo));
+        CopyPlugin(RepoPlugin(Todo), Path.Combine(_root, Todo));
         var soon = DateTime.Now.AddMinutes(5);
         SeedStorage(Todo, $$"""{ "tasks": [{ "id": 1, "title": "开会", "due": "{{soon.ToUniversalTime():O}}", "allDay": false, "high": false, "done": false, "created": "2026-01-01T00:00:00Z", "pomodoros": 0 }] }""");
         StartWith(null, Services);
@@ -83,8 +83,8 @@ public sealed partial class PluginHostTests
     [Fact]
     public void Focus_runs_pomodoros_counts_finished_ones_and_credits_the_bound_task()
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), Todo), Path.Combine(_root, Todo));
-        CopyPlugin(Path.Combine(RepoPlugins(), Focus), Path.Combine(_root, Focus));
+        CopyPlugin(RepoPlugin(Todo), Path.Combine(_root, Todo));
+        CopyPlugin(RepoPlugin(Focus), Path.Combine(_root, Focus));
         SeedStorage(Todo, """{ "tasks": [{ "id": 7, "title": "写报告", "due": null, "allDay": false, "high": false, "done": false, "created": "2026-01-01T00:00:00Z", "pomodoros": 0 }] }""");
         // A work phase that ended while O_O was closed: it finishes on start.
         var ended = DateTimeOffset.Now.AddSeconds(-5).ToUnixTimeMilliseconds();

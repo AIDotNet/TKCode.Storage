@@ -120,7 +120,7 @@ public sealed partial class PluginHostTests
     public void The_clipboard_history_records_dedupes_trims_and_pastes_on_click()
     {
         var clipboard = new FakeClipboard();
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.clipboard"), Path.Combine(_root, "com.o_o.clipboard"));
+        CopyPlugin(RepoPlugin("com.o_o.clipboard"), Path.Combine(_root, "com.o_o.clipboard"));
         StartWith(null, Services with { Clipboard = clipboard });
         WaitForPage(s => s.PluginId == "com.o_o.clipboard" && Texts(s.View.Expanded).Contains("复制的内容会出现在这里。"), "empty history");
 
@@ -186,7 +186,7 @@ public sealed partial class PluginHostTests
     public void Clipboard_search_filters_as_you_type_and_enter_pastes_the_best_match()
     {
         var clipboard = new FakeClipboard();
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.clipboard"), Path.Combine(_root, "com.o_o.clipboard"));
+        CopyPlugin(RepoPlugin("com.o_o.clipboard"), Path.Combine(_root, "com.o_o.clipboard"));
         StartWith(null, Services with { Clipboard = clipboard });
         WaitForPage(s => s.PluginId == "com.o_o.clipboard", "history");
         var now = DateTimeOffset.Now;
@@ -216,7 +216,7 @@ public sealed partial class PluginHostTests
     [Fact]
     public void A_to_do_typed_on_the_island_is_added_with_its_date()
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.todo"), Path.Combine(_root, "com.o_o.todo"));
+        CopyPlugin(RepoPlugin("com.o_o.todo"), Path.Combine(_root, "com.o_o.todo"));
         StartWith(null, Services);
         WaitForPage(s => s.PluginId == "com.o_o.todo" && Nodes(s.View.Expanded).Any(n => n.Type == "input"), "to-do page with a box");
         Thread.Sleep(300); // handlers are renewed on every render: use the latest view's
@@ -249,7 +249,7 @@ public sealed partial class PluginHostTests
     [Fact]
     public void Focus_sends_a_system_notification_when_a_pomodoro_ends()
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.focus"), Path.Combine(_root, "com.o_o.focus"));
+        CopyPlugin(RepoPlugin("com.o_o.focus"), Path.Combine(_root, "com.o_o.focus"));
         // A pomodoro that ended while O_O was closed finishes on start (see the focus tests): it notifies.
         Directory.CreateDirectory(Path.Combine(_data, "com.o_o.focus"));
         File.WriteAllText(Path.Combine(_data, "com.o_o.focus", "storage.json"),

@@ -65,7 +65,7 @@ public sealed partial class PluginHostTests
     public void The_music_plugin_shows_the_track_claims_the_island_while_playing_and_sends_commands()
     {
         var media = new FakeMedia();
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.media"), Path.Combine(_root, "com.o_o.media"));
+        CopyPlugin(RepoPlugin("com.o_o.media"), Path.Combine(_root, "com.o_o.media"));
         StartWith(null, Services with { Media = media });
         _host!.ActivityEnded += (p, a) => _ended.Enqueue((p, a));
         WaitForPage(s => s.PluginId == "com.o_o.media" && Texts(s.View.Expanded).Contains("没有正在播放的内容"), "nothing playing");

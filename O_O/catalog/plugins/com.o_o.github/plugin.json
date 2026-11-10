@@ -1,0 +1,48 @@
+{
+  "id": "com.o_o.github",
+  "name": "GitHub",
+  "version": "0.1.0",
+  "description": "未读通知和待我 review 的 PR（使用 Personal Access Token）；收起的岛上显示未读数",
+  "icon": "Github",
+  "engines": {
+    "island": "^1.0.0"
+  },
+  "main": "main.js",
+  "permissions": [
+    "network:api.github.com",
+    "shell.openUrl"
+  ],
+  "contributes": {
+    "pages": [
+      {
+        "id": "inbox",
+        "title": "GitHub",
+        "icon": "Github"
+      }
+    ],
+    "chips": [
+      {
+        "id": "unread",
+        "title": "未读通知",
+        "side": "right"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "token": {
+          "type": "string",
+          "format": "password",
+          "title": "Personal Access Token",
+          "description": "在 github.com › Settings › Developer settings 创建 classic token，勾选 notifications 和 repo（读私有仓库时）。只保存在系统钥匙串里。"
+        },
+        "every": {
+          "type": "integer",
+          "title": "刷新间隔（分钟）",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 5
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "id": "com.o_o.media",
+  "name": "音乐",
+  "version": "0.1.0",
+  "description": "显示正在播放的音乐，控制播放",
+  "icon": "Music",
+  "engines": {
+    "island": "^1.0.0"
+  },
+  "main": "main.js",
+  "permissions": [
+    "media"
+  ],
+  "contributes": {
+    "pages": [
+      {
+        "id": "now",
+        "title": "音乐",
+        "icon": "Music"
+      }
+    ],
+    "chips": [
+      {
+        "id": "playing",
+        "title": "正在播放",
+        "side": "left"
+      }
+    ],
+    "activities": [
+      {
+        "id": "playing",
+        "title": "正在播放"
+      }
+    ]
+  }
+}

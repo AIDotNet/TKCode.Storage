@@ -5,7 +5,7 @@ public sealed partial class PluginHostTests
     [Fact]
     public void Dropped_files_land_on_the_shelf_with_their_size_and_are_marked_when_they_disappear()
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.shelf"), Path.Combine(_root, "com.o_o.shelf"));
+        CopyPlugin(RepoPlugin("com.o_o.shelf"), Path.Combine(_root, "com.o_o.shelf"));
         StartWith(null, Services);
         WaitForPage(s => s.PluginId == "com.o_o.shelf" && Texts(s.View.Expanded).Contains("把文件拖到岛上暂存"), "empty shelf");
         WaitForState(PluginState.Running); // the page is drawn during activate(), a moment before the plugin counts as running

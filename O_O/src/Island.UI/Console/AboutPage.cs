@@ -29,6 +29,10 @@ public sealed class AboutPage : StackPanel
                 CenteredText($"版本 {version.Split('+')[0]}", ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.TextSecondary),
             },
         });
+        if (Island.UI.Services.UpdateService.Shared is { } updates)
+        {
+            Children.Add(Group(new UpdatePanel(updates)));
+        }
         Children.Add(Group(new StackPanel
         {
             Spacing = 16,

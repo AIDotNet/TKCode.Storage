@@ -1,0 +1,43 @@
+{
+  "id": "com.o_o.cal.google",
+  "name": "Google 日历",
+  "version": "0.1.0",
+  "description": "Google 日历来源：登录 Google 账户，读取主日历的日程",
+  "icon": "CalendarDays",
+  "engines": {
+    "island": "^1.0.0"
+  },
+  "main": "main.js",
+  "requires": [
+    "com.o_o.calendar"
+  ],
+  "permissions": [
+    "oauth:google",
+    "network:www.googleapis.com"
+  ],
+  "contributes": {
+    "providers": [
+      {
+        "interface": "calendar",
+        "id": "google",
+        "title": "Google 日历"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "title": "OAuth 客户端 ID",
+          "description": "在 Google Cloud 控制台创建项目 → 启用 Google Calendar API → \"凭据\"中新建 OAuth 客户端 ID，应用类型选\"桌面应用\"，把客户端 ID 填在这里。应用未经 Google 验证时，需要在\"OAuth 权限请求页面\"把自己加为测试用户。",
+          "default": ""
+        },
+        "clientSecret": {
+          "type": "string",
+          "format": "password",
+          "title": "客户端密钥",
+          "description": "同一个桌面应用客户端的密钥。只保存在系统钥匙串里，只用于向 Google 换取登录凭据。"
+        }
+      }
+    }
+  }
+}

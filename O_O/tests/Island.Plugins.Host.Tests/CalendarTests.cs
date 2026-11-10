@@ -133,7 +133,7 @@ public sealed partial class PluginHostTests
     /// <summary>Runs a shipped calendar provider with the given settings and a consumer that lists today's and tomorrow's events.</summary>
     private JsonElement RunCalendarProvider(string pluginId, string providerId, Dictionary<string, string> settings)
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), pluginId), Path.Combine(_root, pluginId));
+        CopyPlugin(RepoPlugin(pluginId), Path.Combine(_root, pluginId));
         WritePluginWithManifest("test.consumer", "", "", $$"""
             import { island, ui } from '@island/api';
             const settle = (p) => p.then((v) => ({ ok: v }), (e) => ({ err: e.message }));
@@ -274,7 +274,7 @@ public sealed partial class PluginHostTests
     [Fact]
     public void The_calendar_merges_sources_and_announces_an_event_that_starts_soon()
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.calendar"), Path.Combine(_root, "com.o_o.calendar"));
+        CopyPlugin(RepoPlugin("com.o_o.calendar"), Path.Combine(_root, "com.o_o.calendar"));
         // The same meeting in two calendars, five minutes from now, plus a later one only in the first.
         const string meeting = "{ id: 'x', title: '周会', start: new Date(Math.floor(now / M) * M + 5 * M).toISOString(), end: new Date(Math.floor(now / M) * M + 35 * M).toISOString(), allDay: false, meetingUrl: 'https://meet.google.com/abc-defg-hij' }";
         WriteFakeCalendarProvider("test.cal.a", "a", $"[{meeting}, {{ id: 'y', title: '晚点的', start: new Date(now + 600 * M).toISOString(), end: new Date(now + 630 * M).toISOString(), allDay: false }}]");
@@ -311,7 +311,7 @@ public sealed partial class PluginHostTests
     [Fact]
     public void An_event_under_way_makes_the_activity_active_and_without_sources_the_page_says_what_to_do()
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.calendar"), Path.Combine(_root, "com.o_o.calendar"));
+        CopyPlugin(RepoPlugin("com.o_o.calendar"), Path.Combine(_root, "com.o_o.calendar"));
         WriteFakeCalendarProvider("test.cal.a", "a",
             "[{ id: 'z', title: '正在进行的长会议', start: new Date(now - 2 * M).toISOString(), end: new Date(now + 60 * M).toISOString(), allDay: false }]");
         StartDiscovered();

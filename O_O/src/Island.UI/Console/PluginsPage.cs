@@ -229,6 +229,10 @@ public sealed class PluginsPage : Panel
         }
 
         body.Children.Add(SectionLabel("管理"));
+        if (CatalogDrawer.For(_host, package, () => FillDrawer(package.Id)) is { } fromCatalog)
+        {
+            body.Children.Add(fromCatalog);
+        }
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         var off = new ArcButton { Content = "停用", Variant = ButtonVariant.Secondary, Size = ControlSize.Small };
         off.Click += (_, _) =>
@@ -345,6 +349,13 @@ public sealed class PluginsPage : Panel
         }
 
         body.Children.Add(list);
+        // Plugins from the O_O plugin catalog (CatalogSection.cs); a new one opens its drawer to ask for permissions.
+        body.Children.Add(new CatalogSection(_host, id =>
+        {
+            _addDialog.IsOpen = false;
+            Rebuild();
+            ShowPlugin(id);
+        }));
         _addDialog.Content = new ScrollViewer { Content = body, MaxHeight = 480 };
     }
 

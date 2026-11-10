@@ -28,6 +28,37 @@ public sealed class PluginManifest
     /// </summary>
     public bool Optional { get; init; }
 
+    /// <summary>Plugins this one needs to be useful (e.g. a calendar source needs the calendar page); installed first.</summary>
+    public IReadOnlyList<string> Requires { get => field ?? []; init; }
+
+    /// <summary>Where it works: <c>macos</c>, <c>windows</c>, <c>linux</c>; empty means everywhere.</summary>
+    public IReadOnlyList<string> Platforms { get => field ?? []; init; }
+
+    /// <summary>This machine, in the words of <see cref="Platforms"/>.</summary>
+    public static string CurrentPlatform =>
+        OperatingSystem.IsMacOS() ? "macos" : OperatingSystem.IsWindows() ? "windows" : "linux";
+
+    public static readonly IReadOnlySet<string> KnownPlatforms = new HashSet<string>(StringComparer.Ordinal) { "macos", "windows", "linux" };
+
+    public bool RunsOn(string platform) => Platforms.Count == 0 || Platforms.Contains(platform, StringComparer.Ordinal);
+
+    /// <summary>Checks <see cref="Requires"/> and <see cref="Platforms"/>.</summary>
+    public void ValidateTargets(List<string> problems)
+    {
+        foreach (var platform in Platforms.Where(p => !KnownPlatforms.Contains(p)))
+        {
+            problems.Add($"unknown platform '{platform}' (known: macos, windows, linux)");
+        }
+        foreach (var id in Requires)
+        {
+            if (id == Id || id.Length is < 3 or > 100 || !id.Contains('.') ||
+                !id.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '.' or '-' or '_'))
+            {
+                problems.Add($"requires '{id}' is not a plugin id");
+            }
+        }
+    }
+
     public PluginEngines Engines { get => field ??= new(); init; }
     public IReadOnlyList<string> Permissions { get => field ?? []; init; }
     public PluginContributions Contributes { get => field ??= new(); init; }
