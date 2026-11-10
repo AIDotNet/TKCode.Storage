@@ -32,25 +32,14 @@ public static class IslandSnapshot
         var pages = new Island.Core.Pages.PagePreferencesStore(Path.Combine(Path.GetTempPath(), $"o_o-render-pages-{Guid.NewGuid():N}.json"));
         var presenter = new IslandPresenter(view, (plugin, handler, payload) => host.Dispatch(plugin, handler, payload), pages, s =>
         {
-            var declared = host.Packages.FirstOrDefault(p => p.Id == s.PluginId)?.Manifest.Contributes.AllPages.FirstOrDefault(p => p.Id == s.PageId);
+            var declared = host.Packages.FirstOrDefault(p => p.Id == s.PluginId)?.Manifest.Contributes.Home.FirstOrDefault(p => p.Id == s.PageId);
             return new Island.Core.Pages.PageInfo(s.Key, declared?.Title ?? s.Title, declared?.Enabled ?? true, declared?.Icon);
-        }, new Island.Core.Pages.ChipPreferencesStore(Path.Combine(Path.GetTempPath(), $"o_o-render-chips-{Guid.NewGuid():N}.json")), s =>
-        {
-            var declared = host.Packages.FirstOrDefault(p => p.Id == s.PluginId)?.Manifest.Contributes.CollapsedItems.FirstOrDefault(c => c.Id == s.ChipId);
-            return new Island.Core.Pages.ChipInfo(s.Key, s.Title, declared?.Enabled ?? true,
-                declared?.Side == "left" ? Island.Core.Pages.ChipSide.Left : Island.Core.Pages.ChipSide.Right);
-        });
+        }, new Island.Core.Pages.ChipPreferencesStore(Path.Combine(Path.GetTempPath(), $"o_o-render-chips-{Guid.NewGuid():N}.json")));
         presenter.OnStateChanged(state);
-        host.ChipUpdated += s => Dispatcher.UIThread.Post(() => presenter.UpdateChip(s));
         foreach (var page in host.LivePages)
         {
             presenter.UpdatePage(page);
         }
-        foreach (var chip in host.LiveChips)
-        {
-            presenter.UpdateChip(chip); // shown before we subscribed; later ones arrive in order (sequence numbers)
-        }
-        // The 2.0 island (docs/design/09-island-v2.md).
         host.LiveActivityUpdated += s => Dispatcher.UIThread.Post(() => presenter.UpdateLive(s));
         host.LiveActivityEnded += (_, k) => Dispatcher.UIThread.Post(() => presenter.EndLive(k));
         host.AmbientUpdated += a => Dispatcher.UIThread.Post(() => presenter.UpdateAmbient(a));
@@ -64,8 +53,6 @@ public static class IslandSnapshot
         }
 
         presenter.SetTabRoom(expanded.Surface.Width - 10 - 200);
-        host.ActivityUpdated += s => Dispatcher.UIThread.Post(() => presenter.Update(s));
-        host.ActivityEnded += (p, a) => Dispatcher.UIThread.Post(() => presenter.End(p, a));
         host.PageUpdated += s => Dispatcher.UIThread.Post(() => presenter.UpdatePage(s));
         host.PageEnded += (p, g) => Dispatcher.UIThread.Post(() => presenter.EndPage(p, g));
 

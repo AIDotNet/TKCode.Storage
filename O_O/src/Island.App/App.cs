@@ -64,7 +64,7 @@ public class App(IIslandPlatform platform) : Application
 
     public static Island.Core.Pages.PageInfo DescribePage(PluginHost plugins, string pluginId, string pageId, string title)
     {
-        var declared = plugins.Packages.FirstOrDefault(p => p.Id == pluginId)?.Manifest.Contributes.AllPages
+        var declared = plugins.Packages.FirstOrDefault(p => p.Id == pluginId)?.Manifest.Contributes.Home
             .FirstOrDefault(p => p.Id == pageId);
         return new(Island.Plugins.PageSnapshot.PageKey(pluginId, pageId), declared?.Title ?? title, declared?.Enabled ?? true, declared?.Icon);
     }
@@ -72,15 +72,6 @@ public class App(IIslandPlatform platform) : Application
     /// <summary>What the collapsed island shows: which chips, in what order, on which side.</summary>
     public static Island.Core.Pages.ChipPreferencesStore Chips { get; } =
         new(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "chips.json"));
-
-    /// <summary>A chip as its plugin's manifest declares it.</summary>
-    public static Island.Core.Pages.ChipInfo DescribeChip(PluginHost plugins, Island.Plugins.ChipSnapshot s)
-    {
-        var declared = plugins.Packages.FirstOrDefault(p => p.Id == s.PluginId)?.Manifest.Contributes.CollapsedItems
-            .FirstOrDefault(c => c.Id == s.ChipId);
-        return new(s.Key, s.Title, declared?.Enabled ?? true,
-            declared?.Side == "left" ? Island.Core.Pages.ChipSide.Left : Island.Core.Pages.ChipSide.Right);
-    }
 
     public static string DataDirectory => Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "plugin-data");
 
@@ -135,12 +126,15 @@ public class App(IIslandPlatform platform) : Application
         : new Island.Platform.NullClipboardPlatform();
 
     /// <summary>"O_O 有新版本 0.1.1001" on the island for a few seconds.</summary>
-    private static Island.Plugins.AlertSnapshot UpdateAlert(string version) => new(
+    private static Island.Plugins.LiveAlertSnapshot UpdateAlert(string version) => new(
         "o_o",
-        new Island.Plugins.VNode("icon", null, new Dictionary<string, object> { ["name"] = "CircleArrowUp", ["tone"] = "accent" },
-            new Dictionary<string, int>(), []),
-        new Island.Plugins.VNode("text", null, new Dictionary<string, object> { ["text"] = $"O_O 有新版本 {version}", ["size"] = "sm", ["weight"] = "semibold" },
-            new Dictionary<string, int>(), []),
+        null,
+        Island.Plugins.LivePriority.Normal,
+        new Island.Plugins.RegionView(
+            Leading: new Island.Plugins.VNode("icon", null, new Dictionary<string, object> { ["name"] = "CircleArrowUp", ["tone"] = "accent" },
+                new Dictionary<string, int>(), []),
+            Center: new Island.Plugins.VNode("text", null, new Dictionary<string, object> { ["text"] = $"O_O 有新版本 {version}", ["size"] = "sm", ["weight"] = "semibold" },
+                new Dictionary<string, int>(), [])),
         TimeSpan.FromSeconds(8),
         0);
 
@@ -195,15 +189,10 @@ public class App(IIslandPlatform platform) : Application
                 (plugin, handler, payload) => plugins.Dispatch(plugin, handler, payload),
                 Pages,
                 s => DescribePage(plugins, s.PluginId, s.PageId, s.Title),
-                Chips,
-                s => DescribeChip(plugins, s));
-            _plugins.ActivityUpdated += s => IslandPresenter.Post(() => presenter.Update(s));
-            _plugins.ActivityEnded += (p, a) => IslandPresenter.Post(() => presenter.End(p, a));
+                Chips);
             _plugins.PageUpdated += s => IslandPresenter.Post(() => presenter.UpdatePage(s));
             _plugins.PageEnded += (p, g) => IslandPresenter.Post(() => presenter.EndPage(p, g));
-            _plugins.ChipUpdated += s => IslandPresenter.Post(() => presenter.UpdateChip(s));
-            _plugins.AlertRaised += a => IslandPresenter.Post(() => presenter.ShowAlert(a));
-            // The 2.0 island (docs/design/09-island-v2.md): live activities, alerts, ambient items.
+            // The island (docs/design/09-island-v2.md): live activities, alerts, ambient items.
             presenter.ActivityPreferences = new Island.Core.Activities.ActivityPreferencesStore(
                 Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "activities.json"));
             _plugins.LiveActivityUpdated += s => IslandPresenter.Post(() => presenter.UpdateLive(s));
@@ -211,13 +200,11 @@ public class App(IIslandPlatform platform) : Application
             _plugins.LiveAlertRaised += a => IslandPresenter.Post(() => presenter.RaiseLiveAlert(a));
             _plugins.AmbientUpdated += a => IslandPresenter.Post(() => presenter.UpdateAmbient(a));
             presenter.OpenRequested += open => OpenSource(plugins, open);
-            // Satellite islands beside the main one (docs/design/08): notices plugins show with island.satellite().
+            // The satellite window beside the island: the second activity's bubble.
             VNodeRenderer.AppIconResolver = plugins.AppIcon;
             _satellites = new SatelliteHost(platform,
                 new SatellitePreferencesStore(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "satellites.json")),
                 (pid, handler, payload) => plugins.Dispatch(pid, handler, payload));
-            Island.UI.Console.SatellitePanel.Preferences = _satellites.Preferences;
-            _plugins.SatelliteUpdated += _satellites.OnUpdated;
             _satellites.Follow(_island);
             // The second activity is a bubble beside the island (09 §2, 最小); clicking it brings it to the front.
             string? bubble = null;
@@ -286,10 +273,30 @@ public class App(IIslandPlatform platform) : Application
             _island.Show();
             Island.Core.StartupTrace.Mark("island shown");
             _plugins.StartAll();
+            // Catalog plugins installed before island API 2 no longer load: put their catalog version in their place.
+            if (_plugins.Services.UserPluginDirectory is { } userPlugins)
+            {
+                var installer = new Island.Plugins.Host.Services.CatalogInstaller(_plugins, userPlugins,
+                    new HttpClient { Timeout = TimeSpan.FromSeconds(60) }, DataDirectory);
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        foreach (var id in await installer.UpgradeStrandedAsync(CancellationToken.None))
+                        {
+                            Console.Error.WriteLine($"[plugins] updated {id} for island API 2");
+                        }
+                    }
+                    catch (Island.Plugins.Host.Services.PluginCapabilityException e)
+                    {
+                        Console.Error.WriteLine($"[plugins] could not update old catalog plugins: {e.Message}");
+                    }
+                });
+            }
             // Update check (docs/design/08-updates-and-catalog.md): a newer O_O is announced once on the island; the
             // download is offered on the console's 关于 page.
             var updates = new Island.UI.Services.UpdateService(Path.GetDirectoryName(AppSettings.DefaultPath)!,
-                latest => presenter.ShowAlert(UpdateAlert(latest.Version)));
+                latest => presenter.RaiseLiveAlert(UpdateAlert(latest.Version)));
             Island.UI.Services.UpdateService.Shared = updates;
             updates.Start();
             desktop.Exit += (_, _) => updates.Dispose();

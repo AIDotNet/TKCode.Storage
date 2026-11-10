@@ -28,8 +28,8 @@ public sealed partial class PluginHostTests : IDisposable
             return Task.CompletedTask;
         }
     }
-    private readonly ConcurrentQueue<ActivitySnapshot> _updates = new();
-    private readonly ConcurrentQueue<(string Plugin, string Activity)> _ended = new();
+    /// <summary>What test plugins report (they show it on a home page); see <see cref="MirrorPage"/>.</summary>
+    private readonly ConcurrentQueue<PageShot> _updates = new();
     private readonly ConcurrentQueue<(string Plugin, PluginState State, string? Reason)> _states = new();
     private readonly ConcurrentQueue<PluginLogEntry> _logs = new();
     private PluginHost? _host;
@@ -43,12 +43,8 @@ public sealed partial class PluginHostTests : IDisposable
     {
         WritePlugin(id, js);
         _host = new PluginHost(Services, options ?? FastRestart);
-        _host.ActivityUpdated += _updates.Enqueue;
         _host.PageUpdated += MirrorPage;
-        _host.ChipUpdated += _chipViews.Enqueue;
-        _host.AlertRaised += _alertsSeen.Enqueue;
         SubscribeLive(_host);
-        _host.ActivityEnded += (p, a) => _ended.Enqueue((p, a));
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
         _host.PluginLog += _logs.Enqueue;
         Assert.Empty(_host.Discover(_root, bundled: true));
@@ -78,20 +74,45 @@ public sealed partial class PluginHostTests : IDisposable
     /// <summary>Extra permissions for the next plugin written, as a JSON array body, e.g. "\"secrets\"".</summary>
     private string _permissions = "";
 
-    /// <summary>The next plugin's <c>contributes</c> object as JSON, e.g. <c>{ "pages": [...] }</c>.</summary>
+    /// <summary>The next plugin's <c>contributes</c> object as JSON, e.g. <c>{ "home": [...] }</c>.</summary>
     private string _contributes = "{}";
 
-    /// <summary>The next plugin's <c>engines.island</c>, e.g. <c>^2.0.0</c> for the 2.0 island API; null for the default.</summary>
+    /// <summary>The next plugin's <c>engines.island</c>; null: ^2.0.0 (the one test that needs another sets it).</summary>
     private string? _engine;
+
+    /// <summary>
+    /// Completes a test plugin's manifest: the island API it asks for, and — unless the test declares home pages itself —
+    /// the home pages its code shows (test plugins report what they found on a home page).
+    /// </summary>
+    private void FinishManifest(string dir)
+    {
+        var path = Path.Combine(dir, "plugin.json");
+        var manifest = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        if (!manifest.ContainsKey("engines"))
+        {
+            manifest["engines"] = new System.Text.Json.Nodes.JsonObject { ["island"] = _engine ?? "^2.0.0" };
+        }
+        if (manifest["contributes"] is not System.Text.Json.Nodes.JsonObject contributes)
+        {
+            manifest["contributes"] = contributes = [];
+        }
+        if (!contributes.ContainsKey("home"))
+        {
+            var code = string.Join("\n", Directory.GetFiles(dir, "*.js").Select(File.ReadAllText));
+            var ids = System.Text.RegularExpressions.Regex.Matches(code, @"island\.home\.page\('([^']+)'\)").Select(m => m.Groups[1].Value).Distinct();
+            contributes["home"] = new System.Text.Json.Nodes.JsonArray([.. ids.Select(id => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject { ["id"] = id, ["title"] = id })]);
+        }
+        File.WriteAllText(path, manifest.ToJsonString());
+    }
 
     private string WritePlugin(string id, string js, string main = "main.js")
     {
         var dir = Path.Combine(_root, id);
         Directory.CreateDirectory(dir);
-        var engines = _engine is null ? "" : $$""", "engines": { "island": "{{_engine}}" }""";
         File.WriteAllText(Path.Combine(dir, "plugin.json"),
-            $$"""{ "id": "{{id}}", "name": "Test", "version": "1.0.0", "main": "{{main}}", "permissions": [{{_permissions}}], "contributes": {{_contributes}}{{engines}} }""");
+            $$"""{ "id": "{{id}}", "name": "Test", "version": "1.0.0", "main": "{{main}}", "permissions": [{{_permissions}}], "contributes": {{_contributes}} }""");
         File.WriteAllText(Path.Combine(dir, main), js);
+        FinishManifest(dir);
         return dir;
     }
 
@@ -114,7 +135,7 @@ public sealed partial class PluginHostTests : IDisposable
                              string.Join("\n", _logs.Select(l => $"{l.Level} {l.Message}")) +
                              "\nStates: " + string.Join(", ", _states.Select(s => $"{s.State}({s.Reason})")));
 
-    private ActivitySnapshot WaitForUpdate(Func<ActivitySnapshot, bool> match, string what) =>
+    private PageShot WaitForUpdate(Func<PageShot, bool> match, string what) =>
         WaitFor(() => _updates.LastOrDefault(match), what);
 
     private void WaitForState(PluginState state, int occurrence = 1) =>
@@ -123,69 +144,68 @@ public sealed partial class PluginHostTests : IDisposable
     private static string Text(VNode? n) => n?.GetString("text") ?? "";
 
     [Fact]
-    public void Activate_renders_and_a_click_round_trips_to_the_plugin()
+    public void An_activity_renders_its_regions_and_a_click_reaches_the_plugin_and_re_renders()
     {
-        var host = Start("""
+        var host = StartV2("""{ "activities": [{ "id": "counter", "title": "Counter" }] }""", """
             import { island, ui } from '@island/api';
             export function activate() {
-              const act = island.activity.create('counter', { title: 'Counter', priority: 'active' });
               let n = 0;
-              const render = () => act.update({
+              const view = () => ({
+                priority: 'high',
                 compact: { leading: ui.icon('Hash'), trailing: ui.text(String(n)) },
-                expanded: ui.stack({ gap: 'sm' }, [
+                expanded: { bottom: ui.stack({ gap: 'sm' }, [
                   ui.text(`count ${n}`, { size: 'xl' }),
-                  ui.button('Add', { variant: 'primary', onClick: () => { n++; render(); } }),
-                ]),
+                  ui.button('Add', { variant: 'primary', onClick: () => { n++; act.update(view()); } }),
+                ]) },
               });
-              render();
+              const act = island.activity('counter', view());
             }
             """);
 
-        var first = WaitForUpdate(s => s.ActivityId == "counter", "first render");
+        var first = WaitFor(() => _live.FirstOrDefault(s => s.ActivityId == "counter"), "first render");
         Assert.Equal("Counter", first.Title);
-        Assert.Equal(ActivityPriority.Active, first.Priority);
-        Assert.Equal("icon", first.View.CompactLeading!.Type);
-        Assert.Equal("Hash", first.View.CompactLeading.GetString("name"));
-        Assert.Equal("0", Text(first.View.CompactTrailing));
-        var button = first.View.Expanded!.Children[1];
+        Assert.Equal(LivePriority.High, first.Priority);
+        Assert.Equal("icon", first.View.Compact.Leading!.Type);
+        Assert.Equal("Hash", first.View.Compact.Leading.GetString("name"));
+        Assert.Equal("0", Text(first.View.Compact.Trailing));
+        var button = first.View.Expanded.Bottom!.Children[1];
         Assert.Equal("button", button.Type);
         Assert.Equal("primary", button.GetString("variant"));
 
         host.Dispatch("test.plugin", button.Handlers["onClick"]);
-        var second = WaitForUpdate(s => Text(s.View.CompactTrailing) == "1", "re-render after click");
+        var second = WaitFor(() => _live.LastOrDefault(s => Text(s.View.Compact.Trailing) == "1"), "re-render after click");
         Assert.True(second.Sequence > first.Sequence);
 
         // Handlers are re-registered on every render; the old id no longer does anything.
         host.Dispatch("test.plugin", button.Handlers["onClick"]);
-        var newButton = second.View.Expanded!.Children[1];
+        var newButton = second.View.Expanded.Bottom!.Children[1];
         host.Dispatch("test.plugin", newButton.Handlers["onClick"]);
-        WaitForUpdate(s => Text(s.View.CompactTrailing) == "2", "second click");
+        WaitFor(() => _live.LastOrDefault(s => Text(s.View.Compact.Trailing) == "2"), "second click");
         Thread.Sleep(100);
-        Assert.DoesNotContain(_updates, s => Text(s.View.CompactTrailing) == "3");
+        Assert.DoesNotContain(_live, s => Text(s.View.Compact.Trailing) == "3");
     }
 
     [Fact]
     public void A_render_identical_to_the_last_is_not_sent_again_and_its_handlers_still_work()
     {
-        var host = Start("""
+        var host = StartV2("""{ "activities": [{ "id": "same" }] }""", """
             import { island, ui } from '@island/api';
             export function activate() {
-              const act = island.activity.create('same', { title: 'Same', priority: 'active' });
               let n = 0;
-              const render = () => act.update({
+              const view = () => ({
                 compact: { leading: ui.icon('Hash'), trailing: ui.text(String(n)) },
-                expanded: ui.button('Add', { onClick: () => { n++; render(); } }),
+                expanded: { bottom: ui.button('Add', { onClick: () => { n++; act.update(view()); } }) },
               });
-              render();
-              render(); // nothing changed: dropped, but the button now runs this render's closure
+              const act = island.activity('same', view());
+              act.update(view()); // nothing changed: dropped, but the button now runs this render's closure
             }
             """);
 
-        var first = WaitForUpdate(s => s.ActivityId == "same", "first render");
+        var first = WaitFor(() => _live.FirstOrDefault(s => s.ActivityId == "same"), "first render");
         Thread.Sleep(100);
-        Assert.Single(_updates, s => s.ActivityId == "same");
-        host.Dispatch("test.plugin", first.View.Expanded!.Handlers["onClick"]);
-        WaitForUpdate(s => Text(s.View.CompactTrailing) == "1", "click on the deduplicated render");
+        Assert.Single(_live, s => s.ActivityId == "same");
+        host.Dispatch("test.plugin", first.View.Expanded.Bottom!.Handlers["onClick"]);
+        WaitFor(() => _live.LastOrDefault(s => Text(s.View.Compact.Trailing) == "1"), "click on the deduplicated render");
     }
 
     [Fact]
@@ -194,12 +214,12 @@ public sealed partial class PluginHostTests : IDisposable
         Start("""
             import { island, ui } from '@island/api';
             export function activate() {
-              const act = island.activity.create('t');
+              const act = island.home.page('t');
               let ticks = 0;
-              setTimeout((x) => act.update({ expanded: ui.text('timeout ' + x) }), 20, 'ok');
+              setTimeout((x) => act.update(ui.text('timeout ' + x)), 20, 'ok');
               const h = setInterval(() => {
                 ticks++;
-                act.update({ expanded: ui.text('tick ' + ticks) });
+                act.update(ui.text('tick ' + ticks));
                 if (ticks === 3) clearInterval(h);
               }, 20);
             }
@@ -217,13 +237,13 @@ public sealed partial class PluginHostTests : IDisposable
         var host = Start("""
             import { island, ui } from '@island/api';
             export function activate() {
-              const act = island.activity.create('a');
+              const act = island.home.page('a');
               let ok = 0;
-              const render = () => act.update({ expanded: ui.row({}, [
+              const render = () => act.update(ui.row({}, [
                 ui.button('boom', { onClick: () => { throw new Error('kaboom'); } }),
                 ui.button('ok', { onClick: () => { ok++; render(); } }),
                 ui.text('ok ' + ok),
-              ]) });
+              ]));
               render();
             }
             """);
@@ -242,17 +262,19 @@ public sealed partial class PluginHostTests : IDisposable
         var host = Start("""
             import { island, ui } from '@island/api';
             export function activate() {
-              const act = island.activity.create('loop');
-              act.update({ expanded: ui.button('hang', { onClick: () => { for (;;) {} } }) });
+              const act = island.home.page('loop');
+              act.update(ui.button('hang', { onClick: () => { for (;;) {} } }));
             }
             """);
 
         var first = WaitForUpdate(_ => true, "first render");
         WaitForState(PluginState.Running);
+        var ended = new ConcurrentQueue<string>();
+        host.PageEnded += (_, page) => ended.Enqueue(page);
         host.Dispatch("test.plugin", first.View.Expanded!.Handlers["onClick"]);
 
         WaitForState(PluginState.Restarting);
-        Assert.Contains(_ended, e => e.Activity == "loop");          // its activities leave the island
+        Assert.Contains(ended, page => page == "loop");              // what it showed leaves the island
         Assert.Contains(_states, s => s.Reason?.Contains("budget") == true);
         WaitForState(PluginState.Running, occurrence: 2);              // and it comes back
         WaitFor(() => _updates.Count >= 2 ? "ok" : null, "render after restart");
@@ -291,17 +313,14 @@ public sealed partial class PluginHostTests : IDisposable
             import { greet } from './lib/greet.js';
             import data from './data.json' with { type: 'json' };
             export function activate() {
-              island.activity.create('a').update({ expanded: ui.text(greet(data.name)) });
+              island.home.page('a').update(ui.text(greet(data.name)));
             }
             """);
         Directory.CreateDirectory(Path.Combine(dir, "lib"));
         File.WriteAllText(Path.Combine(dir, "lib", "greet.js"), "export const greet = (n) => `hello ${n}`;");
         File.WriteAllText(Path.Combine(dir, "data.json"), """{ "name": "island" }""");
         _host = new PluginHost(Services, FastRestart);
-        _host.ActivityUpdated += _updates.Enqueue;
         _host.PageUpdated += MirrorPage;
-        _host.ChipUpdated += _chipViews.Enqueue;
-        _host.AlertRaised += _alertsSeen.Enqueue;
         SubscribeLive(_host);
         _host.PluginLog += _logs.Enqueue;
         _host.Discover(_root, bundled: true);
@@ -321,12 +340,12 @@ public sealed partial class PluginHostTests : IDisposable
     [Fact]
     public void A_plugin_may_hold_at_most_two_activities()
     {
-        Start("""
+        StartV2("""{ "activities": [{ "id": "a" }, { "id": "b" }, { "id": "c" }] }""", """
             import { island, ui } from '@island/api';
             export function activate() {
-              island.activity.create('a').update({ expanded: ui.text('a') });
-              island.activity.create('b').update({ expanded: ui.text('b') });
-              island.activity.create('c').update({ expanded: ui.text('c') });
+              island.activity('a', { minimal: ui.text('a') });
+              island.activity('b', { minimal: ui.text('b') });
+              island.activity('c', { minimal: ui.text('c') });
             }
             """);
         WaitForState(PluginState.Restarting);

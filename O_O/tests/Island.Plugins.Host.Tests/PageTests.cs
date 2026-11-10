@@ -8,27 +8,30 @@ public sealed partial class PluginHostTests
     private readonly ConcurrentQueue<(string Plugin, string Page)> _pagesEnded = new();
 
     /// <summary>Pages as snapshots with only an expanded view, so view helpers work on them.</summary>
-    private readonly ConcurrentQueue<ActivitySnapshot> _pageViews = new();
+    private readonly ConcurrentQueue<PageShot> _pageViews = new();
 
-    private readonly ConcurrentQueue<ChipSnapshot> _chipViews = new();
-    private readonly ConcurrentQueue<AlertSnapshot> _alertsSeen = new();
+    /// <summary>What a test sees of a home page: a plugin's view, or a test plugin's report (a home page as well).</summary>
+    private sealed record PageShot(string PluginId, string ActivityId, string Title, PageShotView View, long Sequence);
+
+    private sealed record PageShotView(VNode? Expanded, VNode? Status);
 
     private void MirrorPage(PageSnapshot p)
     {
         _pages.Enqueue(p);
-        _pageViews.Enqueue(new ActivitySnapshot(p.PluginId, "page:" + p.PageId, p.Title, ActivityPriority.Ambient,
-            new ActivityView(null, null, p.View), p.Sequence));
+        var shot = new PageShot(p.PluginId, p.PageId, p.Title, new PageShotView(p.View, p.Status), p.Sequence);
+        _pageViews.Enqueue(shot);
+        _updates.Enqueue(shot);
     }
 
-    private ActivitySnapshot WaitForPage(Func<ActivitySnapshot, bool> match, string what) =>
+    private PageShot WaitForPage(Func<PageShot, bool> match, string what) =>
         WaitFor(() => _pageViews.LastOrDefault(match), what);
 
     private PluginHost StartWithPages(string js)
     {
-        _contributes = """{ "pages": [{ "id": "usage", "title": "AI 用量", "icon": "Gauge" }, { "id": "today", "title": "今日", "enabled": false }] }""";
+        _contributes = """{ "home": [{ "id": "usage", "title": "AI 用量", "icon": "Gauge" }, { "id": "today", "title": "今日", "enabled": false }] }""";
         WritePlugin("test.plugin", js);
         _host = new PluginHost(Services, FastRestart);
-        _host.ActivityUpdated += _updates.Enqueue;
+        _host.PageUpdated += MirrorPage;
         _host.PageUpdated += _pages.Enqueue;
         _host.PageEnded += (p, g) => _pagesEnded.Enqueue((p, g));
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
@@ -40,17 +43,15 @@ public sealed partial class PluginHostTests
     }
 
     [Fact]
-    public void A_declared_page_renders_with_its_manifest_title_and_its_handlers_work()
+    public void A_declared_home_page_renders_with_its_manifest_title_and_its_handlers_work()
     {
         var host = StartWithPages("""
             import { island, ui } from '@island/api';
             export function activate() {
               let n = 0;
-              const render = () => island.page('usage').update(
-                ui.button(`n ${n}`, { onClick: () => { n++; render(); } }));
+              const render = () => island.home.page('usage').update(
+                ui.button(`n ${n}`, { onClick: () => { n++; render(); } }), { status: ui.text(`${n} 次`) });
               render();
-              island.activity.create('alert', { page: 'usage', priority: 'active' })
-                .update({ compact: { trailing: ui.text('!') } });
             }
             """);
 
@@ -61,26 +62,25 @@ public sealed partial class PluginHostTests
         host.Dispatch("test.plugin", page.View.Handlers["onClick"]);
         WaitFor(() => _pages.LastOrDefault(p => (p.View!.GetString("label") ?? p.View.GetString("text")) == "n 1"), "click");
 
-        var alert = WaitForUpdate(s => s.ActivityId == "alert", "activity");
-        Assert.Equal("usage", alert.View.Page);
+        Assert.Equal("1 次", Text(_pages.Last().Status));
         var manifest = host.Packages.Single().Manifest;
-        Assert.False(manifest.Contributes.Pages.Single(p => p.Id == "today").Enabled);
-        Assert.Equal("Gauge", manifest.Contributes.Pages[0].Icon);
+        Assert.False(manifest.Contributes.Home.Single(p => p.Id == "today").Enabled);
+        Assert.Equal("Gauge", manifest.Contributes.Home[0].Icon);
     }
 
     [Fact]
-    public void An_undeclared_page_is_an_error_and_pages_end_with_the_plugin()
+    public void An_undeclared_home_page_is_an_error_and_pages_end_with_the_plugin()
     {
         var host = StartWithPages("""
             import { island, ui } from '@island/api';
             export function activate() {
-              island.page('usage').update(ui.text('ok'));
-              try { island.page('nope').update(ui.text('x')); } catch (e) { console.warn('rejected: ' + e.message); }
+              island.home.page('usage').update(ui.text('ok'));
+              try { island.home.page('nope').update(ui.text('x')); } catch (e) { console.warn('rejected: ' + e.message); }
             }
             """);
 
         WaitFor(() => _pages.LastOrDefault(), "page");
-        WaitFor(() => _logs.FirstOrDefault(l => l.Message.Contains("rejected") && l.Message.Contains("contributes.pages")), "rejection");
+        WaitFor(() => _logs.FirstOrDefault(l => l.Message.Contains("rejected") && l.Message.Contains("contributes.home")), "rejection");
         Assert.DoesNotContain(_pages, p => p.PageId == "nope");
 
         host.Dispose();

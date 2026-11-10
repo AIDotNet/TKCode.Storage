@@ -17,13 +17,12 @@ using ArcButton = TKCode.Arc.Button;
 namespace Island.UI.Plugins;
 
 /// <summary>
-/// Puts plugin content on the island (docs/design/07-home-and-layout.md):
+/// Puts plugin content on the island (docs/design/09-island-v2.md, 07-home-and-layout.md):
 /// <list type="bullet">
-/// <item>Collapsed: the user's chips (docs 07 §4), unless an alert or an active or critical activity takes their place
-/// (the highest priority, and among equals the one that started first).</item>
-/// <item>Expanded: one page at a time, picked with the tabs in the header (overflow behind "更多 ⌄"); which page the
-/// island opens on follows <see cref="SmartHome"/>. An activity that still sends an <c>expanded</c> view and names no
-/// page gets a page of its own while it runs (compatibility, docs 07 §7).</item>
+/// <item>Collapsed: an alert, else the first live activity (IslandPresenter.Live.cs), else the mascot and the ambient
+/// items the user arranged in 收起时显示.</item>
+/// <item>Expanded: the first activity's card, or home: one page at a time, picked with the tabs in the header (overflow
+/// behind "更多 ⌄"); which page home opens on follows <see cref="SmartHome"/>.</item>
 /// </list>
 /// Must be used on the UI thread; <see cref="Post"/> marshals plugin events.
 /// </summary>
@@ -37,22 +36,12 @@ public sealed partial class IslandPresenter
     private readonly PagePreferencesStore _preferences;
     private readonly Func<PageSnapshot, PageInfo> _describe;
     private readonly ChipPreferencesStore _chipPreferences;
-    private readonly Func<ChipSnapshot, ChipInfo> _describeChip;
-    private readonly Dictionary<string, (ChipSnapshot Snapshot, ChipInfo Info)> _chips = [];
     private readonly Dictionary<string, (VNodeRenderer Renderer, Control? Control)> _chipControls = [];
-    private readonly VNodeRenderer _alertRenderer;
-    private AlertSnapshot? _alert;
-    private IDisposable? _alertTimer;
     private bool _hasCompact;
-    private (string, string)? _ownerShown;
-    private readonly VNodeRenderer _compactRenderer;
     private readonly VNodeRenderer _expandedRenderer;
     private readonly VNodeRenderer _statusRenderer;
-    private readonly Dictionary<(string Plugin, string Activity), (ActivitySnapshot Snapshot, long Order)> _activities = [];
     private readonly Dictionary<string, (PageSnapshot Snapshot, PageInfo Info)> _pages = [];
     private readonly Stopwatch _clock = Stopwatch.StartNew();
-    private long _order;
-    private ActivitySnapshot? _current;
     private string? _shown;
     private string? _pickedByUser;
     private TimeSpan? _collapsedAt;
@@ -66,19 +55,14 @@ public sealed partial class IslandPresenter
         Action<string, int, string?> dispatch,
         PagePreferencesStore preferences,
         Func<PageSnapshot, PageInfo> describe,
-        ChipPreferencesStore chipPreferences,
-        Func<ChipSnapshot, ChipInfo> describeChip)
+        ChipPreferencesStore chipPreferences)
     {
         _chipPreferences = chipPreferences;
-        _describeChip = describeChip;
-        _alertRenderer = new VNodeRenderer((h, p) => Send(_alert?.PluginId, h, p));
         chipPreferences.Changed += _ => Post(RefreshCompact);
         _view = view;
         _dispatch = dispatch;
         _preferences = preferences;
         _describe = describe;
-        // Each half dispatches to the plugin whose view it shows.
-        _compactRenderer = new VNodeRenderer((h, p) => Send(_current?.PluginId, h, p));
         _expandedRenderer = new VNodeRenderer((h, p) => Send(_shown is { } k && _pages.TryGetValue(k, out var pg) ? pg.Snapshot.PluginId : null, h, p));
         _statusRenderer = new VNodeRenderer((h, p) => Send(_shown is { } k && _pages.TryGetValue(k, out var pg) ? pg.Snapshot.PluginId : null, h, p));
         view.PageTabs.Picked += key =>
@@ -100,8 +84,6 @@ public sealed partial class IslandPresenter
 
     /// <summary>Raised after the collapsed content was re-rendered (its width may have changed).</summary>
     public event Action? CompactContentChanged;
-
-    public ActivitySnapshot? Current => _current;
 
     /// <summary>The page the expanded island shows (<c>plugin/page</c>).</summary>
     public string? ShownPage => _shown;
@@ -155,70 +137,13 @@ public sealed partial class IslandPresenter
             }
             var visible = VisiblePages();
             var picked = _pickedByUser == _shown ? _pickedByUser : null;
-            _shown = SmartHome.Choose(visible, _preferences.Current, picked, _collapsedAt is { } at ? _clock.Elapsed - at : TimeSpan.MaxValue, UrgentPages());
+            _shown = SmartHome.Choose(visible, _preferences.Current, picked, _collapsedAt is { } at ? _clock.Elapsed - at : TimeSpan.MaxValue, []);
             if (_shown != picked)
             {
                 _pickedByUser = null;
             }
             RenderPage(visible);
         }
-    }
-
-    public void Update(ActivitySnapshot snapshot)
-    {
-        var key = (snapshot.PluginId, snapshot.ActivityId);
-        if (_activities.TryGetValue(key, out var known))
-        {
-            if (snapshot.Sequence < known.Snapshot.Sequence)
-            {
-                return; // out of order: a newer view is already shown
-            }
-            _activities[key] = (snapshot, known.Order);
-        }
-        else
-        {
-            _activities[key] = (snapshot, ++_order);
-        }
-        Refresh();
-    }
-
-    public void End(string pluginId, string activityId)
-    {
-        if (_activities.Remove((pluginId, activityId)))
-        {
-            Refresh();
-        }
-    }
-
-    public void UpdateChip(ChipSnapshot snapshot)
-    {
-        if (snapshot.View is null)
-        {
-            _chips.Remove(snapshot.Key);
-            _chipControls.Remove(snapshot.Key);
-        }
-        else
-        {
-            if (_chips.TryGetValue(snapshot.Key, out var known) && snapshot.Sequence < known.Snapshot.Sequence)
-            {
-                return;
-            }
-            _chips[snapshot.Key] = (snapshot, _describeChip(snapshot));
-        }
-        RefreshCompact();
-    }
-
-    /// <summary>Shows an alert in place of the chips for its duration (docs 07 §4); a newer alert replaces it.</summary>
-    public void ShowAlert(AlertSnapshot alert)
-    {
-        _alert = alert;
-        _alertTimer?.Dispose();
-        _alertTimer = DispatcherTimer.RunOnce(() =>
-        {
-            _alert = null;
-            RefreshCompact();
-        }, alert.Duration);
-        RefreshCompact();
     }
 
     public void UpdatePage(PageSnapshot snapshot)
@@ -254,36 +179,9 @@ public sealed partial class IslandPresenter
         }
     }
 
-    /// <summary>Legacy pages: activities that send an expanded view and name no page of their own.</summary>
-    private static string LegacyKey(ActivitySnapshot s) => PageSnapshot.PageKey(s.PluginId, "@" + s.ActivityId);
-
-    private IEnumerable<(PageSnapshot Snapshot, PageInfo Info)> AllPages()
-    {
-        foreach (var page in _pages.Values)
-        {
-            yield return page;
-        }
-        foreach (var (snapshot, _) in _activities.Values.OrderBy(a => a.Order))
-        {
-            if (snapshot.View.Expanded is not null && snapshot.View.Page is null)
-            {
-                var key = LegacyKey(snapshot);
-                yield return (new PageSnapshot(snapshot.PluginId, "@" + snapshot.ActivityId, snapshot.Title, snapshot.View.Expanded, snapshot.Sequence),
-                    new PageInfo(key, snapshot.Title));
-            }
-        }
-    }
+    private IEnumerable<(PageSnapshot Snapshot, PageInfo Info)> AllPages() => _pages.Values;
 
     private IReadOnlyList<PageInfo> VisiblePages() => _preferences.Current.Visible(AllPages().Select(p => p.Info));
-
-    /// <summary>Pages of active or critical activities, most important and then most recent first.</summary>
-    private IEnumerable<string> UrgentPages() => _activities.Values
-        .Where(a => a.Snapshot.Priority >= ActivityPriority.Active)
-        .OrderByDescending(a => a.Snapshot.Priority)
-        .ThenByDescending(a => a.Order)
-        .Select(a => a.Snapshot.View.Page is { } page ? PageSnapshot.PageKey(a.Snapshot.PluginId, page)
-            : a.Snapshot.View.Expanded is not null ? LegacyKey(a.Snapshot) : null)
-        .OfType<string>();
 
     private void Refresh()
     {
@@ -293,42 +191,22 @@ public sealed partial class IslandPresenter
         if (_shown is null || visible.All(p => p.Key != _shown))
         {
             // Nothing chosen yet, or the page went away (plugin stopped, page hidden): choose again.
-            _shown = SmartHome.Choose(visible, _preferences.Current, null, TimeSpan.MaxValue, UrgentPages());
+            _shown = SmartHome.Choose(visible, _preferences.Current, null, TimeSpan.MaxValue, []);
             _pickedByUser = null;
         }
         RenderPage(visible);
     }
 
     /// <summary>
-    /// The collapsed island, in order of precedence: an alert; an active or critical activity with a compact view
-    /// (it owns the island while it lasts); otherwise the user's chips, left and right. Activities that still send
-    /// a compact view at a lower priority show as chips of their own (compatibility, docs 07 §7).
+    /// The collapsed island, in order of precedence (09 §2): an alert, else the first live activity; otherwise the
+    /// mascot and the ambient items the user arranged, left and right.
     /// </summary>
     private void RefreshCompact()
     {
-        _current = _activities.Values
-            .Where(a => a.Snapshot.Priority >= ActivityPriority.Active && HasCompact(a.Snapshot))
-            .OrderByDescending(a => a.Snapshot.Priority)
-            .ThenBy(a => a.Order)
-            .Select(a => a.Snapshot)
-            .FirstOrDefault();
-
         Control? leading, trailing;
-        if (_alert is { } alert)
+        if (LiveCompact() is { } live)
         {
-            leading = _alertRenderer.Render(alert.Leading, null);
-            trailing = _alertRenderer.Render(alert.Trailing, null);
-        }
-        else if (LiveCompact() is { } live)
-        {
-            (leading, trailing) = live; // a 2.0 alert or the first live activity (09 §2)
-        }
-        else if (_current is { } owner)
-        {
-            // Update in place only what this renderer drew last time; chips and alerts are other renderers' controls.
-            var mine = _ownerShown == (owner.PluginId, owner.ActivityId);
-            leading = _compactRenderer.Render(owner.View.CompactLeading, mine ? _view.CompactLeading.Content as Control : null);
-            trailing = _compactRenderer.Render(owner.View.CompactTrailing, mine ? _view.CompactTrailing.Content as Control : null);
+            (leading, trailing) = live;
         }
         else if (_minimal)
         {
@@ -350,7 +228,6 @@ public sealed partial class IslandPresenter
             leading = ChipRow(left, offered, HorizontalAlignment.Left);
             trailing = ChipRow(right, offered, HorizontalAlignment.Right);
         }
-        _ownerShown = _alert is null && _alerts.Current is null && _arrangement.Primary is null && _current is { } shown ? (shown.PluginId, shown.ActivityId) : null;
         if (!ReferenceEquals(_view.CompactLeading.Content, leading))
         {
             _view.CompactLeading.Content = leading;
@@ -373,9 +250,6 @@ public sealed partial class IslandPresenter
         }
     }
 
-    private static bool HasCompact(ActivitySnapshot s) => s.View.CompactLeading is not null || s.View.CompactTrailing is not null;
-
-    /// <summary>Plugin chips, then the compact halves of lower-priority activities as chips (leading left, trailing right).</summary>
     /// <summary>
     /// O_O's own chip: the mascot, on the left, shown unless the user turns it off in 收起时显示 (it belongs to the
     /// shell, not to a plugin, so it is there whatever plugins are on).
@@ -388,26 +262,10 @@ public sealed partial class IslandPresenter
     private IEnumerable<(VNode View, string PluginId, ChipInfo Info)> AllChips()
     {
         yield return (MascotView, "o_o", MascotChip);
-        // In key order, so chips nobody has ordered yet appear the same way here and in the console.
-        foreach (var (snapshot, info) in _chips.Values.OrderBy(c => c.Info.Key, StringComparer.Ordinal))
-        {
-            yield return (snapshot.View!, snapshot.PluginId, info);
-        }
+        // In key order, so items nobody has ordered yet appear the same way here and in the console.
         foreach (var ambient in AmbientChips())
         {
             yield return ambient;
-        }
-        foreach (var (s, _) in _activities.Values.OrderBy(a => a.Order))
-        {
-            var key = LegacyKey(s);
-            if (s.View.CompactLeading is { } l)
-            {
-                yield return (l, s.PluginId, new ChipInfo(key + ":leading", s.Title, true, ChipSide.Left));
-            }
-            if (s.View.CompactTrailing is { } t)
-            {
-                yield return (t, s.PluginId, new ChipInfo(key + ":trailing", s.Title, true, ChipSide.Right));
-            }
         }
     }
 

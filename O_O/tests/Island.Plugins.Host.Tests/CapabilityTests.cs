@@ -21,7 +21,7 @@ public sealed partial class PluginHostTests
             const here = [typeof __island_activity, typeof __island_call, typeof __island_storage,
                           typeof __island_handoff, typeof __island_dispatch, typeof __island_permissions].join(',');
             export function activate() {
-              island.activity.create('a').update({ expanded: ui.text(probe + '|' + here) });
+              island.home.page('a').update(ui.text(probe + '|' + here));
             }
             """);
         // Evaluated before the plugin's import of @island/api: the host loaded the API first, so the handoff is gone.
@@ -38,8 +38,8 @@ public sealed partial class PluginHostTests
         Start("""
             import { island, ui, http, secrets, storage, granted } from '@island/api';
             export function activate() {
-              island.activity.create('a').update({ expanded: ui.text(
-                [typeof http, typeof secrets, typeof storage, granted.length].join(',')) });
+              island.home.page('a').update(ui.text(
+                [typeof http, typeof secrets, typeof storage, granted.length].join(',')));
             }
             """);
         Assert.Equal("undefined,undefined,object,0", Shown());
@@ -56,8 +56,8 @@ public sealed partial class PluginHostTests
               storage.set('profile', { name: '岛', tags: ['a', 'b'] });
               let quota = 'none';
               try { storage.set('big', 'x'.repeat(4000)); } catch (e) { quota = e.message; }
-              island.activity.create('a').update({ expanded: ui.text(
-                `launches=${n} name=${storage.get('profile').name} keys=${storage.keys().join('+')} quota=${quota}`) });
+              island.home.page('a').update(ui.text(
+                `launches=${n} name=${storage.get('profile').name} keys=${storage.keys().join('+')} quota=${quota}`));
             }
             """;
         var services = Services with { StorageQuotaBytes = 2000 };
@@ -78,12 +78,12 @@ public sealed partial class PluginHostTests
         Start("""
             import { island, ui, secrets } from '@island/api';
             export async function activate() {
-              const act = island.activity.create('a');
+              const act = island.home.page('a');
               await secrets.set('token', 's3cret');
               const back = await secrets.get('token');
               const missing = await secrets.get('nope');
               const removed = await secrets.delete('other');
-              act.update({ expanded: ui.text(`${back}|${missing}|${removed}`) });
+              act.update(ui.text(`${back}|${missing}|${removed}`));
             }
             """);
         Assert.Equal("s3cret|null|false", ShownWhen(t => t.Contains('|'), "secret round trip"));
@@ -99,14 +99,14 @@ public sealed partial class PluginHostTests
             import { island, ui, http } from '@island/api';
             const settle = (p) => p.then((v) => 'ok:' + v, (e) => 'err:' + e.message);
             export async function activate() {
-              const act = island.activity.create('a');
+              const act = island.home.page('a');
               const hello = await settle(http.getJson('{{server.Url}}hello').then((j) => j.msg));
               const posted = await settle(http.fetch('{{server.Url}}echo', { method: 'POST', body: { a: 1 } })
                 .then((r) => r.status + ' ' + r.text()));
               const other = await settle(http.fetch('https://example.org/'));
               const hop = await settle(http.fetch('{{server.Url}}redirect'));
               const header = await settle(http.fetch('{{server.Url}}hello', { headers: { Host: 'evil' } }));
-              act.update({ expanded: ui.text([hello, posted, other, hop, header].join('\n')) });
+              act.update(ui.text([hello, posted, other, hop, header].join('\n')));
             }
             """);
         var lines = ShownWhen(t => t.Split('\n').Length == 5, "five results").Split('\n');
@@ -140,10 +140,7 @@ public sealed partial class PluginHostTests
             WritePlugin("test.plugin", js);
         }
         _host = new PluginHost(services, FastRestart);
-        _host.ActivityUpdated += _updates.Enqueue;
         _host.PageUpdated += MirrorPage;
-        _host.ChipUpdated += _chipViews.Enqueue;
-        _host.AlertRaised += _alertsSeen.Enqueue;
         SubscribeLive(_host);
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
         _host.PluginLog += _logs.Enqueue;

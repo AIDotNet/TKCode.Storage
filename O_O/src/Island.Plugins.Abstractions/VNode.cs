@@ -28,30 +28,19 @@ public sealed record VNode(
         Type == other.Type && Key == other.Key && (Type != "arc" || GetString("type") == other.GetString("type"));
 }
 
-/// <summary>What an activity shows in each island state.</summary>
-/// <param name="Page">The page (of the same plugin) the island opens on while this activity runs (docs 07 §3.1).</param>
-/// <param name="Status">A page's status: a short node the island header shows while the page is on show (pages only).</param>
-public sealed record ActivityView(VNode? CompactLeading, VNode? CompactTrailing, VNode? Expanded, string? Page = null, VNode? Status = null);
+/// <summary>What a home page update sends: its view and the short status for the island header.</summary>
+public sealed record PageView(VNode? View, VNode? Status);
 
-/// <summary>The latest view of one chip (docs/design/07-home-and-layout.md §4).</summary>
-/// <param name="Instance">Which one, for chips declared <c>multiple</c>; null otherwise.</param>
-/// <param name="Title">The instance's name for the console (e.g. the account), or the declared title.</param>
-/// <param name="View">The chip's content; null when the plugin removed it.</param>
-public sealed record ChipSnapshot(string PluginId, string ChipId, string? Instance, string Title, VNode? View, long Sequence)
+/// <summary>Keys of the items the user arranges in 收起时显示: <c>plugin/id</c> or <c>plugin/id#instance</c>.</summary>
+public static class ItemKeys
 {
-    /// <summary>Identifies the chip across plugins: <c>plugin/chip</c> or <c>plugin/chip#instance</c>.</summary>
-    public string Key => ChipKey(PluginId, ChipId, Instance);
-
-    public static string ChipKey(string pluginId, string chipId, string? instance) =>
-        instance is null ? $"{pluginId}/{chipId}" : $"{pluginId}/{chipId}#{instance}";
+    public static string Of(string pluginId, string id, string? instance) =>
+        instance is null ? $"{pluginId}/{id}" : $"{pluginId}/{id}#{instance}";
 }
 
-/// <summary>A short-lived notice that takes the collapsed island's place for a few seconds ("已复制", "额度 95%").</summary>
-public sealed record AlertSnapshot(string PluginId, VNode? Leading, VNode? Trailing, TimeSpan Duration, long Sequence);
-
 /// <summary>
-/// One notice in a satellite island (docs/design/08-notifications-and-satellites.md §4). A snapshot without a view takes
-/// the notice <paramref name="Key"/> away (an empty key: all of the satellite's notices).
+/// One notice in a satellite window beside the island (the bubble of the second activity, docs/design/09-island-v2.md
+/// §2). A snapshot without a view takes the notice <paramref name="Key"/> away (an empty key: all of its notices).
 /// </summary>
 /// <param name="Side">"auto", "left" or "right", as declared.</param>
 /// <param name="Badge">A count drawn on the notice's corner, or null.</param>
@@ -78,26 +67,8 @@ public sealed record PageSnapshot(string PluginId, string PageId, string Title, 
     public static string PageKey(string pluginId, string pageId) => $"{pluginId}/{pageId}";
 }
 
-/// <summary>How strongly an activity claims the island (docs 02 §2.1).</summary>
-public enum ActivityPriority
-{
-    Ambient,
-    Passive,
-    Active,
-    Critical,
-}
-
-/// <summary>The latest state of one running activity.</summary>
-public sealed record ActivitySnapshot(
-    string PluginId,
-    string ActivityId,
-    string Title,
-    ActivityPriority Priority,
-    ActivityView View,
-    long Sequence);
-
 /// <summary>
-/// Parses the JSON a plugin sends for an activity. The wire format is compact: <c>t</c> type, <c>k</c> key,
+/// Parses the JSON a plugin sends for a view. The wire format is compact: <c>t</c> type, <c>k</c> key,
 /// <c>p</c> props, <c>c</c> children; a prop <c>{"$h": n}</c> is an event handler.
 /// Unknown shapes are rejected rather than guessed at.
 /// </summary>
@@ -109,28 +80,16 @@ public static class VNodeJson
     // Each view level is an object plus a children array, and the view itself wraps the roots in two more objects.
     private static readonly JsonDocumentOptions DocumentOptions = new() { MaxDepth = MaxDepth * 2 + 8 };
 
+    /// <summary>A home page update: <c>{ expanded, status }</c>.</summary>
     /// <exception cref="InvalidDataException">The JSON is malformed or the view breaks a limit.</exception>
-    public static ActivityView ParseView(string json)
+    public static PageView ParsePage(string json)
     {
         using var doc = Parse(json);
         var root = doc.RootElement;
         var budget = MaxNodes;
         VNode? Read(string name) =>
             root.TryGetProperty(name, out var e) && e.ValueKind == JsonValueKind.Object ? ParseNode(e, 0, ref budget) : null;
-        VNode? compactLeading = null, compactTrailing = null;
-        if (root.TryGetProperty("compact", out var compact) && compact.ValueKind == JsonValueKind.Object)
-        {
-            if (compact.TryGetProperty("leading", out var l) && l.ValueKind == JsonValueKind.Object)
-            {
-                compactLeading = ParseNode(l, 0, ref budget);
-            }
-            if (compact.TryGetProperty("trailing", out var t) && t.ValueKind == JsonValueKind.Object)
-            {
-                compactTrailing = ParseNode(t, 0, ref budget);
-            }
-        }
-        var page = root.TryGetProperty("page", out var pg) && pg.ValueKind == JsonValueKind.String ? pg.GetString() : null;
-        return new ActivityView(compactLeading, compactTrailing, Read("expanded"), string.IsNullOrEmpty(page) ? null : page, Read("status"));
+        return new PageView(Read("expanded"), Read("status"));
     }
 
     /// <exception cref="InvalidDataException">The JSON is malformed or the node breaks a limit.</exception>

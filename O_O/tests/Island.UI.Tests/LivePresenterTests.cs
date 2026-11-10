@@ -28,8 +28,7 @@ public sealed class LivePresenterTests
         var presenter = new IslandPresenter(view, (_, _, _) => { },
             new PagePreferencesStore(Path.Combine(temp, $"o_o-p-{Guid.NewGuid():N}.json")),
             s => new PageInfo(s.Key, s.Title),
-            new ChipPreferencesStore(Path.Combine(temp, $"o_o-c-{Guid.NewGuid():N}.json")),
-            s => new ChipInfo(s.Key, s.Title));
+            new ChipPreferencesStore(Path.Combine(temp, $"o_o-c-{Guid.NewGuid():N}.json")));
         new Window { Content = view }.Show();
         return (presenter, view);
     }

@@ -5,14 +5,13 @@ public class VNodeJsonTests
     [Fact]
     public void Parses_props_handlers_keys_and_children()
     {
-        var view = VNodeJson.ParseView("""
-            { "compact": { "leading": { "t": "icon", "p": { "name": "Clock" } }, "trailing": null },
+        var view = VNodeJson.ParsePage("""
+            { "status": { "t": "icon", "p": { "name": "Clock" } },
               "expanded": { "t": "row", "k": 7, "p": { "gap": "sm", "on": true, "n": 2.5, "onClick": { "$h": 12 }, "skip": null, "obj": { "a": 1 } },
                             "c": [ { "t": "text", "p": { "text": "hi" } }, 5, { "t": "spacer" } ] } }
             """);
-        Assert.Equal("Clock", view.CompactLeading!.GetString("name"));
-        Assert.Null(view.CompactTrailing);
-        var row = view.Expanded!;
+        Assert.Equal("Clock", view.Status!.GetString("name"));
+        var row = view.View!;
         Assert.Equal("7", row.Key);
         Assert.Equal("sm", row.GetString("gap"));
         Assert.True(row.GetBool("on"));

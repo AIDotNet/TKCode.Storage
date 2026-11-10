@@ -4,7 +4,7 @@ using Island.Plugins.Host.Services;
 
 namespace Island.Plugins.Host.Tests;
 
-/// <summary>notifications.listen, the display cut and satellites (docs/design/08-notifications-and-satellites.md).</summary>
+/// <summary>notifications.listen and the display cut (docs/design/08-notifications-and-satellites.md).</summary>
 public sealed partial class PluginHostTests
 {
     private const string WeChat = "com.tencent.xinWeChat";
@@ -32,8 +32,6 @@ public sealed partial class PluginHostTests
         public void Badge(string app, int? n) => BadgeChanged?.Invoke(app, n);
     }
 
-    private readonly ConcurrentQueue<SatelliteSnapshot> _satellites = new();
-
     private (FakeListener Listener, PluginServices Services) StartNotifier(string js, string permissions, NotificationDisplay? display = null)
     {
         var listener = new FakeListener();
@@ -43,10 +41,9 @@ public sealed partial class PluginHostTests
             services.NotificationPrefs.Default = d;
         }
         _permissions = permissions;
-        _contributes = """{ "satellites": [{ "id": "message", "title": "消息", "side": "auto" }] }""";
         WritePlugin("test.plugin", js);
         _host = new PluginHost(services, FastRestart);
-        _host.SatelliteUpdated += _satellites.Enqueue;
+        SubscribeLive(_host);
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
         _host.PluginLog += _logs.Enqueue;
         Assert.Empty(_host.Discover(_root, bundled: true));
@@ -167,39 +164,6 @@ public sealed partial class PluginHostTests
         }
         var many = Enumerable.Range(0, 9).Select(i => $"notifications.listen:com.app{i}").ToList();
         Assert.Null(PluginPermissions.Parse(many, []));
-    }
-
-    [Fact]
-    public void Satellites_show_replace_by_key_hide_and_are_bounded()
-    {
-        StartNotifier("""
-            import { island, ui, notifications } from '@island/api';
-            export async function activate() {
-              const sat = island.satellite('message');
-              const a = await sat.show(ui.row({}, [ui.appIcon('com.tencent.xinWeChat', { size: 18 }), ui.text('老王')]), { key: 'wx', seconds: 99, badge: 2, onClick: () => console.info('clicked') });
-              await sat.show(ui.text('again'), { key: 'wx' });
-              console.info('first ' + a);
-              try { island.satellite('nope').show(ui.text('x')); } catch (e) { console.info('rejected: ' + e.message); }
-              sat.hide('wx');
-              let accepted = 0;
-              for (let i = 0; i < 40; i++) if (await sat.show(ui.text('n' + i), { key: 'k' + (i % 5) })) accepted++;
-              console.info('accepted ' + accepted);
-            }
-            """, $"\"notifications.listen:{WeChat}\"");
-        WaitFor(() => _logs.FirstOrDefault(l => l.Message.StartsWith("accepted ")), "done");
-        var snapshots = _satellites.ToList();
-        var first = snapshots[0];
-        Assert.Equal(("test.plugin", "message", "wx"), (first.PluginId, first.SatelliteId, first.Key));
-        Assert.Equal(10, first.Duration.TotalSeconds);                 // seconds clamped to 10 (0 would mean: stays)
-        Assert.Equal(2, first.Badge);
-        Assert.Equal("auto", first.Side);
-        Assert.Equal("item", first.View!.Type);                        // onClick wraps the view in an item
-        Assert.Contains(Nodes(first.View), n => n.Type == "appIcon" && n.GetString("appId") == WeChat);
-        Assert.Contains("first true", _logs.Select(l => l.Message));
-        Assert.Contains(_logs, l => l.Message.StartsWith("rejected: Satellite 'nope' is not declared"));
-        Assert.Contains(snapshots, s => s.Key == "wx" && s.View is null);   // hide
-        // 2 earlier shows + 40 more: the rate limit is 30 a minute, so not all are accepted.
-        Assert.InRange(int.Parse(_logs.First(l => l.Message.StartsWith("accepted ")).Message[9..]), 1, 29);
     }
 
     [Fact]

@@ -38,7 +38,7 @@ public sealed class LayoutService(PluginHost plugins, IslandAppearanceStore appe
             Minimal = layout.Minimal ?? appearance.Current.Minimal,
         });
 
-        var pageKeys = plugins.Packages.SelectMany(p => p.Manifest.Contributes.AllPages.Select(g => $"{p.Id}/{g.Id}")).ToList();
+        var pageKeys = plugins.Packages.SelectMany(p => p.Manifest.Contributes.Home.Select(g => $"{p.Id}/{g.Id}")).ToList();
         if (layout.Pages.Count > 0 || layout.Exclusive || layout.Home is not null)
         {
             var enabled = new Dictionary<string, bool>(pages.Current.Enabled);
@@ -76,7 +76,7 @@ public sealed class LayoutService(PluginHost plugins, IslandAppearanceStore appe
             }
             if (layout.Exclusive)
             {
-                var chipKeys = plugins.Packages.SelectMany(p => p.Manifest.Contributes.CollapsedItems.Select(c => $"{p.Id}/{c.Id}"));
+                var chipKeys = plugins.Packages.SelectMany(p => p.Manifest.Contributes.Ambient.Select(c => $"{p.Id}/{c.Id}"));
                 foreach (var other in chipKeys.Where(k => !listed.Contains(k)))
                 {
                     enabled[other] = false;

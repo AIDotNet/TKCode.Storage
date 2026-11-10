@@ -18,7 +18,7 @@ public sealed class PluginsPageTests : IDisposable
         var dir = Path.Combine(_root, "plugins", id);
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "plugin.json"),
-            $$"""{ "id": "{{id}}", "name": "{{name}}", "version": "1.0.0", "main": "main.js", "permissions": [] {{extra}} }""");
+            $$"""{ "id": "{{id}}", "name": "{{name}}", "version": "1.0.0", "engines": { "island": "^2.0.0" }, "main": "main.js", "permissions": [] {{extra}} }""");
         File.WriteAllText(Path.Combine(dir, "main.js"), "export function activate() {}");
     }
 

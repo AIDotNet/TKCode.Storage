@@ -140,13 +140,15 @@ public sealed partial class PluginHostTests
     }
 
     [Fact]
-    public void A_one_x_plugin_keeps_the_one_x_api()
+    public void A_plugin_written_for_the_one_x_api_is_refused_with_a_reason()
     {
-        _engine = null;
-        Start("""
-            import { island } from '@island/api';
-            export function activate() { console.info(`${typeof island.chip} ${typeof island.ambient}`); }
-            """);
-        Assert.Equal("function undefined", WaitFor(() => _logs.FirstOrDefault(), "log").Message);
+        _engine = "^1.0.0";
+        WritePlugin("test.old", "export function activate() {}");
+        var host = new PluginHost(Services, FastRestart);
+        var problem = Assert.Single(host.Discover(_root, bundled: false));
+        Assert.Contains("needs the island API ^1.0.0", problem);
+        Assert.Contains("^2.0.0", problem);
+        Assert.Empty(host.Packages);
+        host.Dispose();
     }
 }

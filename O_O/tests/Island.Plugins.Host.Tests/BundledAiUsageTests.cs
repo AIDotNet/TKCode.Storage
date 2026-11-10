@@ -56,21 +56,21 @@ public sealed partial class PluginHostTests
     }
 
     /// <summary>The aggregator's latest view: handler ids change on every render, so events go to this one.</summary>
-    private ActivitySnapshot LatestUsage()
+    private PageShot LatestUsage()
     {
         WaitForPage(s => s.PluginId == "com.o_o.ai-usage", "usage page");
         Thread.Sleep(150); // let a render already in flight land, so its handlers are the current ones
         return _pageViews.Last(s => s.PluginId == "com.o_o.ai-usage");
     }
 
-    private static string? Shown(ActivitySnapshot s, string type) =>
+    private static string? Shown(PageShot s, string type) =>
         Nodes(s.View.Expanded).FirstOrDefault(n => n.Type == type)?.GetString(type == "swap" ? "id" : "value");
 
     /// <summary>
     /// Steps through the providers with the ‹ › arrows, as a click would, until <paramref name="providerId"/> is shown
     /// and <paramref name="ready"/>; returns its view. The provider tabs are not shown, so the arrows are the way.
     /// </summary>
-    private ActivitySnapshot PickProvider(string providerId, Func<ActivitySnapshot, bool> ready)
+    private PageShot PickProvider(string providerId, Func<PageShot, bool> ready)
     {
         for (var step = 0; step < 12; step++)
         {

@@ -198,17 +198,16 @@ public sealed class IslandPage : StackPanel
         // Only running plugins: a stopped plugin never sends its chip, so switching it on here would show nothing.
         foreach (var package in _plugins.Packages.Where(p => _plugins.IsEnabled(p.Id)))
         {
-            foreach (var chip in package.Manifest.Contributes.CollapsedItems)
+            foreach (var chip in package.Manifest.Contributes.Ambient)
             {
                 var side = chip.Side == "left" ? ChipSide.Left : ChipSide.Right;
                 if (!chip.Multiple)
                 {
-                    offered.Add((new ChipInfo(ChipSnapshot.ChipKey(package.Id, chip.Id, null), chip.Title ?? chip.Id, chip.Enabled ?? true, side), package.Manifest.Name));
+                    offered.Add((new ChipInfo(ItemKeys.Of(package.Id, chip.Id, null), chip.Title ?? chip.Id, chip.Enabled ?? true, side), package.Manifest.Name));
                     continue;
                 }
-                // One row per instance shown now (1.x chips and 2.0 ambient items alike).
-                var instances = _plugins.LiveChips.Where(c => c.PluginId == package.Id && c.ChipId == chip.Id).Select(c => (c.Key, c.Title))
-                    .Concat(_plugins.LiveAmbient.Where(a => a.PluginId == package.Id && a.AmbientId == chip.Id).Select(a => (a.Key, Title: a.Title ?? a.AmbientId)));
+                // One row per instance shown now (one per account, say).
+                var instances = _plugins.LiveAmbient.Where(a => a.PluginId == package.Id && a.AmbientId == chip.Id).Select(a => (a.Key, Title: a.Title ?? a.AmbientId));
                 foreach (var (key, title) in instances.OrderBy(x => x.Title))
                 {
                     offered.Add((new ChipInfo(key, title, chip.Enabled ?? true, side), package.Manifest.Name));
@@ -283,7 +282,7 @@ public sealed class IslandPage : StackPanel
         // Only running plugins: a stopped plugin's page never appears on the island.
         var offered = _plugins.Packages
             .Where(p => _plugins.IsEnabled(p.Id))
-            .SelectMany(p => p.Manifest.Contributes.AllPages.Select(page => (Package: p, Page: page)))
+            .SelectMany(p => p.Manifest.Contributes.Home.Select(page => (Package: p, Page: page)))
             .ToDictionary(
                 x => PageSnapshot.PageKey(x.Package.Id, x.Page.Id),
                 x => (Info: new PageInfo(PageSnapshot.PageKey(x.Package.Id, x.Page.Id), x.Page.Title ?? x.Page.Id, x.Page.Enabled ?? true, x.Page.Icon),
@@ -322,7 +321,7 @@ public sealed class IslandPage : StackPanel
     private Control PageRow(PageInfo page, string plugin)
     {
         var prefs = _pages.Current;
-        var visible = prefs.Visible(_plugins.Packages.Where(p => _plugins.IsEnabled(p.Id)).SelectMany(p => p.Manifest.Contributes.AllPages
+        var visible = prefs.Visible(_plugins.Packages.Where(p => _plugins.IsEnabled(p.Id)).SelectMany(p => p.Manifest.Contributes.Home
             .Select(g => new PageInfo(PageSnapshot.PageKey(p.Id, g.Id), g.Title ?? g.Id, g.Enabled ?? true))));
         var isHome = prefs.HomeOf(visible) == page.Key;
         var toggle = new ArcSwitch { IsChecked = prefs.IsEnabled(page), VerticalAlignment = VerticalAlignment.Center };

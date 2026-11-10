@@ -42,9 +42,13 @@ public sealed class PluginManifest
 
     public bool RunsOn(string platform) => Platforms.Count == 0 || Platforms.Contains(platform, StringComparer.Ordinal);
 
-    /// <summary>Checks <see cref="Requires"/> and <see cref="Platforms"/>.</summary>
+    /// <summary>Checks the island API asked for, <see cref="Requires"/> and <see cref="Platforms"/>.</summary>
     public void ValidateTargets(List<string> problems)
     {
+        if (Engines.ApiMajor < 2)
+        {
+            problems.Add($"needs the island API {Engines.Island}; this O_O runs plugins written for ^2.0.0 (docs/design/09-island-v2.md)");
+        }
         foreach (var platform in Platforms.Where(p => !KnownPlatforms.Contains(p)))
         {
             problems.Add($"unknown platform '{platform}' (known: macos, windows, linux)");
@@ -81,38 +85,17 @@ public sealed class PluginContributions
 {
     public IReadOnlyList<ActivityContribution> Activities { get => field ?? []; init; }
 
-    /// <summary>Full views shown in the expanded island, one tab each (docs/design/07-home-and-layout.md §2).</summary>
-    public IReadOnlyList<PageContribution> Pages { get => field ?? []; init; }
-
-    /// <summary>Small items for the collapsed island (docs/design/07-home-and-layout.md §4).</summary>
-    public IReadOnlyList<ChipContribution> Chips { get => field ?? []; init; }
-
     /// <summary>Items beside the idle island (docs/design/09-island-v2.md §3).</summary>
     public IReadOnlyList<AmbientContribution> Ambient { get => field ?? []; init; }
 
     /// <summary>Pages of the home dashboard (09 §2), one tab each.</summary>
     public IReadOnlyList<PageContribution> Home { get => field ?? []; init; }
 
-    /// <summary>Every page of the expanded island's home: 2.0 home pages and 1.x pages.</summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public IEnumerable<PageContribution> AllPages => Home.Concat(Pages);
-
-    /// <summary>
-    /// Every item of the collapsed island the user arranges in 收起时显示: 1.x chips and 2.0 ambient items (as chips, under
-    /// the same <c>plugin/id</c> keys).
-    /// </summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public IEnumerable<ChipContribution> CollapsedItems =>
-        Chips.Concat(Ambient.Select(a => new ChipContribution { Id = a.Id, Title = a.Title, Enabled = a.Enabled, Side = a.Side, Multiple = a.Multiple }));
-
     /// <summary>Looks for every O_O window (docs/design/03-plugin-system.md §9), chosen on the console's 外观 page.</summary>
     public IReadOnlyList<ThemeContribution> Themes { get => field ?? []; init; }
 
     /// <summary>Island layouts the user can apply on the console's 岛体 page: shape, dock, size, pages and chips in one go.</summary>
     public IReadOnlyList<LayoutContribution> Layouts { get => field ?? []; init; }
-
-    /// <summary>Small islands beside the main one for short-lived notices (docs/design/08-notifications-and-satellites.md §4).</summary>
-    public IReadOnlyList<SatelliteContribution> Satellites { get => field ?? []; init; }
 
     /// <summary>Implementations this plugin offers to other plugins (docs/design/03-plugin-system.md §7.1).</summary>
     public IReadOnlyList<ProviderContribution> Providers { get => field ?? []; init; }
@@ -132,7 +115,7 @@ public sealed class ProviderContribution
     public string? Title { get; init; }
 }
 
-/// <summary>A page: a plugin's full view in the expanded island, rendered with <c>island.page(id).update(view)</c>.</summary>
+/// <summary>A home page: a plugin's full view in the home dashboard, rendered with <c>island.home.page(id).update(view)</c>.</summary>
 public sealed class PageContribution
 {
     public required string Id { get; init; }
@@ -143,32 +126,6 @@ public sealed class PageContribution
 
     /// <summary>Whether the page shows until the user decides otherwise (e.g. the clock's 今日 page does not).</summary>
     public bool? Enabled { get; init; }
-}
-
-/// <summary>A chip: a small item on the collapsed island, rendered with <c>island.chip(id[, instance]).update(view)</c>.</summary>
-public sealed class ChipContribution
-{
-    public required string Id { get; init; }
-    public string? Title { get; init; }
-
-    /// <summary>One chip per instance (e.g. one per AI account): <c>island.chip(id, instance)</c>.</summary>
-    public bool Multiple { get; init; }
-
-    /// <summary>Whether the chip shows until the user decides otherwise.</summary>
-    public bool? Enabled { get; init; }
-
-    /// <summary>"left" or "right" (default): which side of the island, or which wing beside a notch.</summary>
-    public string? Side { get; init; }
-}
-
-/// <summary>A satellite: a small island beside the main one, shown with <c>island.satellite(id).show(view, options)</c>.</summary>
-public sealed class SatelliteContribution
-{
-    public required string Id { get; init; }
-    public string? Title { get; init; }
-
-    /// <summary>"auto" (default: the side with room, right first), "left" or "right"; the user can pin it in the console.</summary>
-    public string? Side { get; init; }
 }
 
 /// <summary>

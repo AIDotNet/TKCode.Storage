@@ -11,7 +11,7 @@ public sealed partial class PluginHostTests
 
     private static JsonElement Json(string value) => JsonSerializer.SerializeToElement(value);
 
-    private static List<VNode> Rows(ActivitySnapshot page) => [.. Nodes(page.View.Expanded).Where(n => n.Type == "item")];
+    private static List<VNode> Rows(PageShot page) => [.. Nodes(page.View.Expanded).Where(n => n.Type == "item")];
 
     private AmbientSnapshot WaitForAmbient(string key, Func<AmbientSnapshot, bool> match, string what) =>
         WaitFor(() => _ambientSeen.LastOrDefault(c => c.Key == key) is { } c && match(c) ? c : null, what);
@@ -20,13 +20,13 @@ public sealed partial class PluginHostTests
         WaitFor(() => _host!.LiveActivities.FirstOrDefault(a => a.Kind == kind && match(a)), what);
 
     /// <summary>A plugin's latest page: handler ids change on every render, so events go to this one.</summary>
-    private ActivitySnapshot Latest(string pluginId)
+    private PageShot Latest(string pluginId)
     {
         Thread.Sleep(200); // let renders already under way land
         return _pageViews.Last(s => s.PluginId == pluginId);
     }
 
-    private static bool HasButton(ActivitySnapshot s, string label) =>
+    private static bool HasButton(PageShot s, string label) =>
         Nodes(s.View.Expanded).Any(n => n.Type == "button" && n.GetString("label") == label);
 
     private void SeedStorage(string pluginId, string json)

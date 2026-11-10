@@ -12,7 +12,7 @@ public sealed partial class PluginHostTests
         var dir = Path.Combine(_data, "src-" + id);
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "plugin.json"),
-            $$"""{ "id": "{{id}}", "name": "Sample", "version": "1.2.0", "permissions": ["secrets"] {{manifestExtra}} }""");
+            $$"""{ "id": "{{id}}", "name": "Sample", "version": "1.2.0", "engines": { "island": "^2.0.0" }, "permissions": ["secrets"] {{manifestExtra}} }""");
         File.WriteAllText(Path.Combine(dir, "main.js"), js);
         Directory.CreateDirectory(Path.Combine(dir, ".git"));
         File.WriteAllText(Path.Combine(dir, ".git", "HEAD"), "ref");

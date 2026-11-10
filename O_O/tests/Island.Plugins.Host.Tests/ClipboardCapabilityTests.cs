@@ -114,7 +114,7 @@ public sealed partial class PluginHostTests
 
 public sealed partial class PluginHostTests
 {
-    private IEnumerable<VNode> HistoryRows(ActivitySnapshot page) => Nodes(page.View.Expanded).Where(n => n.Type == "item");
+    private IEnumerable<VNode> HistoryRows(PageShot page) => Nodes(page.View.Expanded).Where(n => n.Type == "item");
 
     [Fact]
     public void The_clipboard_history_records_dedupes_trims_and_pastes_on_click()
@@ -160,12 +160,12 @@ public sealed partial class PluginHostTests
     {
         var opened = new System.Collections.Concurrent.ConcurrentQueue<Uri>();
         _permissions = "\"shell.openUrl\"";
-        _contributes = """{ "pages": [{ "id": "p" }] }""";
+        _contributes = """{ "home": [{ "id": "p" }] }""";
         StartWith("""
             import { island, ui, shell } from '@island/api';
             export async function activate() {
               try { await shell.openUrl('https://example.com/a'); } catch (e) { console.info('no click: ' + e.message); }
-              island.page('p').update(ui.button('go', { onClick: async () => {
+              island.home.page('p').update(ui.button('go', { onClick: async () => {
                 await shell.openUrl('https://example.com/b');
                 try { await shell.openUrl('file:///etc/passwd'); } catch (e) { console.info('file: ' + e.message); }
               } }));

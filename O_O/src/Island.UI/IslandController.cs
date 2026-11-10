@@ -532,10 +532,9 @@ public sealed class IslandController : IDisposable
         Action<string, int, string?> dispatch,
         Island.Core.Pages.PagePreferencesStore pages,
         Func<Island.Plugins.PageSnapshot, Island.Core.Pages.PageInfo> describe,
-        Island.Core.Pages.ChipPreferencesStore chips,
-        Func<Island.Plugins.ChipSnapshot, Island.Core.Pages.ChipInfo> describeChip)
+        Island.Core.Pages.ChipPreferencesStore chips)
     {
-        var presenter = new IslandPresenter(_window.View, dispatch, pages, describe, chips, describeChip);
+        var presenter = new IslandPresenter(_window.View, dispatch, pages, describe, chips);
         _presenter = presenter;
         presenter.Vertical = _vertical ?? false;
         presenter.HasCompactContentChanged += SetHasActivity;

@@ -97,7 +97,7 @@ public sealed partial class PluginHostTests
             import { island, ui } from '@island/api';
             const settle = (p) => p.then((v) => ({ ok: v }), (e) => ({ err: e.message }));
             export async function activate() {
-              const act = island.activity.create('r');
+              const act = island.home.page('r');
               for (let i = 0; i < 100; i++) {
                 const list = await island.providers.list('ai-usage');
                 if (list.some((p) => p.id === '{{providerId}}' && p.running)) break;
@@ -106,12 +106,12 @@ public sealed partial class PluginHostTests
               const accounts = await settle(island.providers.call('ai-usage', '{{providerId}}', 'accounts'));
               const usage = [];
               for (const a of accounts.ok ?? []) usage.push(await settle(island.providers.call('ai-usage', '{{providerId}}', 'usage', a)));
-              act.update({ expanded: ui.text(JSON.stringify({ accounts, usage })) });
+              act.update(ui.text(JSON.stringify({ accounts, usage })));
             }
             """);
 
         _host = new PluginHost(Services, FastRestart);
-        _host.ActivityUpdated += _updates.Enqueue;
+        _host.PageUpdated += MirrorPage;
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
         _host.PluginLog += _logs.Enqueue;
         Assert.Empty(_host.Discover(_root, bundled: true));

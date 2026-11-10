@@ -15,10 +15,9 @@
     reply: __island_reply,
   };
   const permissions = Object.freeze(JSON.parse(__island_permissions));
-  const apiMajor = Number(__island_api) === 2 ? 2 : 1;
   for (const name of ['__island_log', '__island_setTimer', '__island_clearTimer', '__island_activity',
                       '__island_storage', '__island_settings', '__island_call', '__island_reply',
-                      '__island_permissions', '__island_api']) {
+                      '__island_permissions']) {
     delete globalThis[name];
   }
   const host = natives;
@@ -141,7 +140,7 @@
 
   globalThis.__island_handoff = () => {
     delete globalThis.__island_handoff;
-    return Object.freeze({ natives, internal, permissions, call, apiMajor });
+    return Object.freeze({ natives, internal, permissions, call });
   };
 
   globalThis.__island_dispatch = (kind, id, payload) => {

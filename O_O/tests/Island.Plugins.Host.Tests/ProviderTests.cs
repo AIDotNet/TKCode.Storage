@@ -10,6 +10,7 @@ public sealed partial class PluginHostTests
         File.WriteAllText(Path.Combine(dir, "plugin.json"),
             $$"""{ "id": "{{id}}", "name": "{{id}}", "version": "1.0.0", "permissions": [{{permissions}}] {{manifestExtra}} }""");
         File.WriteAllText(Path.Combine(dir, "main.js"), js);
+        FinishManifest(dir);
     }
 
     [Fact]
@@ -33,14 +34,14 @@ public sealed partial class PluginHostTests
             import { island, ui, secrets } from '@island/api';
             const settle = (p) => p.then((v) => 'ok:' + JSON.stringify(v), (e) => 'err:' + e.message);
             export async function activate() {
-              const act = island.activity.create('a');
+              const act = island.home.page('a');
               await new Promise((r) => setTimeout(r, 300));     // let the provider start
               const list = await island.providers.list('echo');
               const greet = await settle(island.providers.call('echo', 'one', 'greet', 'ada', 21));
               const fail = await settle(island.providers.call('echo', 'one', 'fail'));
               const missing = await settle(island.providers.call('echo', 'two', 'greet'));
               const nomethod = await settle(island.providers.call('echo', 'one', 'nope'));
-              act.update({ expanded: ui.text([JSON.stringify(list), typeof secrets, greet, fail, missing, nomethod].join('\n')) });
+              act.update(ui.text([JSON.stringify(list), typeof secrets, greet, fail, missing, nomethod].join('\n')));
             }
             """);
         StartDiscovered();

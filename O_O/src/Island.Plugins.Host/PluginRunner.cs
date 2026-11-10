@@ -10,19 +10,14 @@ namespace Island.Plugins.Host;
 /// <summary>Where a runner reports to. Called on the runner's thread; implementations marshal as they need.</summary>
 internal interface IPluginRunnerSink
 {
-    void ActivityUpdated(ActivitySnapshot snapshot);
 
     /// <summary>Runs a provider method in the providing plugin; returns its JSON result.</summary>
     Task<string> CallProvider(string callerId, string iface, string id, string method, string argsJson, CancellationToken ct);
 
     /// <summary>The providers of <paramref name="iface"/> as a JSON array.</summary>
     string ListProviders(string iface);
-    void ActivityEnded(string pluginId, string activityId);
     void PageUpdated(PageSnapshot snapshot);
     void PageEnded(string pluginId, string pageId);
-    void ChipUpdated(ChipSnapshot snapshot);
-    void Alert(AlertSnapshot alert);
-    void Satellite(SatelliteSnapshot snapshot);
     void LiveActivityUpdated(LiveActivitySnapshot snapshot);
     void LiveActivityEnded(string pluginId, string key);
     void LiveAlert(LiveAlertSnapshot alert);
@@ -71,9 +66,7 @@ internal sealed partial class PluginRunner : IDisposable
     private JsEngine? _engine;
     private JsFunction? _dispatch;
     private readonly Dictionary<int, Timer> _timers = [];
-    private readonly HashSet<string> _activities = [];
     private readonly HashSet<string> _pages = [];
-    private readonly HashSet<(string Chip, string? Instance)> _chips = [];
     // The last arguments each live activity, page and chip was shown with. Plugins often re-render on a timer with
     // nothing changed; an identical update is dropped before parsing and never reaches the UI.
     private readonly Dictionary<string, string> _lastViews = new(StringComparer.Ordinal);
@@ -200,7 +193,6 @@ internal sealed partial class PluginRunner : IDisposable
             _engine = engine;
             RegisterNatives(engine, generation);
             engine.SetValue("__island_permissions", PermissionsJson());
-            engine.SetValue("__island_api", _package.Manifest.Engines.ApiMajor);
 
             // The prelude takes the natives into a closure and removes them from globalThis; the host then keeps its
             // own reference to the dispatcher and removes that global too. Plugin code never sees the natives.
@@ -318,24 +310,13 @@ internal sealed partial class PluginRunner : IDisposable
             timer.Dispose();
         }
         _timers.Clear();
-        foreach (var activity in _activities)
-        {
-            _sink.ActivityEnded(Id, activity);
-        }
-        _activities.Clear();
         foreach (var page in _pages)
         {
             _sink.PageEnded(Id, page);
         }
         _pages.Clear();
-        foreach (var (chip, instance) in _chips)
-        {
-            _sink.ChipUpdated(new ChipSnapshot(Id, chip, instance, "", null, ++_sequence));
-        }
-        _chips.Clear();
         TearDownLive();
         _lastViews.Clear();
-        TearDownSatellites();
         _dispatch = null;
         _engine?.Dispose();
         _engine = null;
@@ -983,166 +964,44 @@ internal sealed partial class PluginRunner : IDisposable
         engine.SetFunction("__island_activity", (ref JsCallContext c) =>
         {
             var op = Arg(ref c, 0);
-            var activityId = Arg(ref c, 1);
+            var id = Arg(ref c, 1);
             if (IsLiveOp(op))
             {
-                return Live(ref c, op, activityId);
+                return Live(ref c, op, id);
             }
-            if (op is "chip" or "chipEnd")
+            if (op != "home")
             {
-                return Chip(ref c, op == "chipEnd", activityId);
+                throw c.TypeError($"Unknown island call '{op}'.");
             }
-            if (op is "satellite" or "satelliteEnd")
+            // A home page: declared in plugin.json, titled there; its view and the header status it sets.
+            if (_package.Manifest.Contributes.Home.FirstOrDefault(p => p.Id == id) is not { } declared)
             {
-                return Satellite(ref c, op == "satelliteEnd", activityId);
+                throw c.TypeError($"Home page '{id}' is not declared in plugin.json (contributes.home).");
             }
-            if (op == "alert")
-            {
-                ActivityView alert;
-                try
-                {
-                    alert = VNodeJson.ParseView(Arg(ref c, 4));
-                }
-                catch (InvalidDataException e)
-                {
-                    throw c.TypeError($"Invalid view: {e.Message}");
-                }
-                var seconds = double.TryParse(Arg(ref c, 3), System.Globalization.CultureInfo.InvariantCulture, out var s) ? s : 3;
-                _sink.Alert(new AlertSnapshot(Id, alert.CompactLeading, alert.CompactTrailing,
-                    TimeSpan.FromSeconds(Math.Clamp(double.IsFinite(s) ? seconds : 3, 1, 10)), ++_sequence));
-                return JsValue.Undefined;
-            }
-            if (op is "page" or "home")
-            {
-                // A page (a home page in 2.0): declared in plugin.json, titled there, and only its expanded view is used.
-                if (_package.Manifest.Contributes.Home.Concat(_package.Manifest.Contributes.Pages).FirstOrDefault(p => p.Id == activityId) is not { } declared)
-                {
-                    throw c.TypeError(op == "home"
-                        ? $"Home page '{activityId}' is not declared in plugin.json (contributes.home)."
-                        : $"Page '{activityId}' is not declared in plugin.json (contributes.pages).");
-                }
-                var pageKey = "page\u0001" + activityId;
-                var pageArgs = ViewArgs(ref c);
-                if (_pages.Contains(activityId) && Unchanged(pageKey, pageArgs))
-                {
-                    return JsValue.Undefined;
-                }
-                ActivityView pageView;
-                try
-                {
-                    pageView = VNodeJson.ParseView(Arg(ref c, 4));
-                }
-                catch (InvalidDataException e)
-                {
-                    throw c.TypeError($"Invalid view: {e.Message}");
-                }
-                _pages.Add(activityId);
-                _lastViews[pageKey] = pageArgs;
-                _sink.PageUpdated(new PageSnapshot(Id, activityId, declared.Title ?? activityId, pageView.Expanded, ++_sequence, pageView.Status));
-                return JsValue.Undefined;
-            }
-            if (op == "end")
-            {
-                _lastViews.Remove("activity\u0001" + activityId);
-                if (_activities.Remove(activityId))
-                {
-                    _sink.ActivityEnded(Id, activityId);
-                }
-                return JsValue.Undefined;
-            }
-            if (!_activities.Contains(activityId) && _activities.Count >= _options.MaxActivities)
-            {
-                throw c.TypeError($"A plugin may show at most {_options.MaxActivities} activities at once.");
-            }
-            var activityKey = "activity\u0001" + activityId;
-            var activityArgs = ViewArgs(ref c);
-            if (_activities.Contains(activityId) && Unchanged(activityKey, activityArgs))
+            var pageKey = "page\u0001" + id;
+            var pageArgs = ViewArgs(ref c);
+            if (_pages.Contains(id) && Unchanged(pageKey, pageArgs))
             {
                 return JsValue.Undefined;
             }
-            ActivityView view;
+            PageView pageView;
             try
             {
-                view = VNodeJson.ParseView(Arg(ref c, 4));
+                pageView = VNodeJson.ParsePage(Arg(ref c, 4));
             }
             catch (InvalidDataException e)
             {
                 throw c.TypeError($"Invalid view: {e.Message}");
             }
-            var priority = Arg(ref c, 3) switch
-            {
-                "ambient" => ActivityPriority.Ambient,
-                "active" => ActivityPriority.Active,
-                "critical" => ActivityPriority.Critical,
-                _ => ActivityPriority.Passive,
-            };
-            _activities.Add(activityId);
-            _lastViews[activityKey] = activityArgs;
-            _sink.ActivityUpdated(new ActivitySnapshot(Id, activityId, Arg(ref c, 2), priority, view, ++_sequence));
+            _pages.Add(id);
+            _lastViews[pageKey] = pageArgs;
+            _sink.PageUpdated(new PageSnapshot(Id, id, declared.Title ?? id, pageView.View, ++_sequence, pageView.Status));
             return JsValue.Undefined;
         }, 5);
     }
 
-    /// <summary>
-    /// <c>chip</c> / <c>chipEnd</c>: (op, chip id, instance or "", title or "", view JSON). The chip must be declared;
-    /// an instance only for chips declared <c>multiple</c>.
-    /// </summary>
-    private JsValue Chip(ref JsCallContext c, bool end, string chipId)
-    {
-        if (_package.Manifest.Contributes.Chips.FirstOrDefault(x => x.Id == chipId) is not { } declared)
-        {
-            throw c.TypeError($"Chip '{chipId}' is not declared in plugin.json (contributes.chips).");
-        }
-        var instance = Arg(ref c, 2) is { Length: > 0 } i ? i : null;
-        if (declared.Multiple != (instance is not null))
-        {
-            throw c.TypeError(declared.Multiple
-                ? $"Chip '{chipId}' is declared multiple: use island.chip('{chipId}', instance)."
-                : $"Chip '{chipId}' is not declared multiple: use island.chip('{chipId}').");
-        }
-        if (instance is { Length: > 64 })
-        {
-            throw c.TypeError("A chip instance id is at most 64 characters.");
-        }
-        var key = (chipId, instance);
-        var chipKey = "chip\u0001" + chipId + "\u0001" + instance;
-        if (end)
-        {
-            _lastViews.Remove(chipKey);
-            if (_chips.Remove(key))
-            {
-                _sink.ChipUpdated(new ChipSnapshot(Id, chipId, instance, "", null, ++_sequence));
-            }
-            return JsValue.Undefined;
-        }
-        if (!_chips.Contains(key) && _chips.Count >= MaxChips)
-        {
-            throw c.TypeError($"A plugin may show at most {MaxChips} chips at once.");
-        }
-        var chipArgs = ViewArgs(ref c);
-        if (_chips.Contains(key) && Unchanged(chipKey, chipArgs))
-        {
-            return JsValue.Undefined;
-        }
-        VNode? view;
-        try
-        {
-            view = VNodeJson.ParseView(Arg(ref c, 4)).Expanded;
-        }
-        catch (InvalidDataException e)
-        {
-            throw c.TypeError($"Invalid view: {e.Message}");
-        }
-        _chips.Add(key);
-        _lastViews[chipKey] = chipArgs;
-        var title = Arg(ref c, 3) is { Length: > 0 } t ? t : declared.Title ?? chipId;
-        _sink.ChipUpdated(new ChipSnapshot(Id, chipId, instance, title, view, ++_sequence));
-        return JsValue.Undefined;
-    }
 
-    private const int MaxChips = 32;
-
-    /// <summary>Everything an activity, page or chip update shows: title, priority and view JSON (arguments 2-4).</summary>
+    /// <summary>Everything a home page update shows (arguments 2-4).</summary>
     private static string ViewArgs(ref JsCallContext c) =>
         string.Concat(Arg(ref c, 2), "\u0001", Arg(ref c, 3), "\u0001", Arg(ref c, 4));
 

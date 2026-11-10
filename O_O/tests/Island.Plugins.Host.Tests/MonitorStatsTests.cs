@@ -17,11 +17,11 @@ public sealed partial class PluginHostTests
     public void Without_the_permission_the_system_api_is_absent()
     {
         _permissions = "";
-        _contributes = """{ "pages": [{ "id": "usage", "title": "x" }] }""";
+        _contributes = """{ "home": [{ "id": "usage", "title": "x" }] }""";
         StartWith("""
             import { system, island, ui } from '@island/api';
             export function activate() {
-              island.page('usage').update(ui.text(system === undefined ? 'no-system' : 'has-system'));
+              island.home.page('usage').update(ui.text(system === undefined ? 'no-system' : 'has-system'));
             }
             """, Services);
         WaitForPage(s => Texts(s.View.Expanded).Contains("no-system"), "no system api");

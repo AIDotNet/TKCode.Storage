@@ -1,11 +1,10 @@
 // The `@island/api` module (docs/design/03-plugin-system.md §7). The host loads it before any plugin code; it takes
 // the natives from the prelude's one-shot handoff, and exports a capability only when the plugin holds its permission
 // (otherwise the export is undefined). The host checks permissions again on every call.
-const { natives, internal, permissions, call, apiMajor } = globalThis.__island_handoff();
+const { natives, internal, permissions, call } = globalThis.__island_handoff();
 const host = { activity: natives.activity };
 const has = (p) => permissions.includes(p);
 
-const PRIORITIES = ['ambient', 'passive', 'active', 'critical'];
 
 // ---- views -----------------------------------------------------------------------------------------------------
 // A node is { t, k?, p, c }. Function-valued props become handler references on the way to the host.
@@ -94,153 +93,6 @@ export const ui = Object.freeze({
    *  size (24-160 px; below 56 a compact drawing is used) */
   mascot: (props) => node('mascot', props),
 });
-
-// Replaces function props with { $h: id }, registering the functions for this activity.
-const serialize = (activityId, view, page) => {
-  const fns = [];
-  const refs = [];
-  const walk = (n) => {
-    if (n == null || typeof n !== 'object') return null;
-    const p = {};
-    for (const [name, value] of Object.entries(n.p ?? {})) {
-      if (typeof value === 'function') {
-        const ref = { $h: 0 };
-        fns.push(value);
-        refs.push(ref);
-        p[name] = ref;
-      } else {
-        p[name] = value;
-      }
-    }
-    const out = { t: n.t, p, c: (n.c ?? []).map(walk).filter((x) => x !== null) };
-    if (n.k !== undefined) out.k = n.k;
-    return out;
-  };
-  const shaped = {
-    compact: {
-      leading: walk(view?.compact?.leading),
-      trailing: walk(view?.compact?.trailing),
-    },
-    expanded: walk(view?.expanded),
-  };
-  if (page) shaped.page = page;
-  if (view?.status) shaped.status = walk(view.status);
-  // Every ref is still { $h: 0 } here: the JSON is the view's shape without its handler ids.
-  const ids = internal.registerHandlers(activityId, fns, JSON.stringify(shaped));
-  refs.forEach((ref, i) => { ref.$h = ids[i]; });
-  return JSON.stringify(shaped);
-};
-
-// ---- activities ------------------------------------------------------------------------------------------------
-class Activity {
-  #id;
-  #title;
-  #priority;
-  #ended = false;
-
-  constructor(id, options) {
-    this.#id = id;
-    this.#title = options?.title ?? id;
-    this.#priority = PRIORITIES.includes(options?.priority) ? options.priority : 'passive';
-    this.#page = options?.page == null ? null : String(options.page);
-  }
-
-  #page;
-
-  get id() { return this.#id; }
-
-  /** Changes how strongly the activity claims the island; takes effect with the next update(). */
-  setPriority(priority) {
-    if (!PRIORITIES.includes(priority)) throw new TypeError(`Unknown priority '${priority}'`);
-    this.#priority = priority;
-  }
-
-  /** Shows `view` ({ compact: { leading, trailing }, expanded }) on the island. */
-  update(view) {
-    if (this.#ended) throw new Error(`Activity '${this.#id}' has ended`);
-    host.activity('update', this.#id, this.#title, this.#priority, serialize(this.#id, view, this.#page));
-  }
-
-  /** Removes the activity from the island. */
-  end() {
-    if (this.#ended) return;
-    this.#ended = true;
-    internal.dropHandlers(this.#id);
-    host.activity('end', this.#id, this.#title, this.#priority, '');
-  }
-}
-
-// ---- pages -----------------------------------------------------------------------------------------------------
-class Page {
-  #id;
-
-  constructor(id) { this.#id = id; }
-
-  get id() { return this.#id; }
-
-  /** Shows `view` (a node) as this page; plugin.json must declare the page under contributes.pages.
-   *  options.status: a short node for the island header while this page is on show (e.g. "更新于 2 分钟前").
-   *  Without one the header stays empty. */
-  update(view, options) {
-    const key = `page:${this.#id}`;
-    host.activity('page', this.#id, '', '', serialize(key, { expanded: view, status: options?.status }));
-  }
-}
-const pages = new Map();
-
-// ---- chips -----------------------------------------------------------------------------------------------------
-class Chip {
-  #id;
-  #instance;
-
-  constructor(id, instance) { this.#id = id; this.#instance = instance; }
-
-  /** Shows `view` (a small node: an icon and a short text, at most 96 pt wide) on the collapsed island.
-   *  options: { title } names this instance in the console (e.g. the account). */
-  update(view, options) {
-    host.activity('chip', this.#id, this.#instance, options?.title == null ? '' : String(options.title),
-      serialize(`chip:${this.#id}#${this.#instance}`, { expanded: view }));
-  }
-
-  /** Takes the chip off the island. */
-  remove() {
-    internal.dropHandlers(`chip:${this.#id}#${this.#instance}`);
-    host.activity('chipEnd', this.#id, this.#instance, '', '');
-  }
-}
-
-// ---- satellites ------------------------------------------------------------------------------------------------
-class Satellite {
-  #id;
-  #keys = new Set();
-
-  constructor(id) { this.#id = id; }
-
-  /** Shows a short notice in the small island beside the main one (docs/design/08). plugin.json must declare the satellite
-   *  under contributes.satellites. `view` is a node (use ui.appIcon for the source app's icon); keep it to one or two lines.
-   *  options: { key (a notice with the same key is replaced in place and its timer restarts; default 'default'),
-   *  seconds (1-10, default 4; paused while the pointer is over it; 0: stays until you hide() it, for a running count), badge (a count on its corner), onClick }.
-   *  Promise<boolean>: whether it was accepted (not when over the rate limit of 30 a minute). */
-  show(view, options) {
-    const key = options?.key == null ? 'default' : String(options.key);
-    const body = typeof options?.onClick === 'function' ? ui.item({ onClick: options.onClick }, [view]) : view;
-    const opts = JSON.stringify({ seconds: options?.seconds, badge: options?.badge });
-    this.#keys.add(key);
-    return Promise.resolve(host.activity('satellite', this.#id, key, opts,
-      serialize(`satellite:${this.#id}#${key}`, { expanded: body })) === true);
-  }
-
-  /** Takes the notice `key` away; without a key, all of this satellite's notices. */
-  hide(key) {
-    const k = key == null ? '' : String(key);
-    for (const x of k === '' ? [...this.#keys] : [k]) {
-      internal.dropHandlers(`satellite:${this.#id}#${x}`);
-      this.#keys.delete(x);
-    }
-    host.activity('satelliteEnd', this.#id, k, '', '');
-  }
-}
-const satellites = new Map();
 
 // ---- the 2.0 island API (docs/design/09-island-v2.md §3) --------------------------------------------------------
 
@@ -382,12 +234,14 @@ class HomePage {
 
   /** Shows `view` as this home page; options.status: a short node for the header while it is on show. */
   update(view, options) {
-    host.activity('home', this.#id, '', '', serialize(`home:${this.#id}`, { expanded: view, status: options?.status }));
+    const { walk, done } = walker();
+    host.activity('home', this.#id, '', '', done(`home:${this.#id}`, { expanded: walk(view), status: walk(options?.status) }));
   }
 }
 const homePages = new Map();
 
-const island2 = Object.freeze({
+/** The island (docs/design/09-island-v2.md §3). */
+export const island = Object.freeze({
   /** A live activity declared in plugin.json (contributes.activities), started with `spec`:
    *  { priority, accent, title, open: { app, url }, compact: { leading, trailing }, minimal, expanded: { leading, trailing,
    *  center, bottom } }. options.instance for activities declared multiple. The host decides where it shows. */
@@ -420,45 +274,7 @@ const island2 = Object.freeze({
   }),
 });
 
-const island1 = Object.freeze({
-  /** The satellite `id` declared in plugin.json (contributes.satellites). */
-  satellite: (id) => {
-    id = String(id);
-    if (!satellites.has(id)) satellites.set(id, new Satellite(id));
-    return satellites.get(id);
-  },
-  /** The chip `id` declared in plugin.json (contributes.chips); `instance` only for chips declared multiple. */
-  chip: (id, instance) => new Chip(String(id), instance == null ? '' : String(instance)),
-  /** Takes the collapsed island's place for a few seconds. view: { leading, trailing }; options: { seconds } (1-10, 3). */
-  alert: (view, options) => host.activity('alert', '', '', String(Number(options?.seconds ?? 3)),
-    serialize('alert', { compact: { leading: view?.leading, trailing: view?.trailing } })),
-  /** The page `id` declared in plugin.json (contributes.pages): the plugin's full view in the expanded island. */
-  page: (id) => {
-    id = String(id);
-    if (!pages.has(id)) pages.set(id, new Page(id));
-    return pages.get(id);
-  },
-  /** Offers `impl` (an object of methods) as provider `id` of `iface`; plugin.json must declare it under
-   *  contributes.providers. Other plugins call it through island.providers; it runs here, with our permissions. */
-  provide: (iface, id, impl) => internal.provide(String(iface), String(id), impl),
-  providers: Object.freeze({
-    /** Calls fn() when a provider plugin starts, stops or is granted permissions; returns a function to stop. */
-    onChange: (fn) => internal.onProvidersChanged(fn),
-    /** Promise<[{ id, title, plugin, running }]> */
-    list: (iface) => call('providers.list', { interface: String(iface) }),
-    /** Calls a provider method; arguments and result must be JSON-serialisable. */
-    call: (iface, id, method, ...args) =>
-      call('providers.call', { interface: String(iface), id: String(id), method: String(method), args }),
-  }),
-  activity: Object.freeze({
-    /** Declares an activity. options: { title, priority: 'ambient'|'passive'|'active'|'critical', page }.
-     *  `page`: the page (declared by this plugin) the island opens on while the activity is active or critical. */
-    create: (id, options) => new Activity(String(id), options),
-  }),
-});
 
-/** The island: the 2.0 API for plugins whose plugin.json asks for engines.island ^2.0.0, the 1.x API otherwise. */
-export const island = apiMajor === 2 ? island2 : island1;
 
 // ---- storage (no permission needed; per plugin, persisted, quota-limited) --------------------------------------
 export const storage = Object.freeze({

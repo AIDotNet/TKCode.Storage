@@ -138,7 +138,7 @@ public sealed partial class PluginHostTests
             import { island, ui } from '@island/api';
             const settle = (p) => p.then((v) => ({ ok: v }), (e) => ({ err: e.message }));
             export async function activate() {
-              const act = island.activity.create('r');
+              const act = island.home.page('r');
               for (let i = 0; i < 100; i++) {
                 if ((await island.providers.list('calendar')).some((p) => p.id === '{{providerId}}' && p.running)) break;
                 await new Promise((r) => setTimeout(r, 50));
@@ -153,11 +153,11 @@ public sealed partial class PluginHostTests
                 calendars.push(await settle(island.providers.call('calendar', '{{providerId}}', 'listCalendars', a)));
                 events.push(await settle(island.providers.call('calendar', '{{providerId}}', 'listEvents', a, range)));
               }
-              act.update({ expanded: ui.text(JSON.stringify({ accounts, calendars, events })) });
+              act.update(ui.text(JSON.stringify({ accounts, calendars, events })));
             }
             """);
         _host = new PluginHost(Services, FastRestart);
-        _host.ActivityUpdated += _updates.Enqueue;
+        _host.PageUpdated += MirrorPage;
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
         _host.PluginLog += _logs.Enqueue;
         Assert.Empty(_host.Discover(_root, bundled: true));

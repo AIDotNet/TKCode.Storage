@@ -70,7 +70,7 @@ public sealed partial class PluginHostTests
             {
                 using (var w = new StreamWriter(zip.CreateEntry("plugin.json").Open()))
                 {
-                    w.Write($$"""{ "id": "{{id}}", "name": "{{id}}", "version": "{{version}}", "requires": {{requires}}, "platforms": {{platforms}} }""");
+                    w.Write($$"""{ "id": "{{id}}", "name": "{{id}}", "version": "{{version}}", "engines": { "island": "^2.0.0" }, "requires": {{requires}}, "platforms": {{platforms}} }""");
                 }
                 using (var w = new StreamWriter(zip.CreateEntry("main.js").Open()))
                 {
@@ -129,6 +129,43 @@ public sealed partial class PluginHostTests
             Assert.Equal("0.2.0", update.Version);
             Assert.Equal(["com.example.cal.ics"], (await installer.InstallAsync(update, catalog, CancellationToken.None)).Select(p => p.Id));
             WaitFor(() => _logs.FirstOrDefault(l => l.Message == "com.example.cal.ics 0.2.0 running"), "updated plugin runs");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("O_O_SERVICE_URL", null);
+        }
+    }
+
+    [Fact]
+    public async Task Catalog_plugins_written_for_the_old_island_api_are_replaced_by_their_catalog_version_at_start()
+    {
+        using var service = new FakeCatalogService();
+        service.CatalogJson = FakeCatalogService.Catalog(service.Publish("com.example.calendar", "0.2.0"), service.Publish("com.example.off", "0.2.0"));
+        // Installed from the catalog before island API 2: still on disk, no longer loaded.
+        var user = Path.Combine(_data, "user-plugins");
+        foreach (var id in new[] { "com.example.calendar", "com.example.off", "com.example.gone" })
+        {
+            if (id != "com.example.gone")
+            {
+                Directory.CreateDirectory(Path.Combine(user, id));
+                File.WriteAllText(Path.Combine(user, id, "plugin.json"), $$"""{ "id": "{{id}}", "name": "old", "version": "0.1.0", "main": "main.js" }""");
+                File.WriteAllText(Path.Combine(user, id, "main.js"), "export function activate() {}");
+            }
+        }
+        File.WriteAllText(Path.Combine(_data, "catalog-installs.json"),
+            """{ "com.example.calendar": "0.1.0", "com.example.off": "0.1.0", "com.example.gone": "0.1.0" }""");
+        File.WriteAllText(Path.Combine(_data, "enabled.json"), """{ "com.example.off": false }""");
+        StartDiscovered();
+        Assert.Contains(_host!.Discover(user), p => p.Contains("needs the island API ^1.0.0"));
+        try
+        {
+            var installer = CatalogFor(service);
+            var upgraded = await installer.UpgradeStrandedAsync(CancellationToken.None);
+            Assert.Equal(["com.example.calendar", "com.example.off"], upgraded.Order());             // not the one deleted by hand
+            Assert.Equal("0.2.0", _host.Packages.Single(p => p.Id == "com.example.calendar").Manifest.Version);
+            Assert.True(_host.IsEnabled("com.example.calendar"));
+            Assert.False(_host.IsEnabled("com.example.off"));                                         // off as it was
+            Assert.Empty(await installer.UpgradeStrandedAsync(CancellationToken.None));               // nothing left to do
         }
         finally
         {

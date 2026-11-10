@@ -112,7 +112,7 @@ public sealed partial class PluginHostTests
             const settle = (p) => p.then((v) => ({ ok: v }), (e) => ({ err: e.message }));
             const call = (m, ...a) => island.providers.call('calendar', '{{providerId}}', m, ...a);
             export async function activate() {
-              const act = island.activity.create('r');
+              const act = island.home.page('r');
               for (let i = 0; i < 100; i++) {
                 if ((await island.providers.list('calendar')).some((p) => p.id === '{{providerId}}' && p.running)) break;
                 await new Promise((r) => setTimeout(r, 50));
@@ -131,7 +131,7 @@ public sealed partial class PluginHostTests
               const calendars = await settle(call('listCalendars', accounts[0]));
               const events = await settle(call('listEvents', accounts[0], range));
               const after = await call('status');
-              act.update({ expanded: ui.text(JSON.stringify({ before, after, accounts, calendars, events })) });
+              act.update(ui.text(JSON.stringify({ before, after, accounts, calendars, events })));
             }
             """);
 
@@ -151,8 +151,6 @@ public sealed partial class PluginHostTests
     private void StartOAuthHost(PluginServices services)
     {
         _host = new PluginHost(services, FastRestart);
-        _host.ActivityUpdated += _updates.Enqueue;
-        _host.ChipUpdated += _chipViews.Enqueue;
         SubscribeLive(_host);
         _host.PageUpdated += MirrorPage;
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
@@ -346,14 +344,14 @@ public sealed partial class PluginHostTests
         WritePluginWithManifest("test.consumer", "", "", """
             import { island, ui } from '@island/api';
             export async function activate() {
-              const act = island.activity.create('r');
+              const act = island.home.page('r');
               for (let i = 0; i < 100; i++) {
                 if ((await island.providers.list('calendar')).some((p) => p.id === 'feishu' && p.running)) break;
                 await new Promise((r) => setTimeout(r, 50));
               }
               const status = await island.providers.call('calendar', 'feishu', 'status');
               const err = await island.providers.call('calendar', 'feishu', 'signIn').then(() => 'started', (e) => e.message);
-              act.update({ expanded: ui.text(JSON.stringify({ status, err })) });
+              act.update(ui.text(JSON.stringify({ status, err })));
             }
             """);
         StartOAuthHost(OAuthServices(api));

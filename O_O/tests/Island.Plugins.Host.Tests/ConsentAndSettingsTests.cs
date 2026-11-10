@@ -10,15 +10,13 @@ public sealed partial class PluginHostTests
         var dir = WritePlugin("test.plugin", js);
         if (settingsSchema is not null)
         {
-            var manifest = File.ReadAllText(Path.Combine(dir, "plugin.json"));
-            File.WriteAllText(Path.Combine(dir, "plugin.json"),
-                manifest.TrimEnd().TrimEnd('}') + $$""", "contributes": { "settings": {{settingsSchema}} } }""");
+            var path = Path.Combine(dir, "plugin.json");
+            var manifest = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+            manifest["contributes"]!["settings"] = System.Text.Json.Nodes.JsonNode.Parse(settingsSchema);
+            File.WriteAllText(path, manifest.ToJsonString());
         }
         _host = new PluginHost(Services, FastRestart);
-        _host.ActivityUpdated += _updates.Enqueue;
         _host.PageUpdated += MirrorPage;
-        _host.ChipUpdated += _chipViews.Enqueue;
-        _host.AlertRaised += _alertsSeen.Enqueue;
         SubscribeLive(_host);
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
         _host.PluginLog += _logs.Enqueue;
@@ -31,8 +29,8 @@ public sealed partial class PluginHostTests
     private const string ShowGranted = """
         import { island, ui, granted, secrets, http } from '@island/api';
         export function activate() {
-          island.activity.create('a').update({ expanded: ui.text(
-            `granted=${[...granted].sort().join('+')} secrets=${typeof secrets} http=${typeof http}`) });
+          island.home.page('a').update(ui.text(
+            `granted=${[...granted].sort().join('+')} secrets=${typeof secrets} http=${typeof http}`));
         }
         """;
 
@@ -70,10 +68,7 @@ public sealed partial class PluginHostTests
         _updates.Clear();
         _states.Clear();
         _host = new PluginHost(Services, FastRestart);
-        _host.ActivityUpdated += _updates.Enqueue;
         _host.PageUpdated += MirrorPage;
-        _host.ChipUpdated += _chipViews.Enqueue;
-        _host.AlertRaised += _alertsSeen.Enqueue;
         SubscribeLive(_host);
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
         _host.Discover(_root, bundled: false);
@@ -111,9 +106,9 @@ public sealed partial class PluginHostTests
         var host = StartUserPlugin("""
             import { island, ui, settings } from '@island/api';
             export async function activate() {
-              const act = island.activity.create('a');
-              const show = async (why) => act.update({ expanded: ui.text(
-                `${why} city=${settings.get('city')} every=${settings.get('every')} key=${await settings.getSecret('apiKey')} all=${JSON.stringify(settings.all())}`) });
+              const act = island.home.page('a');
+              const show = async (why) => act.update(ui.text(
+                `${why} city=${settings.get('city')} every=${settings.get('every')} key=${await settings.getSecret('apiKey')} all=${JSON.stringify(settings.all())}`));
               settings.onChange((key) => show('changed:' + key));
               await show('start');
             }
@@ -144,13 +139,15 @@ public sealed partial class PluginHostTests
     public void An_invalid_settings_schema_rejects_the_plugin()
     {
         var dir = WritePlugin("test.plugin", "export function activate() {}");
-        var manifest = File.ReadAllText(Path.Combine(dir, "plugin.json"));
-        File.WriteAllText(Path.Combine(dir, "plugin.json"), manifest.TrimEnd().TrimEnd('}') + """
-            , "contributes": { "settings": { "properties": {
+        var path = Path.Combine(dir, "plugin.json");
+        var manifest = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        manifest["contributes"]!["settings"] = System.Text.Json.Nodes.JsonNode.Parse("""
+            { "properties": {
                 "a": { "type": "date" },
                 "b": { "type": "integer", "default": "ten" },
-                "c": { "type": "string", "format": "password", "default": "hunter2" } } } } }
+                "c": { "type": "string", "format": "password", "default": "hunter2" } } }
             """);
+        File.WriteAllText(path, manifest.ToJsonString());
         _host = new PluginHost(Services, FastRestart);
         var problem = Assert.Single(_host.Discover(_root));
         Assert.Contains("unsupported type 'date'", problem);

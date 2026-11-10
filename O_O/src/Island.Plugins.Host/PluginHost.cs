@@ -27,17 +27,8 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
         _grants = new PermissionGrantStore(Path.Combine(services.DataDirectory, "grants.json"));
     }
 
-    public event Action<ActivitySnapshot>? ActivityUpdated;
-    public event Action<string, string>? ActivityEnded;
     public event Action<PageSnapshot>? PageUpdated;
     public event Action<string, string>? PageEnded;
-
-    /// <summary>A chip changed; a snapshot without a view means it was removed.</summary>
-    public event Action<ChipSnapshot>? ChipUpdated;
-    public event Action<AlertSnapshot>? AlertRaised;
-
-    /// <summary>A satellite notice appeared or was taken away (a snapshot without a view).</summary>
-    public event Action<SatelliteSnapshot>? SatelliteUpdated;
 
     /// <summary>What plugins may see of other apps' notifications, edited in the console.</summary>
     public NotificationPreferences NotificationPreferences => _services.NotificationPrefs;
@@ -53,10 +44,6 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
             ? _appIcons.GetOrAdd(appId, id => { try { return l.GetAppIcon(id, 64); } catch { return null; } })
             : null;
 
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ChipSnapshot> _liveChips = new();
-
-    /// <summary>The chips plugins show right now (for the console, which lists instances of multiple chips).</summary>
-    public IReadOnlyList<ChipSnapshot> LiveChips => [.. _liveChips.Values];
     public event Action<string, PluginState, string?>? PluginStateChanged;
     public event Action<PluginLogEntry>? PluginLog;
 
@@ -521,7 +508,6 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
     private PluginPackage Package(string pluginId) =>
         _packages.FirstOrDefault(p => p.Id == pluginId) ?? throw new ArgumentException($"Unknown plugin '{pluginId}'.");
 
-    void IPluginRunnerSink.ActivityUpdated(ActivitySnapshot snapshot) => ActivityUpdated?.Invoke(snapshot);
 
     /// <summary>How long a provider may take to answer one call.</summary>
     public static readonly TimeSpan ProviderTimeout = TimeSpan.FromSeconds(60);
@@ -560,7 +546,6 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
         return System.Text.Encoding.UTF8.GetString(buffer.ToArray());
     }
 
-    void IPluginRunnerSink.ActivityEnded(string pluginId, string activityId) => ActivityEnded?.Invoke(pluginId, activityId);
 
     void IPluginRunnerSink.PageUpdated(PageSnapshot snapshot)
     {
@@ -579,22 +564,6 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
     /// <summary>The latest view of every page plugins show now (for views that start listening late).</summary>
     public IReadOnlyList<PageSnapshot> LivePages => [.. _livePages.Values];
 
-    void IPluginRunnerSink.ChipUpdated(ChipSnapshot snapshot)
-    {
-        if (snapshot.View is null)
-        {
-            _liveChips.TryRemove(snapshot.Key, out _);
-        }
-        else
-        {
-            _liveChips[snapshot.Key] = snapshot;
-        }
-        ChipUpdated?.Invoke(snapshot);
-    }
-
-    void IPluginRunnerSink.Alert(AlertSnapshot alert) => AlertRaised?.Invoke(alert);
-
-    void IPluginRunnerSink.Satellite(SatelliteSnapshot snapshot) => SatelliteUpdated?.Invoke(snapshot);
 
     // ---- the 2.0 island API (docs/design/09-island-v2.md) ------------------------------------------------------
 

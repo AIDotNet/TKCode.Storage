@@ -186,14 +186,14 @@ public sealed partial class PluginHostTests
             import { island, ui, http, localAuth } from '@island/api';
             const settle = (p) => p.then((v) => 'ok:' + v, (e) => 'err:' + e.message);
             export async function activate() {
-              const act = island.activity.create('a');
+              const act = island.home.page('a');
               const [account] = await localAuth.accounts('codex-cli');
               const keys = Object.keys(account).sort().join(',');
               const who = await settle(http.fetch('{{serverUrl}}whoami', { auth: account }).then((r) => r.text()));
               const anon = await settle(http.fetch('{{serverUrl}}whoami').then((r) => r.text()));
               const hop = await settle(http.fetch('{{serverUrl}}redirect-local', { auth: account }));
               const forged = await settle(http.fetch('{{serverUrl}}whoami', { auth: 'codex-cli:made-up' }));
-              act.update({ expanded: ui.text([account.label, keys, who, anon, hop, forged].join('\n')) });
+              act.update(ui.text([account.label, keys, who, anon, hop, forged].join('\n')));
             }
             """, Services with { LocalAuthSources = [new FakeSource(expires)] });
         WaitForState(PluginState.AwaitingConsent);       // local logins always ask, even for bundled plugins
@@ -227,7 +227,7 @@ public sealed partial class PluginHostTests
     {
         Start("""
             import { island, ui, localAuth } from '@island/api';
-            export function activate() { island.activity.create('a').update({ expanded: ui.text(typeof localAuth) }); }
+            export function activate() { island.home.page('a').update(ui.text(typeof localAuth)); }
             """);
         Assert.Equal("undefined", Shown());
 

@@ -54,6 +54,51 @@ public sealed class CatalogInstaller(PluginHost host, string userDirectory, Http
             offered > have)];
 
     /// <summary>
+    /// Catalog plugins installed here that this O_O no longer loads — written for an older island API
+    /// (docs/design/09-island-v2.md) — are replaced by their catalog version, switched on or off as before. Called at
+    /// start; a plugin the catalog does not offer, or one whose folder the user deleted, is left alone.
+    /// </summary>
+    /// <returns>The ids updated.</returns>
+    /// <exception cref="PluginCapabilityException">The catalog could not be read (try again at the next start).</exception>
+    public async Task<IReadOnlyList<string>> UpgradeStrandedAsync(CancellationToken ct)
+    {
+        string[] stranded;
+        lock (_gate)
+        {
+            stranded = [.. LoadOrigins().Keys.Where(id =>
+                host.Packages.All(p => p.Id != id) && Directory.Exists(Path.Combine(userDirectory, id)))];
+        }
+        if (stranded.Length == 0)
+        {
+            return [];
+        }
+        var catalog = await FetchAsync(ct);
+        var upgraded = new List<string>();
+        foreach (var id in stranded)
+        {
+            if (catalog.Plugins.FirstOrDefault(p => p.Id == id) is not { } offered)
+            {
+                continue;
+            }
+            var choice = host.HasChoice(id) ? host.IsEnabled(id) : (bool?)null;
+            try
+            {
+                await InstallAsync(offered, catalog, ct);
+            }
+            catch (PluginCapabilityException)
+            {
+                continue; // tried again at the next start
+            }
+            if (choice == false)
+            {
+                host.SetEnabled(id, false); // installing switches it on; it was off
+            }
+            upgraded.Add(id);
+        }
+        return upgraded;
+    }
+
+    /// <summary>
     /// Installs <paramref name="plugin"/> (or updates it), after what it requires that is not installed yet.
     /// </summary>
     /// <returns>The packages installed, requirements first.</returns>

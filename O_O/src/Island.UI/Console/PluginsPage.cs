@@ -162,12 +162,6 @@ public sealed partial class PluginsPage : Panel
             body.Children.Add(new NotificationsPanel(_host));
         }
 
-        if (package.Manifest.Contributes.Satellites.Count > 0 && SatellitePanel.Preferences is { } satellitePrefs)
-        {
-            body.Children.Add(SectionLabel("消息小岛"));
-            body.Children.Add(new SatellitePanel(package, satellitePrefs));
-        }
-
         var settings = _host.GetSettings(package.Id);
         if (settings.Definitions.Count > 0)
         {
