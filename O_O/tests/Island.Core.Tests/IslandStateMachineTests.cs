@@ -26,6 +26,23 @@ public class IslandStateMachineTests
     }
 
     [Fact]
+    public void Without_hover_expanding_only_a_click_opens_and_leaving_still_collapses()
+    {
+        var sm = new IslandStateMachine(new HoverOptions()) { HoverExpands = false };
+        sm.SetRestingState(IslandState.Compact);
+
+        sm.Update(true, Ms(0));
+        sm.Update(true, Ms(2000));
+        Assert.Equal(IslandState.Compact, sm.State);
+
+        sm.Click();
+        Assert.Equal(IslandState.Expanded, sm.State);
+        sm.Update(false, Ms(2100));
+        sm.Update(false, Ms(3000));
+        Assert.Equal(IslandState.Compact, sm.State);
+    }
+
+    [Fact]
     public void A_brief_pass_over_the_island_does_not_expand_it()
     {
         var sm = new IslandStateMachine(new HoverOptions());

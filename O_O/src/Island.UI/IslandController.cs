@@ -164,6 +164,17 @@ public sealed class IslandController : IDisposable
         window.ScalingChanged += (_, _) => _bridge?.UpdateScale(window.RenderScaling);
     }
 
+    /// <summary>
+    /// Whether resting the pointer on the island opens it, as in 1.x. Off by default (docs/design/09-island-v2.md §2.2):
+    /// hovering makes the island a little larger and a click opens it.
+    /// </summary>
+    public bool HoverToExpand { get; set; }
+
+    /// <summary>How much the resting island grows under the pointer, in island units.</summary>
+    private const double HoverGrow = 4;
+
+    private bool _hovered;
+
     private static readonly TimeSpan WheelPause = TimeSpan.FromMilliseconds(350);
     private const double WheelStep = 2;
     private TimeSpan _wheelAt;
@@ -815,6 +826,21 @@ public sealed class IslandController : IDisposable
         }
 
         var frame = IslandLayout.Compute(_topology, Placement, dock, state, metrics, offset, islandScale);
+        if (_hovered && state != IslandState.Expanded && !_states.HoverExpands)
+        {
+            // Wider either side and longer away from the edge it hangs from.
+            var g = HoverGrow * islandScale;
+            var r = frame.Surface;
+            frame = frame with
+            {
+                Surface = dock switch
+                {
+                    IslandDock.Left => new RectD(r.X, r.Y - g, r.Width + g, r.Height + 2 * g),
+                    IslandDock.Right => new RectD(r.X - g, r.Y - g, r.Width + g, r.Height + 2 * g),
+                    _ => new RectD(r.X - g, r.Y, r.Width + 2 * g, r.Height + g),
+                },
+            };
+        }
         var previous = _frame;
         _frame = frame;
 
@@ -1041,6 +1067,16 @@ public sealed class IslandController : IDisposable
         // but only the shape itself counts as hovering the island.
         _bridge.OnPointerSample(_region.Contains(p));
         TrackHotkeyHold(onShape);
+        // A thin line is too small to aim a click at: it still opens on hover.
+        _states.HoverExpands = HoverToExpand || _thinLine;
+        if (onShape != _hovered)
+        {
+            _hovered = onShape;
+            if (_states.State != IslandState.Expanded && !_states.HoverExpands)
+            {
+                ApplyLayout(); // the hover hint: the resting island grows a little
+            }
+        }
         _states.Update(onShape, _clock.Elapsed);
     }
 

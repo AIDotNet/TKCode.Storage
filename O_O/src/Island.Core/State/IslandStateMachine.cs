@@ -25,6 +25,12 @@ public sealed class IslandStateMachine(HoverOptions options)
 
     public IslandState State { get; private set; } = IslandState.Idle;
 
+    /// <summary>
+    /// Whether resting the pointer on the island opens it (after <see cref="HoverOptions.ExpandDelay"/>). Off in the 2.0
+    /// island (docs/design/09-island-v2.md §2.2), where hovering only hints and a click opens.
+    /// </summary>
+    public bool HoverExpands { get; set; } = true;
+
     public event Action<IslandState>? StateChanged;
 
     public void SetRestingState(IslandState state)
@@ -47,7 +53,7 @@ public sealed class IslandStateMachine(HoverOptions options)
         {
             _outsideSince = null;
             _insideSince ??= now;
-            if (State != IslandState.Expanded && options.ExpandDelay is { } delay && now - _insideSince >= delay)
+            if (State != IslandState.Expanded && HoverExpands && options.ExpandDelay is { } delay && now - _insideSince >= delay)
             {
                 Set(IslandState.Expanded);
             }
