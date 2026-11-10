@@ -1,5 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
@@ -18,7 +20,14 @@ namespace Island.UI.Plugins;
 /// <param name="Type">The Arc (or Avalonia) control.</param>
 /// <param name="Props">Properties a plugin may set (case-sensitive CLR names).</param>
 /// <param name="ValueProp">The property that reports the user's change as <c>onChange(value)</c>; null for display-only controls.</param>
-internal sealed record ArcControlSpec(string Name, Type Type, string[] Props, string? ValueProp = null)
+/// <param name="Extra">Props that are not plain values: charts take their data as one JSON string (<c>data</c>).</param>
+internal sealed record ArcControlSpec(
+    string Name,
+    [property: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)]
+    Type Type,
+    string[] Props,
+    string? ValueProp = null,
+    Action<Control, VNode>? Extra = null)
 {
     public Control Create() => (Control)Activator.CreateInstance(Type)!;
 }
@@ -37,9 +46,78 @@ internal static class ArcRegistry
         new("NumberField", typeof(NumberField), ["Value", "Minimum", "Maximum", "Step", "IsEnabled"], "Value"),
         new("Pagination", typeof(Pagination), ["CurrentPage", "PageCount", "ShowBoundaryPages", "Label"], "CurrentPage"),
         new("Skeleton", typeof(Skeleton), ["Lines", "IsAvatarVisible", "IsLoading", "Label"]),
+        new("LineChart", typeof(LineChart), ChartProps("ShowLegend", "ShowGrid", "ShowXAxis", "ShowYAxis", "YMinimum", "YMaximum"), Extra: (c, n) => ApplyChartData((ChartBase)c, n, slices: false)),
+        new("BarChart", typeof(BarChart), ChartProps("Period", "ValueLabel", "ShowAverage", "ShowGrid", "ShowXAxis", "ShowYAxis", "YMaximum"), Extra: (c, n) => ApplyChartData((ChartBase)c, n, slices: false)),
+        new("DonutChart", typeof(DonutChart), ChartProps("TotalLabel", "Diameter", "RingThickness", "ShowLegend"), Extra: (c, n) => ApplyChartData((ChartBase)c, n, slices: true)),
+        new("Sparkline", typeof(Sparkline), ChartProps("Value", "Change", "Tone", "ShowArea", "DrawingWidth", "DrawingHeight"), Extra: (c, n) => ApplyChartData((ChartBase)c, n, slices: false)),
         new("Slider", typeof(TKCode.Arc.Slider), ["Label", "Minimum", "Maximum", "Value", "IsValueVisible", "IsEnabled"], "Value"),
         new("Switch", typeof(TKCode.Arc.Switch), ["IsChecked", "IsEnabled"], "IsChecked"),
     ];
+
+    private static string[] ChartProps(params string[] own) => ["Label", "Unit", "PlotHeight", .. own];
+
+    private static readonly ConditionalWeakTable<Control, string> ChartData = new();
+
+    /// <summary>
+    /// A chart's data is one JSON string, <c>data</c>: <c>{ "labels": ["Mon", …], "series": [{ "name": "CPU", "values": [1, 2, …],
+    /// "color": "#RRGGBB" }] }</c>; a donut takes <c>{ "labels": […], "values": […] }</c>. It is applied again only when it changed.
+    /// </summary>
+    private static void ApplyChartData(ChartBase chart, VNode node, bool slices)
+    {
+        if (node.GetString("data") is not { } json || (ChartData.TryGetValue(chart, out var last) && last == json))
+        {
+            return;
+        }
+        ChartData.AddOrUpdate(chart, json);
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            var labels = root.TryGetProperty("labels", out var l) && l.ValueKind == JsonValueKind.Array
+                ? l.EnumerateArray().Select(x => x.ToString()).ToArray()
+                : [];
+            chart.Series.Clear();
+            if (slices)
+            {
+                var values = Doubles(root, "values");
+                chart.ItemsSource = labels.Select((label, i) => new Slice(label, i < values.Length ? values[i] : 0)).ToArray();
+                chart.XSelector = o => ((Slice)o).Label;
+                chart.YSelector = o => ((Slice)o).Value;
+                return;
+            }
+            chart.ItemsSource = labels;
+            chart.XSelector = o => o;
+            if (root.TryGetProperty("series", out var list) && list.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var one in list.EnumerateArray().Take(8))
+                {
+                    var series = new ChartSeries { Name = one.TryGetProperty("name", out var nm) ? nm.ToString() : null, Values = Doubles(one, "values") };
+                    if (one.TryGetProperty("color", out var cc) && cc.ValueKind == JsonValueKind.String && Color.TryParse(cc.GetString(), out var color))
+                    {
+                        series.Color = color;
+                    }
+                    chart.Series.Add(series);
+                }
+            }
+            else
+            {
+                chart.Series.Add(new ChartSeries { Values = Doubles(root, "values") });
+            }
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException)
+        {
+            // Bad data draws an empty chart rather than failing the page.
+            chart.Series.Clear();
+            chart.ItemsSource = Array.Empty<string>();
+        }
+    }
+
+    private sealed record Slice(string Label, double Value);
+
+    private static double[] Doubles(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Array
+            ? v.EnumerateArray().Take(1000).Select(x => x.ValueKind == JsonValueKind.Number ? x.GetDouble() : 0).ToArray()
+            : [];
 
     private static readonly Dictionary<string, ArcControlSpec> ByName = Specs.ToDictionary(s => s.Name, StringComparer.Ordinal);
 
@@ -78,22 +156,27 @@ internal static class ArcRegistry
                 info.SetValue(control, value);
             }
         }
+        spec.Extra?.Invoke(control, node);
     }
 
-    internal static PropertyInfo? FindProperty(Type type, string name) =>
+    internal static PropertyInfo? FindProperty(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type type, string name) =>
         type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
 
     /// <summary>JS-style prop name for a CLR property: <c>IsOpen</c> → <c>isOpen</c>.</summary>
     internal static string CamelCase(string name) => char.ToLowerInvariant(name[0]) + name[1..];
 
+    // Built by hand or through the source-generated context: reflection-based serialisation is not AOT-safe.
+    private static string Quote(string s) => JsonSerializer.Serialize(s, UiJson.Default.String);
+
     private static string ToJson(object? value) => value switch
     {
         null => "null",
-        DateOnly d => JsonSerializer.Serialize(d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+        DateOnly d => Quote(d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
         bool b => b ? "true" : "false",
-        Enum e => JsonSerializer.Serialize(e.ToString()),
-        string s => JsonSerializer.Serialize(s),
-        IConvertible c => JsonSerializer.Serialize(Convert.ToDouble(c, CultureInfo.InvariantCulture)),
+        Enum e => Quote(e.ToString()),
+        string s => Quote(s),
+        IConvertible c => Convert.ToDouble(c, CultureInfo.InvariantCulture).ToString("R", CultureInfo.InvariantCulture),
         _ => "null",
     };
 
