@@ -152,7 +152,7 @@ public class App(IIslandPlatform platform) : Application
                 UserPluginDirectory = PluginDirectories[0],
                 SystemCalendar = OperatingSystem.IsMacOS() ? new Island.Platform.MacOS.MacCalendar() : null,
                 // Other apps' notifications for the notifications.listen permission (docs/design/08).
-                NotificationListener = OperatingSystem.IsMacOS() ? (Environment.GetEnvironmentVariable("ZZ_FAKE") == "1" ? new ZzDebugFakeNotify(new Island.Platform.MacOS.MacNotificationListener()) : new Island.Platform.MacOS.MacNotificationListener())
+                NotificationListener = OperatingSystem.IsMacOS() ? new Island.Platform.MacOS.MacNotificationListener()
                     : OperatingSystem.IsWindows() ? new Island.Platform.Windows.WindowsNotificationListener()
                     : OperatingSystem.IsLinux() ? new Island.Platform.Linux.LinuxNotificationListener()
                     : null,

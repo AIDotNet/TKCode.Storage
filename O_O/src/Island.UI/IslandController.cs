@@ -88,7 +88,6 @@ public sealed class IslandController : IDisposable
                 e.Handled = true;
                 return;
             }
-            System.Console.Error.WriteLine("[zz] island surface pressed"); // TEMP
             _states.Click();
         };
         view.Surface.PointerMoved += (_, e) => Drag(e);

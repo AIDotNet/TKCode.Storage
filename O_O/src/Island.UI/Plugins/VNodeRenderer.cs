@@ -129,7 +129,6 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
 
     private void Fire(Control control, string handler, string? payloadJson)
     {
-        System.Console.Error.WriteLine($"[zz] fire {handler} known={_nodes.TryGetValue(control, out var zz)} handlers={(zz is null ? "-" : string.Join(",", zz.Handlers.Keys))}"); // TEMP
         if (_nodes.TryGetValue(control, out var node) && node.Handlers.TryGetValue(handler, out var id))
         {
             dispatch(id, payloadJson);

@@ -95,7 +95,6 @@ public sealed class MacIslandPlatform : IIslandPlatform
                 return;
             }
             _ignoring = ignore;
-            System.Console.Error.WriteLine($"[zz] island ignoresMouse={ignore}"); // TEMP
             ObjC.SendVoid(window, ObjC.Sel("setIgnoresMouseEvents:"), ignore ? (byte)1 : (byte)0);
         }
 

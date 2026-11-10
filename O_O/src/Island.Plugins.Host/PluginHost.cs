@@ -436,7 +436,6 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
 
     public void Dispatch(string pluginId, int handlerId, string? payloadJson = null)
     {
-        Console.Error.WriteLine($"[zz] dispatch {pluginId} {handlerId}"); // TEMP
         if (_runners.TryGetValue(pluginId, out var runner))
         {
             runner.Dispatch(handlerId, payloadJson);
