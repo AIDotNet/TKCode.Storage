@@ -49,7 +49,14 @@ internal static class ConsoleRenderer
                 new Island.Core.Input.HotkeyStore(Path.Combine(data, "hotkeys.json"), OperatingSystem.IsMacOS()),
                 new Island.Platform.NullGlobalHotkeys(), new Dictionary<string, Action>()),
         };
-        view.ShowPage(page);
+        if (page == "market")
+        {
+            view.ShowPlugin("+add"); // 插件市场
+        }
+        else
+        {
+            view.ShowPage(page);
+        }
 
         Control root = view;
         if (Environment.GetEnvironmentVariable("O_O_RENDER_GLASS") == "1")

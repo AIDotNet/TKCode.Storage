@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Island.Core.Updates;
 using Island.Plugins.Host;
@@ -22,7 +23,7 @@ public sealed partial class PluginsPage
     private bool _marketOpen;
     private string _category = PluginCategories.All;
     private string _query = "";
-    private readonly WrapPanel _marketGrid = new() { Orientation = Orientation.Horizontal, ItemSpacing = 12, LineSpacing = 12 };
+    private readonly Island.UI.Controls.ColumnsPanel _marketGrid = new() { MinItemWidth = 280, Spacing = 12 };
     private readonly StackPanel _catalogStatus = new() { Spacing = 8 };
     private bool _catalogLoading;
     private string? _catalogError;
@@ -57,6 +58,57 @@ public sealed partial class PluginsPage
     {
         _marketOpen = false;
         Rebuild();
+    }
+
+    /// <summary>
+    /// A market card: icon, name and where it comes from, with its button on the right; two lines of description; what it
+    /// works with on the last line. Every card in a row is as tall as the others (the description never runs over).
+    /// </summary>
+    private static Control MarketCard(MarketItem item)
+    {
+        item.Icon.VerticalAlignment = VerticalAlignment.Top;
+        item.Icon.Margin = new Thickness(0, 2, 0, 0);
+        item.Action.VerticalAlignment = VerticalAlignment.Top;
+        var name = Text(item.Name, ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, FontWeight.SemiBold);
+        var meta = Text(item.Meta, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary);
+        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 12 };
+        var titles = new StackPanel { Spacing = 2, Children = { name, meta } };
+        Grid.SetColumn(titles, 1);
+        Grid.SetColumn(item.Action, 2);
+        head.Children.Add(item.Icon);
+        head.Children.Add(titles);
+        head.Children.Add(item.Action);
+
+        var description = Text(item.Description ?? "", ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true);
+        description.MaxLines = 2;
+        description.TextTrimming = TextTrimming.CharacterEllipsis;
+        description.MinHeight = 34; // two lines' room, so cards line up whatever their text
+        var body = new StackPanel { Spacing = 10, Children = { head, description } };
+        if (item.Note is { } note)
+        {
+            var noteText = Text(note, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextMuted);
+            var noteRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children =
+                {
+                    new TKCode.Arc.Icons.Lucide.LucideIcon { Kind = TKCode.Arc.Icons.Lucide.LucideIconKind.Link2, Size = 12, VerticalAlignment = VerticalAlignment.Center },
+                    noteText,
+                },
+            };
+            ToolTip.SetTip(noteRow, note);
+            body.Children.Add(noteRow);
+        }
+        ToolTip.SetTip(description, item.Description);
+
+        var card = new Border { BorderThickness = new Thickness(1), Padding = new Thickness(16, 14), Child = body };
+        card.Bind(Border.BackgroundProperty, card.GetResourceObservable(ConsoleView.GroupBrushKey));
+        ArcTokens.Bind(card, Border.BorderBrushProperty, ArcDesignTokenKind.BorderSubtle);
+        ArcTokens.BindCornerRadius(card, ArcDesignTokenKind.RadiusPanel);
+        card.PointerEntered += (_, _) => ArcTokens.Bind(card, Border.BorderBrushProperty, ArcDesignTokenKind.Border);
+        card.PointerExited += (_, _) => ArcTokens.Bind(card, Border.BorderBrushProperty, ArcDesignTokenKind.BorderSubtle);
+        return card;
     }
 
     private void BuildMarket()
@@ -153,17 +205,7 @@ public sealed partial class PluginsPage
             .ToList();
         foreach (var item in items)
         {
-            _marketGrid.Children.Add(new Card
-            {
-                Width = CardWidth,
-                Height = CardHeight,
-                Title = item.Name,
-                Description = item.Description,
-                Avatar = item.Icon,
-                Meta = item.Meta,
-                Status = item.Note,
-                Action = item.Action,
-            });
+            _marketGrid.Children.Add(MarketCard(item));
         }
         if (items.Count == 0 && !_catalogLoading)
         {
