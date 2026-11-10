@@ -52,6 +52,7 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
     {
         "stack" => new Grid(),
         "row" => new Grid(),
+        "grid" => new Grid(),
         "item" => Wire(new Island.UI.Controls.PressableRow(), static (r, p) => p.Click += () => r.Fire(p, "onClick", null)),
         "card" => Wire(new Island.UI.Controls.PressableRow { IsCard = true }, static (r, p) => p.Click += () => r.Fire(p, "onClick", null)),
         "wrap" => new WrapPanel { Orientation = Orientation.Horizontal },
@@ -141,6 +142,9 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
         {
             switch (control, node.Type)
             {
+                case (Grid grid, "grid"):
+                    ApplyGrid(grid, node);
+                    break;
                 case (Grid grid, "stack" or "row"):
                     ApplyLayout(grid, node, horizontal: node.Type == "row");
                     break;
@@ -269,25 +273,7 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
             ArcTokens.Bind(grid, Grid.RowSpacingProperty, gap);
         }
 
-        // Reconcile children: keyed children match by key, the others by position and type.
-        var old = grid.Children.ToList();
-        var byKey = new Dictionary<string, Control>(StringComparer.Ordinal);
-        foreach (var c in old)
-        {
-            if (_nodes.TryGetValue(c, out var n) && n.Key is not null)
-            {
-                byKey.TryAdd(n.Key, c);
-            }
-        }
-        var next = new List<Control>(node.Children.Count);
-        for (var i = 0; i < node.Children.Count; i++)
-        {
-            var child = node.Children[i];
-            Control? candidate = child.Key is not null
-                ? byKey.GetValueOrDefault(child.Key)
-                : i < old.Count && _nodes.TryGetValue(old[i], out var n) && n.Key is null ? old[i] : null;
-            next.Add(Render(child, candidate)!);
-        }
+        var (old, next) = ReconcileChildren(grid, node);
 
         // Spacers take the free space; everything else sizes to content. Rows centre their children vertically.
         // Spacers, and children marked grow (e.g. a text that should be cut with "…" rather than push others out),
@@ -326,6 +312,85 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
                 // A page indicator is centred under the content whatever the stack's alignment.
                 c.HorizontalAlignment = node.Children[i].Type == "dots" ? HorizontalAlignment.Center : ParseHorizontal(align);
             }
+        }
+        if (!old.SequenceEqual(next))
+        {
+            grid.Children.Clear();
+            grid.Children.AddRange(next);
+        }
+    }
+
+    /// <summary>Renders the node's children into controls, reusing existing ones (keyed by key, others by position and type).</summary>
+    private (List<Control> Old, List<Control> Next) ReconcileChildren(Grid grid, VNode node)
+    {
+        // Reconcile children: keyed children match by key, the others by position and type.
+        var old = grid.Children.ToList();
+        var byKey = new Dictionary<string, Control>(StringComparer.Ordinal);
+        foreach (var c in old)
+        {
+            if (_nodes.TryGetValue(c, out var n) && n.Key is not null)
+            {
+                byKey.TryAdd(n.Key, c);
+            }
+        }
+        var next = new List<Control>(node.Children.Count);
+        for (var i = 0; i < node.Children.Count; i++)
+        {
+            var child = node.Children[i];
+            Control? candidate = child.Key is not null
+                ? byKey.GetValueOrDefault(child.Key)
+                : i < old.Count && _nodes.TryGetValue(old[i], out var n) && n.Key is null ? old[i] : null;
+            next.Add(Render(child, candidate)!);
+        }
+        return (old, next);
+    }
+
+    /// <summary>A grid of equal columns (<c>columns</c>, 1–6): children fill it row by row; a child with <c>span</c> takes several columns.</summary>
+    private void ApplyGrid(Grid grid, VNode node)
+    {
+        var columns = (int)Math.Clamp(node.GetNumber("columns") ?? 2, 1, 6);
+        var gap = GapToken(node.GetString("gap"));
+        ArcTokens.Bind(grid, Grid.ColumnSpacingProperty, gap);
+        ArcTokens.Bind(grid, Grid.RowSpacingProperty, gap);
+        var (old, next) = ReconcileChildren(grid, node);
+
+        var placements = new List<(int Row, int Column, int Span)>();
+        int row = 0, col = 0;
+        foreach (var child in node.Children)
+        {
+            var span = (int)Math.Clamp(child.GetNumber("span") ?? 1, 1, columns);
+            if (col + span > columns)
+            {
+                row++;
+                col = 0;
+            }
+            placements.Add((row, col, span));
+            col += span;
+            if (col >= columns)
+            {
+                row++;
+                col = 0;
+            }
+        }
+        var rows = placements.Count == 0 ? 1 : placements.Max(p => p.Row) + 1;
+        var columnDefinitions = string.Join(",", Enumerable.Repeat("*", columns));
+        var rowDefinitions = string.Join(",", Enumerable.Repeat("Auto", rows));
+        if (grid.ColumnDefinitions.ToString() != columnDefinitions)
+        {
+            grid.ColumnDefinitions = new ColumnDefinitions(columnDefinitions);
+        }
+        if (grid.RowDefinitions.ToString() != rowDefinitions)
+        {
+            grid.RowDefinitions = new RowDefinitions(rowDefinitions);
+        }
+        var align = node.GetString("align");
+        for (var i = 0; i < next.Count; i++)
+        {
+            Grid.SetRow(next[i], placements[i].Row);
+            Grid.SetColumn(next[i], placements[i].Column);
+            Grid.SetColumnSpan(next[i], placements[i].Span);
+            next[i].VerticalAlignment = ParseVertical(align);
+            next[i].HorizontalAlignment = HorizontalAlignment.Stretch;
         }
         if (!old.SequenceEqual(next))
         {

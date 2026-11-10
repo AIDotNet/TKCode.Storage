@@ -22,6 +22,8 @@ export const ui = Object.freeze({
   /** Vertical stack. props: gap ('xs'|'sm'|'md'|'lg'), align ('start'|'center'|'end'|'stretch'), width (px; any node),
    *  grow (any child of a row or stack: takes the remaining space; a text is then cut with "…") */
   stack: (props, children) => node('stack', props, children),
+  /** Equal columns, children fill row by row. props: columns (1-6, 2), gap, align; a child may set span (columns it takes) */
+  grid: (props, children) => node('grid', props, children),
   /** Horizontal row. props: gap, align */
   row: (props, children) => node('row', props, children),
   /** A row that acts as a button (no box; brightens under the pointer), for list entries. props: gap, align, onClick,
