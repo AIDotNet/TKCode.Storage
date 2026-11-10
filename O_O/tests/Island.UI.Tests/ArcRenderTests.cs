@@ -68,4 +68,50 @@ public sealed class ArcRenderTests
         var bad = Show(Arc("BarChart", new() { ["data"] = "not json" }), out _);
         Assert.Empty(((TKCode.Arc.ChartBase)bad).Series);
     });
+
+    [Fact]
+    public void The_spectrum_node_sizes_to_its_bars_and_listens_only_while_active()
+    {
+        var source = new CountingSource();
+        Island.UI.Controls.AudioLevels.Source = source;
+        try
+        {
+            Headless.Run(() =>
+            {
+                var node = new VNode("spectrum", null, new Dictionary<string, object> { ["bars"] = 7.0, ["source"] = "NeteaseMusic", ["active"] = true },
+                    new Dictionary<string, int>(), []);
+                var control = Show(node, out var renderer);
+                Assert.Equal(7 * 3 + 6 * 2, control.DesiredSize.Width);
+                Assert.Equal(1, source.Listening);
+                Assert.Equal("NeteaseMusic", source.LastName);
+
+                renderer.Render(new VNode("spectrum", null, new Dictionary<string, object> { ["bars"] = 7.0, ["source"] = "NeteaseMusic", ["active"] = false },
+                    new Dictionary<string, int>(), []), control);
+                Assert.Equal(0, source.Listening);          // paused: the capture is stopped
+            });
+        }
+        finally
+        {
+            Island.UI.Controls.AudioLevels.Source = new Island.Platform.NullAudioLevelSource();
+        }
+    }
+
+    private sealed class CountingSource : Island.Platform.IAudioLevelSource
+    {
+        public int Listening;
+        public string? LastName;
+        public bool IsSupported => true;
+
+        public IDisposable? Listen(string processName, int bands, Action<float[]> levels)
+        {
+            Listening++;
+            LastName = processName;
+            return new Stop(this);
+        }
+
+        private sealed class Stop(CountingSource owner) : IDisposable
+        {
+            public void Dispose() => owner.Listening--;
+        }
+    }
 }

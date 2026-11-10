@@ -83,6 +83,9 @@ export const ui = Object.freeze({
   /** A page indicator. props: count, index */
   dots: (props) => node('dots', props),
   /** props: tone ('neutral'|'success'|'info'|'warning'|'danger'), small */
+  /** Bars that dance to the music. props: active (bool, true), bars (1-16, 5), source (a process name, e.g. 'NeteaseMusic':
+   *  its real loudness is used where the system allows it, otherwise the bars move by themselves), tone ('accent'). */
+  spectrum: (props) => node('spectrum', props),
   badge: (text, props) => node('badge', { ...props, text: String(text) }),
   /** The island's mascot (Arc AiMascot). props: status ('idle'|'listening'|'thinking'|'writing'|'done'|'error'),
    *  size (24-160 px; below 56 a compact drawing is used) */

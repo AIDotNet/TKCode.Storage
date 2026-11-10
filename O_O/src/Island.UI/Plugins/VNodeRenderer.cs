@@ -79,6 +79,8 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
         "dots" => new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 },
         "logo" => new Avalonia.Controls.Shapes.Path { Stretch = Stretch.Uniform },
         // Arc's roll swap: when the child changes identity the old content leaves and the new one rolls in.
+        // Bars that dance to the music: real levels of the named process where the platform gives them, else made-up motion.
+        "spectrum" => new Island.UI.Controls.SpectrumBars(),
         "swap" => new ArcContentSwap
         {
             Mode = ContentSwapMode.Roll,
@@ -232,6 +234,12 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
                     tabs.Selected = node.GetString("value");
                     break;
                 case (DropdownMenu picker, _):
+                case (Island.UI.Controls.SpectrumBars spectrum, "spectrum"):
+                    spectrum.Bars = (int)Math.Clamp(node.GetNumber("bars") ?? 5, 1, 16);
+                    spectrum.Source = node.GetString("source");
+                    spectrum.Active = node.GetBool("active") ?? true;
+                    ApplyTone(spectrum, Avalonia.Controls.Primitives.TemplatedControl.ForegroundProperty, node.GetString("tone") ?? "accent");
+                    break;
                     ApplyPicker(picker, node);
                     break;
                 case (StackPanel dots, "dots"):
