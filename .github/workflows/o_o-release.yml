@@ -192,3 +192,31 @@ jobs:
           gh release create "${GITHUB_REF#refs/tags/}" dist/* --repo "$GITHUB_REPOSITORY" \
             --title "O_O $VERSION" \
             --notes "O_O $VERSION. macOS 14+: O_O-$VERSION-macos-arm64.dmg (Apple Silicon) or -x64.dmg (Intel), drag O_O to Applications. Windows: O_O-$VERSION-windows-x64-setup.exe (or arm64; a portable .zip is also attached). Linux: o-o_${VERSION}_amd64.deb / _arm64.deb, or the .tar.gz."
+
+  # Tells the O_O service (the website, the update check) about the new version; the installers stay on the GitHub release.
+  # Needs the secret O_O_SERVICE_TOKEN (the service's O_O_SERVICE_TOKEN); the address is the repository variable
+  # O_O_SERVICE_URL, https://island.astra-gate.si when unset.
+  service:
+    name: Publish to the O_O service
+    needs: [release]
+    if: startsWith(github.ref, 'refs/tags/o_o-v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release
+        env:
+          O_O_SERVICE_TOKEN: ${{ secrets.O_O_SERVICE_TOKEN }}
+          BASE: ${{ vars.O_O_SERVICE_URL || 'https://island.astra-gate.si' }}
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/o_o-v}"
+          GH="https://github.com/${GITHUB_REPOSITORY}/releases/download/o_o-v$VERSION"
+          jq -n --arg v "$VERSION" --arg gh "$GH" '{
+            version: $v, notes: "O_O \($v)",
+            downloads: {
+              "macos-arm64":   "\($gh)/O_O-\($v)-macos-arm64.dmg",
+              "macos-x64":     "\($gh)/O_O-\($v)-macos-x64.dmg",
+              "windows-x64":   "\($gh)/O_O-\($v)-windows-x64-setup.exe",
+              "windows-arm64": "\($gh)/O_O-\($v)-windows-arm64-setup.exe",
+              "linux-x64":     "\($gh)/o-o_\($v)_amd64.deb",
+              "linux-arm64":   "\($gh)/o-o_\($v)_arm64.deb" } }' > release.json
+          curl -fsS -X POST "$BASE/api/releases" -H "Authorization: Bearer $O_O_SERVICE_TOKEN" \
+            -H "Content-Type: application/json" --data-binary @release.json
