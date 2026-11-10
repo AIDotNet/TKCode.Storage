@@ -24,6 +24,9 @@ public interface IClipboardPlatform
 
     /// <summary>Brings the tracked app back to the front and sends the paste shortcut (Cmd/Ctrl+V).</summary>
     PasteResult Paste();
+
+    /// <summary>Brings the tracked app back to the front (after typing on the island), without sending anything.</summary>
+    void RestoreFocus() { }
 }
 
 /// <param name="Pasted">The keystroke was sent.</param>

@@ -111,11 +111,15 @@ public class App(IIslandPlatform platform) : Application
                 _island.PlacementOverride = placement; // development aid
             }
 
+            // The clipboard's platform layer also knows the app the user works in: typing on the island hands the
+            // keyboard back to it (docs 02 §7).
+            var clipboardPlatform = ClipboardPlatform();
+            IslandFocus.RestoreFocus = clipboardPlatform.RestoreFocus;
             _plugins = new PluginHost(new PluginServices(
                 DataDirectory: DataDirectory,
                 Secrets: platform.Secrets)
             {
-                Clipboard = new Island.UI.Services.ClipboardService(window, ClipboardPlatform(),
+                Clipboard = new Island.UI.Services.ClipboardService(window, clipboardPlatform,
                     Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "clipboard-images")),
                 UserPluginDirectory = PluginDirectories[0],
                 // Music (docs 05 §1). MacMedia is created here, on the main thread, where its notifications arrive.

@@ -55,6 +55,7 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
         "item" => Wire(new Island.UI.Controls.PressableRow(), static (r, p) => p.Click += () => r.Fire(p, "onClick", null)),
         "card" => Wire(new Island.UI.Controls.PressableRow { IsCard = true }, static (r, p) => p.Click += () => r.Fire(p, "onClick", null)),
         "wrap" => new WrapPanel { Orientation = Orientation.Horizontal },
+        "input" => WireInput(node.GetString("kind") == "search" ? new SearchField() : new TKCode.Arc.Input()),
         "image" => new Image { Stretch = Stretch.UniformToFill },
         "spacer" => new Border(),
         "text" => new TextBlock(),
@@ -135,6 +136,9 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
                     card.DragFiles = node.GetString("dragFiles") is { Length: > 0 } cardFiles
                         ? [.. cardFiles.Split('\n').Where(Path.IsPathFullyQualified)]
                         : null;
+                    break;
+                case (TextBox box, "input"):
+                    ApplyInput(box, node);
                     break;
                 case (WrapPanel wrap, "wrap"):
                     ApplyWrap(wrap, node);
@@ -402,6 +406,59 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
     /// need not be on screen all the time, such as the accounts of a provider.
     /// </summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DropdownMenu, string> s_pickerSignatures = [];
+
+    /// <summary>
+    /// A text box on the island. It takes the keyboard only when clicked (<see cref="IslandFocus"/>): the user's app
+    /// keeps it otherwise. onChange gets every edit, onSubmit the text on Enter; Esc gives the keyboard back.
+    /// </summary>
+    private TextBox WireInput(TextBox box)
+    {
+        box.AddHandler(Avalonia.Input.InputElement.PointerPressedEvent, (_, _) => IslandFocus.Begin(box),
+            Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+        box.GotFocus += (_, _) =>
+        {
+            if (!IslandFocus.IsEditing)
+            {
+                IslandFocus.Begin(box);
+            }
+        };
+        box.TextChanged += (_, _) =>
+        {
+            if (!_applying)
+            {
+                Fire(box, "onChange", System.Text.Json.JsonSerializer.Serialize(box.Text ?? "", UiJson.Default.String));
+            }
+        };
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter)
+            {
+                Fire(box, "onSubmit", System.Text.Json.JsonSerializer.Serialize(box.Text ?? "", UiJson.Default.String));
+                e.Handled = true;
+            }
+            else if (e.Key == Avalonia.Input.Key.Escape)
+            {
+                IslandFocus.End(restore: true);
+                e.Handled = true;
+            }
+        };
+        return box;
+    }
+
+    private static void ApplyInput(TextBox box, VNode node)
+    {
+        box.PlaceholderText = node.GetString("placeholder");
+        box.MaxLength = (int)Math.Clamp(node.GetNumber("maxLength") ?? 500, 1, 10_000);
+        // The plugin's value wins only while the user is not typing here, so re-renders never move the caret.
+        if (!box.IsFocused && node.GetString("value") is { } value && value != box.Text)
+        {
+            box.Text = value;
+        }
+        if (node.GetBool("clear") == true && !box.IsFocused)
+        {
+            box.Text = "";
+        }
+    }
 
     /// <summary>Children flow left to right and onto the next line when the island is too narrow (cards).</summary>
     private void ApplyWrap(WrapPanel wrap, VNode node)

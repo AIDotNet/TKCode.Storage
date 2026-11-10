@@ -56,9 +56,17 @@ public sealed class IslandController : IDisposable
         _states = new IslandStateMachine(hover);
         _states.StateChanged += s =>
         {
+            if (s != IslandState.Expanded)
+            {
+                IslandFocus.End(restore: true); // collapsing ends typing and gives the keyboard back
+            }
             _presenter?.OnStateChanged(s); // before the layout, so the card is measured with the page it opens on
             ApplyLayout();
         };
+        // Typing keeps the island open; clicking elsewhere (the island loses activation) ends typing — focus has
+        // already gone where the user clicked.
+        IslandFocus.EditingChanged += _ => UpdatePin();
+        window.Deactivated += (_, _) => IslandFocus.End(restore: false);
 
         _sampler = new DispatcherTimer(SampleInterval, DispatcherPriority.Input, (_, _) => Sample());
 
@@ -252,7 +260,7 @@ public sealed class IslandController : IDisposable
     private void SetUserPinned(bool pinned)
     {
         _userPinned = pinned;
-        _states.Pin(_userPinned || _menuOpen || _hotkeyHeld);
+        UpdatePin();
         if (pinned)
         {
             _states.Click(); // pinning from the compact island's menu also opens it
@@ -262,7 +270,7 @@ public sealed class IslandController : IDisposable
     private void SetMenuOpen(bool open)
     {
         _menuOpen = open;
-        _states.Pin(_userPinned || _menuOpen || _hotkeyHeld);
+        UpdatePin();
     }
 
     // A hotkey opens the island where the pointer is not: it stays open until the pointer has been on it and left,
@@ -311,8 +319,11 @@ public sealed class IslandController : IDisposable
     private void ReleaseHotkeyHold()
     {
         _hotkeyHeld = false;
-        _states.Pin(_userPinned || _menuOpen);
+        UpdatePin();
     }
+
+    /// <summary>The island stays open while pinned, a menu is open, a hotkey holds it, or the user is typing on it.</summary>
+    private void UpdatePin() => _states.Pin(_userPinned || _menuOpen || _hotkeyHeld || IslandFocus.IsEditing);
 
     /// <summary>Lets go of a hotkey-opened island once the pointer has visited and left it, or never came.</summary>
     private void TrackHotkeyHold(bool onShape)
@@ -451,6 +462,35 @@ public sealed class IslandController : IDisposable
             DispatcherTimer.RunOnce(() => Log(
                 $"after 1s: position={_window.Position} surfaceBounds={_window.View.Surface.Bounds} " +
                 $"native={_bridge?.Describe()}"), TimeSpan.FromSeconds(1));
+        }
+
+        if (Environment.GetEnvironmentVariable("O_O_DEBUG_FOCUS") is { Length: > 0 } focusPage)
+        {
+            // Development aid: open a page, start typing in its first text box, and log whether the island really
+            // became the key window; then give the keyboard back (docs 02 §7, typing on the island).
+            DispatcherTimer.RunOnce(() =>
+            {
+                SetUserPinned(true);
+                _presenter?.ShowPage(focusPage);
+                DispatcherTimer.RunOnce(() =>
+                {
+                    var box = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(_window.View).OfType<TextBox>().FirstOrDefault();
+                    if (box is null)
+                    {
+                        System.Console.Error.WriteLine("[focus] no text box on that page");
+                        return;
+                    }
+                    IslandFocus.Begin(box);
+                    DispatcherTimer.RunOnce(() =>
+                    {
+                        System.Console.Error.WriteLine($"[focus] editing: window active={_window.IsActive} box focused={box.IsFocused} editing={IslandFocus.IsEditing}");
+                        IslandFocus.End(restore: true);
+                        DispatcherTimer.RunOnce(() =>
+                            System.Console.Error.WriteLine($"[focus] after Esc: window active={_window.IsActive} editing={IslandFocus.IsEditing}"),
+                            TimeSpan.FromMilliseconds(800));
+                    }, TimeSpan.FromMilliseconds(800));
+                }, TimeSpan.FromMilliseconds(800));
+            }, TimeSpan.FromSeconds(4));
         }
 
         if (Environment.GetEnvironmentVariable("O_O_DEMO") == "1")
