@@ -1,5 +1,9 @@
 # 03 · 插件系统
 
+> **岛 API 2.0（2026-11-10）**：岛上显示什么、插件怎么写，以 [09-island-v2.md](09-island-v2.md) 为准；本文里的
+> `island.page` / `island.chip` / `island.satellite` / `island.activity.create` 等 1.x 接口已移除。
+
+
 ## 1. 目标
 
 - **一切皆插件**：音乐、时钟、主题都与第三方插件走同一 API，第一方插件不享有私有后门（例外：`storage.sql` 等能力仅对签名为第一方的插件开放）。

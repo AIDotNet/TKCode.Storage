@@ -6,21 +6,27 @@ description: Write, test and package a plugin for O_O (the desktop "Dynamic Isla
 # Writing an O_O plugin
 
 An O_O plugin is a folder with `plugin.json` and an ES module (`main.js`). It runs in its own sandboxed JS engine
-(Jaunt) inside O_O and talks to the island only through `@island/api`. It cannot touch the file system, the
+(Jaunt) inside O_O and talks to the island only through `@island/api` — island API **2.0**: `plugin.json` must say
+`"engines": { "island": "^2.0.0" }` (O_O refuses anything else; the 1.x `island.page`, `island.chip`,
+`island.satellite` and `island.activity.create` no longer exist). It cannot touch the file system, the
 network or other apps except through capabilities its manifest declares and the user grants.
 
 The authoritative API is `src/Island.Plugins.Host/Runtime/api.js` (every export has a doc comment; when this skill
-was installed outside the repo, the same file sits next to this one as `api.js`) — read it before writing code. Good references are the bundled plugins in `plugins/`: `com.o_o.clipboard` (page + list + settings),
-`com.o_o.shelf` (files, chips, alerts), `com.o_o.todo` / `com.o_o.focus` (providers, activities, timers),
-`com.o_o.ai.deepseek` (network + password settings), `com.o_o.calendar` (aggregator over providers).
+was installed outside the repo, the same file sits next to this one as `api.js`) — read it before writing code. The
+design is docs/design/09-island-v2.md. Good references are the bundled plugins in `plugins/`: `com.o_o.netease`
+(a live activity with controls, a home page), `com.o_o.focus` / `com.o_o.todo` (activities, providers, timers,
+alerts), `com.o_o.shelf` (files, an ambient item), `com.o_o.im` (alerts and a passive count),
+`com.o_o.ai-usage` (ambient items per account), `com.o_o.ai.deepseek` (network + password settings),
+`catalog/plugins/com.o_o.calendar` (an aggregator over providers).
 
 ## Workflow
 
 1. **Scaffold** — copy `template/` from this skill into a new folder named after the plugin id
    (`com.<you>.<name>`), then fill in `plugin.json` and `main.js`.
 2. **Design** — decide what goes where on the island (below). Keep the collapsed island quiet.
-3. **Write** — `main.js` exports `activate()` (may be async). Render with `island.page(id).update(view)`,
-   `island.chip(id).update(view)`; react to UI events through the functions you put in props.
+3. **Write** — `main.js` exports `activate()` (may be async). Show things with `island.activity(...)`,
+   `island.ambient(id).update(view)`, `island.home.page(id).update(view)` and `island.alert(...)`; react to UI events
+   through the functions you put in props.
 4. **Try it** — copy the folder into O_O's user plugin folder and restart O_O, or install the packed zip (step 6):
    - macOS: `~/Library/Application Support/O_O/plugins/<id>/`
    - Windows: `%APPDATA%\O_O\plugins\<id>\`  ·  Linux: `~/.config/O_O/plugins/<id>/`
@@ -43,11 +49,13 @@ was installed outside the repo, the same file sits next to this one as `api.js`)
   "version": "1.0.0",
   "description": "当前天气和今天的预报",    // one sentence for the console card
   "icon": "CloudSun",                   // a Lucide icon name (lucide.dev) for the console card; "logo:claude" / "logo:codex" for those vendors' marks
+  "engines": { "island": "^2.0.0" },    // required
   "main": "main.js",
   "permissions": ["network:api.example.com"],
   "contributes": {
-    "pages": [{ "id": "now", "title": "天气", "icon": "CloudSun" }],
-    "chips": [{ "id": "temp", "title": "当前温度", "side": "right" }],     // side: left | right; "multiple": true for one per account…
+    "home": [{ "id": "now", "title": "天气", "icon": "CloudSun" }],       // pages of the home dashboard
+    "ambient": [{ "id": "temp", "title": "当前温度", "side": "right" }],   // beside the idle island; "multiple": true for one per account
+    "activities": [{ "id": "rain", "title": "降雨提醒", "priority": "high", "accent": "warning" }],
     "providers": [{ "interface": "calendar", "id": "mycal", "title": "My calendar" }],
     "settings": {
       "properties": {
@@ -80,19 +88,61 @@ Setting types: `string` (optionally `enum`; `format`: `password` (keychain), `ur
 | `shell.openUrl` | `shell.openUrl(url)`: open https/http/mailto/meeting-app links — only within a few seconds after the user clicked something in the plugin |
 | `localAuth:claude-code` / `localAuth:codex-cli` | read-only use of those apps' local logins (always asks the user) |
 
-Unknown permissions make the manifest invalid. Everything else (pages, chips, alerts, activities, storage,
-settings, timers, providers) needs no permission.
+Unknown permissions make the manifest invalid. Everything else (activities, ambient items, home pages, alerts,
+storage, settings, timers, providers) needs no permission.
 
-## The island: what goes where
+## The island: what goes where (docs/design/09-island-v2.md)
 
-- **Page** (`contributes.pages` + `island.page(id).update(view)`): the full view in the expanded island, one tab
-  per page. Optional second argument `{ status }`: a short node shown in the header while the page is on show.
-- **Chip** (`contributes.chips` + `island.chip(id[, instance]).update(view[, { title }])`, `.remove()`): a small
-  item on the collapsed island — an icon and a few characters, at most 64pt wide. Remove it when there is nothing
-  worth showing. The user chooses which chips show and on which side.
-- **Alert** (`island.alert({ leading, trailing }, { seconds })`, 1–10 s): replaces the chips briefly ("已复制").
-- **Activity** (`island.activity.create(id, { priority, page })` + `.update({})` / `.end()`): something happening
-  now. `priority: 'active' | 'critical'` makes opening the island go to `page`; keep `ambient`/`passive` otherwise.
+The island is like Apple's Dynamic Island: it shows **what is happening now** and is quiet otherwise. You fill fixed
+regions; the host decides where things show, lays them out, colours them with the user's theme and animates them.
+
+- **Activity** — something under way that ends: playing, a timer, a meeting about to start, a limit nearly reached.
+  Declare it in `contributes.activities` (`priority`: passive | normal | high | critical; `accent`: music, timer,
+  calendar, message, reminder, warning or #RRGGBB; `multiple` for one per account/timer), then:
+  ```js
+  const a = island.activity('playing', {
+    priority: 'normal',                       // optional; overrides the declared one
+    open: { app: 'com.netease.163music' },    // ⌘-click on the island opens it (or { url })
+    compact:  { leading: ui.icon('Music2', { tone: 'accent', size: 14 }), trailing: ui.spectrum({ bars: 5 }) },
+    minimal:  ui.icon('Music2', { tone: 'accent', size: 14 }),   // as the bubble beside the island
+    expanded: { leading, center, trailing, bottom },              // the card opened with a click
+  }, { instance });                                               // only for activities declared multiple
+  a.update({ compact: { ... } });   // what you give replaces that part; the rest stays
+  a.alert({ leading, center, trailing, seconds });                // opens the island briefly for this activity
+  a.end();
+  ```
+  At most two activities show (the user orders them and can switch kinds to 只提醒 / 关闭); a plugin may hold two.
+  Compact regions are one short line each; put controls and detail in `expanded` (`bottom` for buttons and progress).
+  Use `tone: 'accent'` for what should take the activity's colour.
+- **Ambient item** (`contributes.ambient` + `island.ambient(id[, instance]).update(view[, { title }])`, `.remove()`):
+  a small reading beside the idle island (temperature, an unread count) — an icon and a few characters. It makes way
+  for activities. The user chooses which show and on which side.
+- **Home page** (`contributes.home` + `island.home.page(id).update(view[, { status }])`): the full view on the home
+  dashboard (a click on the idle island, or the hotkey), one tab per page; `status` is a short node for the header.
+- **Alert** (`island.alert({ leading, center, trailing, seconds, priority })`, 1–10 s): a brief notice ("已复制"); a
+  plugin's alerts replace each other; 30 a minute at most (`false` when over).
+
+Constant information is an ambient item plus a home page, not an activity; an activity that never ends keeps the
+island busy and pushes the user's other activities aside.
+
+## Themes (`contributes.themes`)
+
+A theme pack is a plugin whose `main.js` is empty. Besides `accent`, `appearance`, `corners` and `tokens`, a theme may
+set the island itself (all optional; checked when the plugin loads):
+
+```jsonc
+"island": {
+  "surface": { "material": "solid | gradient | translucent | animated", "color": "#101018",
+               "colors": ["#140C29", "#2A1050"], "angle": 135, "opacity": 0.85,
+               "animation": "aurora | pulse | waves", "speed": 0.6 },   // drawn by O_O; never around a real notch
+  "shape":   { "radius": 1.15 },                                        // 0.5–1.5
+  "content": { "accents": { "music": "#C77DFF", "timer": "#FFB86B" } },
+  "motion":  { "spring": "calm | default | snappy | bouncy", "split": "slide | droplet" },
+  "mascot":  { "kind": "classic | pixel | ghost | cube", "color": "#9D7BFF" },
+  "sounds":  { "alert": "sounds/chime.wav" },                           // ≤ 1 MB, in the plugin folder; plays only if the user allows
+  "layout":  { "expanded": "standard | stacked | media" }
+}
+```
 
 ## Views (`ui.*`)
 
@@ -125,7 +175,10 @@ Island design rules (docs/design/02-island-shell.md §7) — the island is black
 ## Checklist before packaging
 
 - [ ] `id`, `name`, `version`, `description`, `icon` filled in; only needed permissions.
-- [ ] Every page/chip used in code is declared in `contributes`; chip `multiple` matches how it is called.
+- [ ] `"engines": { "island": "^2.0.0" }`.
+- [ ] Every activity, ambient item and home page used in code is declared in `contributes`; `multiple` matches how
+      it is called (with or without an instance).
+- [ ] Activities end when the thing ends; constant readings are ambient items, not activities.
 - [ ] Empty, loading and error states render something helpful (in Chinese).
-- [ ] Collapsed island stays quiet: chips only when there is something to show; alerts sparingly.
+- [ ] The island stays quiet: ambient items only when there is something to show; alerts sparingly.
 - [ ] `O_O --pack-plugin <folder>` reports no problems; the zip installs and runs after granting permissions.

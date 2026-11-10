@@ -2,13 +2,15 @@
   "id": "com.example.hello",
   "name": "你好",
   "version": "0.1.0",
-  "description": "一个最小的 O_O 插件：一个页面、一个小项",
+  "description": "一个最小的 O_O 插件：一页主页、一个环境项和一个计时活动",
   "icon": "Hand",
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "permissions": [],
   "contributes": {
-    "pages": [{ "id": "main", "title": "你好", "icon": "Hand" }],
-    "chips": [{ "id": "count", "title": "点击次数", "side": "right" }],
+    "home": [{ "id": "main", "title": "你好", "icon": "Hand" }],
+    "ambient": [{ "id": "count", "title": "点击次数", "side": "right" }],
+    "activities": [{ "id": "timer", "title": "计时", "priority": "normal", "accent": "timer" }],
     "settings": {
       "properties": {
         "greeting": { "type": "string", "title": "问候语", "default": "你好，O_O" }

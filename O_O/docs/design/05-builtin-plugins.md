@@ -1,5 +1,9 @@
 # 05 · 第一方插件设计
 
+> **岛 API 2.0（2026-11-10）**：岛上显示什么、插件怎么写，以 [09-island-v2.md](09-island-v2.md) 为准；本文里的
+> `island.page` / `island.chip` / `island.satellite` / `island.activity.create` 等 1.x 接口已移除。
+
+
 所有第一方插件位于 `plugins/`，与第三方插件同构（JS + `@island/api`），能力由宿主 Capability 提供。下表中"宿主能力"列是需要在 C# 平台层实现的部分。
 
 ## 总览

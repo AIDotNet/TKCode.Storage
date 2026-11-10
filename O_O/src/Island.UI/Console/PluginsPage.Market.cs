@@ -81,7 +81,7 @@ public sealed partial class PluginsPage
             _content.Children.Add(_addError);
         }
 
-        var search = new SearchField { Text = _query, Watermark = "搜索插件…", Margin = new Thickness(0, 0, 0, 12) };
+        var search = new SearchField { Text = _query, PlaceholderText = "搜索插件…", Margin = new Thickness(0, 0, 0, 12) };
         // The Text property itself, not TextChanged: that one only follows typing, not a cleared or set text.
         search.PropertyChanged += (_, e) =>
         {

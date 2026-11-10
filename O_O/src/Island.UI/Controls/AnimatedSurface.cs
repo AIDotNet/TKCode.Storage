@@ -89,7 +89,7 @@ public sealed class AnimatedSurface : Control
 
     public override void Render(DrawingContext context)
     {
-        if (_preset is not { } preset || Bounds.Width <= 0 || Bounds.Height <= 0 || Effect(preset) is not { } effect)
+        if (_preset is not { } preset || Bounds.Width <= 0 || Bounds.Height <= 0 || ShaderFor(preset) is not { } effect)
         {
             return;
         }
@@ -97,7 +97,7 @@ public sealed class AnimatedSurface : Control
         context.Custom(new Draw(new Rect(Bounds.Size), effect, (float)time, _colors));
     }
 
-    private static SKRuntimeEffect? Effect(string preset)
+    private static SKRuntimeEffect? ShaderFor(string preset)
     {
         lock (Effects)
         {
