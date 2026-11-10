@@ -14,5 +14,6 @@
     <Project Path="tests/Island.Core.Tests/Island.Core.Tests.csproj" />
     <Project Path="tests/Island.Platform.Tests/Island.Platform.Tests.csproj" />
     <Project Path="tests/Island.Plugins.Host.Tests/Island.Plugins.Host.Tests.csproj" />
+    <Project Path="tests/Island.UI.Tests/Island.UI.Tests.csproj" />
   </Folder>
 </Solution>

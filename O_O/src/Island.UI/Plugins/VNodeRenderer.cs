@@ -69,6 +69,8 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
             }
         }),
         "progress" => new ArcProgress(),
+        // Any Arc control from the registry (ui.arc): created by name, only listed properties settable.
+        "arc" => CreateArc(node),
         "badge" => new ArcBadge(),
         "mascot" => new MascotHost(),
         "gauge" => new Gauge(),
@@ -96,6 +98,17 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
         }),
         _ => new TextBlock(),
     };
+
+    private Control CreateArc(VNode node)
+    {
+        if (ArcRegistry.Find(node.GetString("type")) is not { } spec)
+        {
+            return new TextBlock { Text = $"（未知组件 {node.GetString("type")}）" };
+        }
+        var control = spec.Create();
+        ArcRegistry.WireChange(control, spec, json => Fire(control, "onChange", json), () => _applying);
+        return control;
+    }
 
     private T Wire<T>(T control, Action<VNodeRenderer, T> wire)
     {
@@ -200,6 +213,12 @@ public sealed class VNodeRenderer(Action<int, string?> dispatch)
                     counter.Decimals = (int)Math.Clamp(node.GetNumber("decimals") ?? 0, 0, 6);
                     counter.Label = node.GetString("label");
                     ArcTokens.Bind(counter, Avalonia.Controls.Primitives.TemplatedControl.FontSizeProperty, TypeToken(node.GetString("size") ?? "3xl"));
+                    break;
+                case (_, "arc"):
+                    if (ArcRegistry.Find(node.GetString("type")) is { } arc && control.GetType() == arc.Type)
+                    {
+                        ArcRegistry.Apply(control, arc, node);
+                    }
                     break;
                 case (SegmentedControl segmented, _):
                     ApplySegmented(segmented, node);

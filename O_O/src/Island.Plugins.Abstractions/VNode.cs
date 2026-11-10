@@ -24,7 +24,8 @@ public sealed record VNode(
     public bool? GetBool(string name) => Props.TryGetValue(name, out var v) && v is bool b ? b : null;
 
     /// <summary>Same type and key: the control rendered for <paramref name="other"/> can be updated in place.</summary>
-    public bool IsSameSlot(VNode other) => Type == other.Type && Key == other.Key;
+    public bool IsSameSlot(VNode other) =>
+        Type == other.Type && Key == other.Key && (Type != "arc" || GetString("type") == other.GetString("type"));
 }
 
 /// <summary>What an activity shows in each island state.</summary>

@@ -5,6 +5,9 @@
     <LucideIconsIncludeAll>true</LucideIconsIncludeAll>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Island.UI.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Arc is built against this exact Avalonia version; keep every Avalonia package on it. -->
     <PackageReference Include="Avalonia" Version="12.1.4" />
     <PackageReference Include="TKCode.Arc" Version="1.0.0" />

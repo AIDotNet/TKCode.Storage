@@ -74,6 +74,10 @@ export const ui = Object.freeze({
   swap: (props, children) => node('swap', props, children),
   /** A brand mark the host knows, drawn in the foreground colour. name: 'claude' | 'codex'. props: size (px) */
   logo: (name, props) => node('logo', { ...props, name: String(name) }),
+  /** Any Arc control from the host's list (Alert, Avatar, Calendar, Checkbox, Countdown, EmptyState, MetricCard, NumberField,
+   *  Pagination, Skeleton, Slider, Switch). props are the control's properties in camelCase (isOpen, selectedDate 'YYYY-MM-DD',
+   *  tone 'Success'…); onChange(value) reports the user's change for controls that have one. Unknown names or props are ignored. */
+  arc: (type, props) => node('arc', { ...props, type: String(type) }),
   /** A page indicator. props: count, index */
   dots: (props) => node('dots', props),
   /** props: tone ('neutral'|'success'|'info'|'warning'|'danger'), small */
