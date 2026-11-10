@@ -126,7 +126,7 @@ public sealed class ClipboardService : IPluginClipboard, IDisposable
         }
         var (width, height) = (bitmap.PixelSize.Width, bitmap.PixelSize.Height);
         using var png = new MemoryStream();
-        bitmap.Save(png);
+        bitmap.Save(png, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
         if (png.Length > MaxImageBytes)
         {
             return null; // too large to keep around
