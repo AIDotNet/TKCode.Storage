@@ -208,7 +208,7 @@ public sealed partial class PluginHostTests
         var listener = new FakeListener();
         var services = Services with { NotificationListener = listener };
         services.NotificationPrefs.Default = NotificationDisplay.Full;
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.im"), Path.Combine(_root, "com.o_o.im"));
+        CopyPlugin(RepoPlugin("com.o_o.im"), Path.Combine(_root, "com.o_o.im"));
         _host = new PluginHost(services, FastRestart);
         _host.SatelliteUpdated += _satellites.Enqueue;
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));

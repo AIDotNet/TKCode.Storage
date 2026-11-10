@@ -180,18 +180,23 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/o_o-v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+      # The release notes: this version's section of O_O/CHANGELOG.md ("## <version> ..." up to the next "## "),
+      # followed by where to find each installer.
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${GITHUB_REF#refs/tags/o_o-v}"
+          awk -v v="$VERSION" '/^## /{ on = ($2 == v); next } on' O_O/CHANGELOG.md > notes.md
+          if [[ ! -s notes.md ]]; then echo "::warning::O_O/CHANGELOG.md has no section for $VERSION"; fi
+          printf '\n### 下载\n%s\n' "macOS 14+: O_O-$VERSION-macos-arm64.dmg (Apple Silicon) or -x64.dmg (Intel), drag O_O to Applications. Windows: O_O-$VERSION-windows-x64-setup.exe (or arm64; a portable .zip is also attached). Linux: o-o_${VERSION}_amd64.deb / _arm64.deb, or the .tar.gz." >> notes.md
           gh release create "${GITHUB_REF#refs/tags/}" dist/* --repo "$GITHUB_REPOSITORY" \
-            --title "O_O $VERSION" \
-            --notes "O_O $VERSION. macOS 14+: O_O-$VERSION-macos-arm64.dmg (Apple Silicon) or -x64.dmg (Intel), drag O_O to Applications. Windows: O_O-$VERSION-windows-x64-setup.exe (or arm64; a portable .zip is also attached). Linux: o-o_${VERSION}_amd64.deb / _arm64.deb, or the .tar.gz."
+            --title "O_O $VERSION" --notes-file notes.md
 
   # Tells the O_O service (the website, the update check) about the new version; the installers stay on the GitHub release.
   # Needs the secret O_O_SERVICE_TOKEN (the service's O_O_SERVICE_TOKEN); the address is the repository variable
@@ -215,8 +220,9 @@ jobs:
         run: |
           VERSION="${GITHUB_REF#refs/tags/o_o-v}"
           GH="https://github.com/${GITHUB_REPOSITORY}/releases/download/o_o-v$VERSION"
-          jq -n --arg v "$VERSION" --arg gh "$GH" '{
-            version: $v, notes: "O_O \($v)",
+          NOTES="$(awk -v v="$VERSION" '/^## /{ on = ($2 == v); next } on' O_O/CHANGELOG.md)"
+          jq -n --arg v "$VERSION" --arg gh "$GH" --arg notes "${NOTES:-O_O $VERSION}" '{
+            version: $v, notes: $notes,
             downloads: {
               "macos-arm64":   "\($gh)/O_O-\($v)-macos-arm64.dmg",
               "macos-x64":     "\($gh)/O_O-\($v)-macos-x64.dmg",
