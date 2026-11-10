@@ -59,7 +59,7 @@ internal static class Program
                         break;
                     }
                 }
-                host.Discover(Path.Combine(AppContext.BaseDirectory, "plugins"), bundled: true);
+                host.Discover(App.BundledPluginDirectory, bundled: true);
                 host.StartAll();
                 if (Environment.GetEnvironmentVariable("O_O_RENDER_DROP") is { Length: > 0 } drop)
                 {

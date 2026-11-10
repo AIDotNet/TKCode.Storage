@@ -62,11 +62,25 @@ public class App(IIslandPlatform platform) : Application
     {
     }
 
+    /// <summary>
+    /// The first-party plugins shipped with O_O: next to the executable, or — inside a macOS app bundle, where
+    /// Contents/MacOS may only hold code — in Contents/Resources/plugins.
+    /// </summary>
+    public static string BundledPluginDirectory
+    {
+        get
+        {
+            var beside = Path.Combine(AppContext.BaseDirectory, "plugins");
+            var resources = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "Resources", "plugins"));
+            return !Directory.Exists(beside) && Directory.Exists(resources) ? resources : beside;
+        }
+    }
+
     /// <summary>User plugins first (they override bundled ones with the same id), then the bundled ones.</summary>
     public static IReadOnlyList<string> PluginDirectories { get; } =
     [
         Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "plugins"),
-        Path.Combine(AppContext.BaseDirectory, "plugins"),
+        BundledPluginDirectory,
     ];
 
     /// <summary>Opens the console, or brings it to the front when it is already open.</summary>

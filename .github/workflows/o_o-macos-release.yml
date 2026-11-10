@@ -1,0 +1,110 @@
+# Builds O_O for macOS (Apple Silicon and Intel), signs it with the Developer ID, notarizes and staples the .dmg
+# installers, and attaches them to a GitHub Release.
+#
+# Run: push a tag "o_o-v1.2.3" (creates the release), or start it by hand (Actions → O_O macOS release → Run
+# workflow) to get the .dmg files as build artifacts only.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   MACOS_CERTIFICATE              base64 of the Developer ID Application certificate (.p12, with private key)
+#   MACOS_CERTIFICATE_PASSWORD     the .p12 password
+#   APPLE_ID                       the Apple ID used for notarization
+#   APPLE_APP_SPECIFIC_PASSWORD    an app-specific password for that Apple ID (appleid.apple.com)
+# Repository variable:
+#   APPLE_TEAM_ID                  the team id (42B564FHYL)
+name: O_O macOS release
+
+on:
+  push:
+    tags: ["o_o-v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g. 0.1.0)"
+        required: true
+        default: "0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: macOS ${{ matrix.arch }}
+    runs-on: macos-15
+    strategy:
+      matrix:
+        arch: [arm64, x64]
+    defaults:
+      run:
+        working-directory: O_O
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: O_O/global.json
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/o_o-v* ]]; then
+            echo "value=${GITHUB_REF#refs/tags/o_o-v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Import the signing certificate
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/certificate.p12"
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"')"
+          if [[ -z "$IDENTITY" ]]; then echo "No Developer ID Application identity in the certificate" >&2; exit 1; fi
+          echo "SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Build, sign, notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          build/macos/package.sh --arch "${{ matrix.arch }}" --version "${{ steps.version.outputs.value }}" \
+            --identity "$SIGNING_IDENTITY" --notarize
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: O_O-macos-${{ matrix.arch }}
+          path: O_O/build/out/*.dmg
+          if-no-files-found: error
+
+      - name: Remove the signing keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+
+  release:
+    name: GitHub release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/o_o-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/o_o-v}"
+          gh release create "${GITHUB_REF#refs/tags/}" dist/*.dmg --repo "$GITHUB_REPOSITORY" \
+            --title "O_O $VERSION" \
+            --notes "O_O $VERSION for macOS 14+. Download O_O-$VERSION-macos-arm64.dmg for Apple Silicon or O_O-$VERSION-macos-x64.dmg for Intel, open it and drag O_O to Applications. Signed with a Developer ID and notarized by Apple."

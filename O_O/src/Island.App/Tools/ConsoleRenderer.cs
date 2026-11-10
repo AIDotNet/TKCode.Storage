@@ -32,7 +32,7 @@ internal static class ConsoleRenderer
         {
             host.Discover(samples);
         }
-        host.Discover(Path.Combine(AppContext.BaseDirectory, "plugins"), bundled: true);
+        host.Discover(App.BundledPluginDirectory, bundled: true);
         host.StartAll();
         // Themes for the 外观 page, with throwaway preferences and every bundled theme pack offered.
         foreach (var themePack in host.Packages.Where(p => p.Manifest.Contributes.Themes.Count > 0 && !host.IsEnabled(p.Id)))

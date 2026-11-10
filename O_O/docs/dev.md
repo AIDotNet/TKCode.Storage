@@ -60,7 +60,7 @@ src/Island.App/bin/Debug/net10.0/O_O --render-island out.png expanded [attached]
 
 ## 生成应用图标
 
-图标由应用自身用 Arc `AiMascot` 绘制（`src/Island.App/Tools/IconRenderer.cs`），修改吉祥物或主题后重新生成：
+图标由应用自身按 `src/Island.App/AppLogo.cs` 的矢量图形绘制（`src/Island.App/Tools/IconRenderer.cs`），修改 Logo 后重新生成：
 
 ```bash
 dotnet build src/Island.App && src/Island.App/bin/Debug/net10.0/O_O --render-icon assets/icon
@@ -78,3 +78,18 @@ dotnet build src/Island.App && src/Island.App/bin/Debug/net10.0/O_O --render-ico
 ## 工程结构
 
 见 `docs/design/01-architecture.md` §2。
+
+## macOS 发布（签名、公证、安装包）
+
+`build/macos/package.sh --arch arm64|x64 --version X.Y.Z [--identity "Developer ID Application: …"] [--notarize]`
+用 NativeAOT 发布、组装 `O_O.app`（`Info.plist`：`com.aidotnet.o-o`，无 Dock 图标；内置插件在
+`Contents/Resources/plugins`）、逐个签名（hardened runtime，权限见 `build/macos/O_O.entitlements`）、打包
+`build/out/O_O-<版本>-macos-<架构>.dmg`，带 `--notarize` 时用 `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` /
+`APPLE_TEAM_ID` 公证并装订。不带 `--identity` 时为临时签名，只能本机试用（hardened runtime 下临时签名的库无法
+通过库校验，本机试运行时需去掉 `--options runtime`）。Intel 版在 Apple 芯片的机器上交叉编译即可。
+
+CI：仓库根目录 `.github/workflows/o_o-macos-release.yml`。推送标签 `o_o-v1.2.3` 会构建两个架构、签名、公证，
+并创建 GitHub Release 附上 `.dmg`；也可在 Actions 页手动运行（只产出构建产物）。需要的仓库 Secrets：
+`MACOS_CERTIFICATE`（Developer ID Application 证书 .p12 的 base64）、`MACOS_CERTIFICATE_PASSWORD`、`APPLE_ID`、
+`APPLE_APP_SPECIFIC_PASSWORD`；变量 `APPLE_TEAM_ID`。
+
