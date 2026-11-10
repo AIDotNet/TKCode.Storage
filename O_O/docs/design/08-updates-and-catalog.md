@@ -1,7 +1,7 @@
 # 08 · 版本更新与插件目录
 
 > 状态：2026-11-10 定稿并实现（客户端）。服务端是单独的项目（`~/code/O_O.Service`），地址固定为
-> `https://O_O.astra-gate.si`，只写在 `src/Island.Core/Updates/ServiceEndpoints.cs` 一处；开发时可用环境变量
+> `https://island.astra-gate.si`，只写在 `src/Island.Core/Updates/ServiceEndpoints.cs` 一处；开发时可用环境变量
 > `O_O_SERVICE_URL`（如 `http://localhost:5080`）指向本机服务。
 
 ## 1. 版本号
@@ -48,7 +48,7 @@ NewAPI、日程及各日历来源（CalDAV、ICS、Google、飞书、钉钉、�
       "id": "com.o_o.cal.ics", "name": "日历订阅（ICS）", "version": "0.1.0",
       "description": "订阅 ICS 日历链接", "icon": "Link",
       "permissions": ["network:@url1"], "requires": ["com.o_o.calendar"], "platforms": [],
-      "size": 12345, "sha256": "小写十六进制", "download": "https://O_O.astra-gate.si/plugins/com.o_o.cal.ics-0.1.0.zip"
+      "size": 12345, "sha256": "小写十六进制", "download": "https://island.astra-gate.si/plugins/com.o_o.cal.ics-0.1.0.zip"
     }
   ]
 }

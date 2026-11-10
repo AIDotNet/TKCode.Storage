@@ -86,7 +86,7 @@ public class UpdatesTests
     [Fact]
     public void Only_https_or_a_local_development_service_is_allowed()
     {
-        Assert.True(ServiceEndpoints.IsAllowed(new Uri("https://O_O.astra-gate.si/api/version")));
+        Assert.True(ServiceEndpoints.IsAllowed(new Uri("https://island.astra-gate.si/api/version")));
         Assert.True(ServiceEndpoints.IsAllowed(new Uri("http://localhost:5080/api/plugins")));
         Assert.True(ServiceEndpoints.IsAllowed(new Uri("http://127.0.0.1:5080/plugins/a.zip")));
         Assert.False(ServiceEndpoints.IsAllowed(new Uri("http://example.com/a.zip")));

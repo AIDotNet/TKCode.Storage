@@ -6,7 +6,7 @@ namespace Island.Core.Updates;
 /// </summary>
 public static class ServiceEndpoints
 {
-    public const string DefaultBase = "https://O_O.astra-gate.si";
+    public const string DefaultBase = "https://island.astra-gate.si";
 
     public static Uri Base
     {
