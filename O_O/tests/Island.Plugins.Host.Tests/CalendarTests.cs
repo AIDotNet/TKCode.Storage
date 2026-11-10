@@ -344,7 +344,10 @@ public sealed partial class PluginHostTests
         _updates.Clear();
         _pageViews.Clear();
         StartWith(null, Services with { Clipboard = clipboard, OpenBrowser = u => { opened.Enqueue(u); return Task.CompletedTask; } });
-        page = WaitForPage(s => s.PluginId == "com.o_o.calendar" && Nodes(s.View.Expanded).Any(n => n.Type == "item" && Texts(n).Contains("周会")), "events again");
+        WaitForPage(s => s.PluginId == "com.o_o.calendar" && Nodes(s.View.Expanded).Any(n => n.Type == "item" && Texts(n).Contains("周会")), "events again");
+        // The page drawn from the cache is drawn again once the sources answer, with new handlers: click on the latest.
+        Thread.Sleep(1000);
+        page = _pageViews.Last(s => s.PluginId == "com.o_o.calendar");
         _host!.Dispatch("com.o_o.calendar", Nodes(page.View.Expanded).First(n => n.Type == "item" && Texts(n).Contains("周会")).Handlers["onClick"]);
         WaitFor(() => opened.FirstOrDefault()?.AbsoluteUri == "https://meet.google.com/abc-defg-hij" ? "ok" : null, "link opened");
         Assert.Null(clipboard.Content); // opened, so nothing was copied

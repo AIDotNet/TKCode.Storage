@@ -9,6 +9,7 @@
     "island": "^1.0.0"
   },
   "main": "main.js",
+  "requires": ["com.o_o.calendar"],
   "permissions": [
     "calendar.system"
   ],

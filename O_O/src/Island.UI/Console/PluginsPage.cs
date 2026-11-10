@@ -22,20 +22,21 @@ using ArcSwitch = TKCode.Arc.Switch;
 namespace Island.UI.Console;
 
 /// <summary>
-/// docs/design/04-console.md §3.5 and §4: the plugins that are on, as a grid of cards (Arc Card); a card opens a
-/// drawer with everything about that plugin — permissions (consent for user plugins, switches to revoke), its
-/// connection, a settings form generated from its schema, turning it off or removing it. "添加插件" lists the bundled
-/// plugins that are off and installs plugin packages (.zip). Changes apply immediately.
+/// docs/design/04-console.md §3.5 and §4: the installed plugins grouped by category (PluginsPage.List.cs), a plugin
+/// that only feeds another (a usage provider, a calendar source) inside that plugin's card; a card opens a drawer with
+/// everything about that plugin — permissions (consent for user plugins, switches to revoke), its connection, a
+/// settings form generated from its schema, turning it off or removing it. 插件市场 (PluginsPage.Market.cs) offers the
+/// plugins that are off and the O_O plugin catalog, and installs plugin packages (.zip). Changes apply immediately.
 /// </summary>
-public sealed class PluginsPage : Panel
+public sealed partial class PluginsPage : Panel
 {
     private const double CardWidth = 212;
     private const double CardHeight = 196;
 
     private readonly PluginHost _host;
-    private readonly WrapPanel _grid = new() { Orientation = Orientation.Horizontal };
+    private readonly StackPanel _content = new();
     private readonly Drawer _drawer = new() { Side = DrawerSide.Right };
-    private readonly Dialog _addDialog = new() { Title = "添加插件", Size = ControlSize.Large };
+    private readonly Dialog _skillDialog = new() { Title = "让 AI 帮你写插件", Size = ControlSize.Large };
     private string? _drawerPlugin;
     private Control? _addError;
     private string? _skillFolder;   // set once the skill is installed
@@ -47,17 +48,9 @@ public sealed class PluginsPage : Panel
     public PluginsPage(PluginHost host)
     {
         _host = host;
-        var add = new ArcButton { Content = "添加插件", Variant = ButtonVariant.Primary, Size = ControlSize.Small, VerticalAlignment = VerticalAlignment.Top };
-        add.Click += (_, _) => OpenAdd();
-        var header = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(add, Dock.Right);
-        header.Children.Add(add);
-        header.Children.Add(PageTitle("插件", "灵动岛上的内容都来自插件。点卡片查看权限和设置；没用到的内置插件和你自己的插件在\"添加插件\"里。"));
-        _grid.ItemSpacing = 12;
-        _grid.LineSpacing = 12;
-        Children.Add(new StackPanel { Children = { header, _grid } });
+        Children.Add(_content);
         Children.Add(_drawer);
-        Children.Add(_addDialog);
+        Children.Add(_skillDialog);
         _drawer.Closed += (_, _) => _drawerPlugin = null;
         Rebuild();
         Action<string, PluginState, string?> stateChanged = (id, _, _) => Dispatcher.UIThread.Post(() =>
@@ -71,8 +64,8 @@ public sealed class PluginsPage : Panel
         WhileAttached(this, () => host.PluginStateChanged += stateChanged, () => host.PluginStateChanged -= stateChanged);
     }
 
-    /// <summary>Opens the "添加插件" dialog.</summary>
-    public void ShowAdd() => OpenAdd();
+    /// <summary>Opens 插件市场.</summary>
+    public void ShowAdd() => OpenMarket(null);
 
     /// <summary>Opens the drawer of a plugin, e.g. from elsewhere in the console.</summary>
     public void ShowPlugin(string pluginId)
@@ -82,72 +75,6 @@ public sealed class PluginsPage : Panel
             FillDrawer(pluginId);
             _drawer.IsOpen = true;
         }
-    }
-
-    private void Rebuild()
-    {
-        _grid.Children.Clear();
-        var shown = _host.Packages
-            .Where(p => _host.IsEnabled(p.Id))
-            .OrderBy(p => p.Bundled ? 0 : 1)
-            .ThenBy(p => p.Manifest.Name, StringComparer.CurrentCulture)
-            .ToList();
-        foreach (var package in shown)
-        {
-            _grid.Children.Add(PluginCard(package));
-        }
-        if (shown.Count == 0)
-        {
-            _grid.Children.Add(new EmptyState
-            {
-                Title = "还没有启用插件",
-                Description = "点\"添加插件\"启用内置插件，或安装你自己的插件包。",
-                Width = 480,
-            });
-        }
-        if (_addDialog.IsOpen)
-        {
-            FillAdd();
-        }
-    }
-
-    private Control PluginCard(PluginPackage package)
-    {
-        var state = _host.GetState(package.Id);
-        var (label, _) = StateBadge(state);
-        if (MissingRequirements(package).FirstOrDefault() is { } missing)
-        {
-            label = $"需启用{missing.Manifest.Name}";
-        }
-        var toggle = new ArcSwitch { IsChecked = true, VerticalAlignment = VerticalAlignment.Center };
-        AutomationProperties.SetName(toggle, $"启用{package.Manifest.Name}");
-        toggle.IsCheckedChanged += (_, _) =>
-        {
-            if (toggle.IsChecked == false)
-            {
-                _host.SetEnabled(package.Id, false);
-            }
-        };
-        var card = new Card
-        {
-            Width = CardWidth,
-            Height = CardHeight,
-            Title = package.Manifest.Name,
-            Description = package.Manifest.Description ?? package.Id,
-            Avatar = Icon(package, 18),
-            Meta = package.Bundled ? $"内置 · {package.Manifest.Version}" : $"我的插件 · {package.Manifest.Version}",
-            Status = label,
-            Action = toggle,
-            Cursor = new Cursor(StandardCursorType.Hand),
-        };
-        card.PointerReleased += (_, e) =>
-        {
-            if (e.InitialPressMouseButton == MouseButton.Left && e.Source is not ArcSwitch)
-            {
-                ShowPlugin(package.Id);
-            }
-        };
-        return card;
     }
 
     /// <summary>
@@ -278,38 +205,24 @@ public sealed class PluginsPage : Panel
         }
         body.Children.Add(actions);
         body.Children.Add(Text(package.Bundled
-                ? "停用后它会回到\"添加插件\"里，设置和数据都会保留。"
+                ? "停用后它仍在插件列表里（变灰），随时可以再打开，设置和数据都会保留。"
                 : "停用会保留它的设置和数据；移除会删除插件本身（数据保留，重新安装即可恢复）。",
             ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true));
 
         _drawer.Content = new ScrollViewer { Content = body, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
     }
 
-    // ---- 添加插件 -------------------------------------------------------------------------------------------
+    // ---- 让 AI 帮你写插件 -------------------------------------------------------------------------------------
 
-    private void OpenAdd()
+    private void OpenSkill()
     {
-        _addError = null;
-        FillAdd();
-        _addDialog.IsOpen = true;
+        FillSkill();
+        _skillDialog.IsOpen = true;
     }
 
-    private void FillAdd()
+    private void FillSkill()
     {
         var body = new StackPanel { Spacing = 8 };
-        var list = new StackPanel { Spacing = 8 };
-        var available = _host.Packages.Where(p => !_host.IsEnabled(p.Id))
-            .OrderBy(p => p.Bundled ? 0 : 1).ThenBy(p => p.Manifest.Name, StringComparer.CurrentCulture).ToList();
-        body.Children.Add(SectionLabel("安装"));
-        var pick = new ArcButton { Content = "选择文件", Variant = ButtonVariant.Secondary, Size = ControlSize.Small, VerticalAlignment = VerticalAlignment.Center };
-        pick.Click += async (_, _) => await PickAndInstall();
-        body.Children.Add(ActionRow(TKCode.Arc.Icons.Lucide.LucideIconKind.PackagePlus, "安装插件包（.zip）",
-            "选择插件作者提供的插件包。安装后它会请求所需的权限，你同意之前它不会运行。", pick));
-        if (_addError is not null)
-        {
-            body.Children.Add(_addError);
-        }
-
         var install = new ArcButton
         {
             Content = _skillFolder is null ? "安装技能" : "重新安装",
@@ -344,44 +257,7 @@ public sealed class PluginsPage : Panel
             body.Children.Add(header);
             body.Children.Add(new Input { Text = prompt, AcceptsReturn = true, IsReadOnly = true, MinHeight = 120 });
         }
-        list.Children.Add(SectionLabel("可添加的插件"));
-        if (available.Count == 0)
-        {
-            list.Children.Add(Text("所有插件都已启用。", ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.TextSecondary));
-        }
-        foreach (var package in available)
-        {
-            var add = new ArcButton { Content = "添加", Variant = ButtonVariant.Secondary, Size = ControlSize.Small, VerticalAlignment = VerticalAlignment.Center };
-            add.Click += (_, _) => _host.SetEnabled(package.Id, true);
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 12, Margin = new Thickness(0, 4) };
-            var icon = Icon(package, 20);
-            var words = new StackPanel
-            {
-                Spacing = 2,
-                VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    Text(package.Bundled ? package.Manifest.Name : $"{package.Manifest.Name}（我的插件）", ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, FontWeight.Medium),
-                    Text(package.Manifest.Description ?? package.Id, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true),
-                },
-            };
-            Grid.SetColumn(words, 1);
-            Grid.SetColumn(add, 2);
-            row.Children.Add(icon);
-            row.Children.Add(words);
-            row.Children.Add(add);
-            list.Children.Add(row);
-        }
-
-        body.Children.Add(list);
-        // Plugins from the O_O plugin catalog (CatalogSection.cs); a new one opens its drawer to ask for permissions.
-        body.Children.Add(new CatalogSection(_host, id =>
-        {
-            _addDialog.IsOpen = false;
-            Rebuild();
-            ShowPlugin(id);
-        }));
-        _addDialog.Content = new ScrollViewer { Content = body, MaxHeight = 480 };
+        _skillDialog.Content = new ScrollViewer { Content = body, MaxHeight = 480 };
     }
 
     /// <summary>Installed plugins this one requires that are turned off.</summary>
@@ -424,7 +300,7 @@ public sealed class PluginsPage : Panel
         {
             _skillError = $"安装失败：{e.Message}";
         }
-        FillAdd();
+        FillSkill();
     }
 
     private async Task PickAndInstall()
@@ -452,7 +328,6 @@ public sealed class PluginsPage : Panel
         {
             var package = await Task.Run(() => _host.Install(path, userDirectory));
             _addError = null;
-            _addDialog.IsOpen = false;
             Rebuild();
             ShowPlugin(package.Id); // its consent request is the next step
         }
@@ -465,7 +340,7 @@ public sealed class PluginsPage : Panel
     private void ShowAddError(string message)
     {
         _addError = new Alert { Tone = AlertTone.Danger, Title = message };
-        FillAdd();
+        Rebuild();
     }
 
     private static (string, BadgeTone) StateBadge(PluginState? state) => state switch

@@ -139,8 +139,10 @@ export async function activate() {
   // ---- views --------------------------------------------------------------------------------------------------------
 
   const send = async (command) => {
+    // Show the result at once; the host confirms (it treats a pause sent from here as a pause right away).
+    if (now && command === 'toggle') { track({ ...now, playing: !now.playing }); sync(); }
     try { await media.command(command); } catch { /* the player may not take commands */ }
-    setTimeout(async () => { track(await media.nowPlaying()); sync(); }, 700);
+    setTimeout(async () => { track(await media.nowPlaying()); sync(); }, 400);
   };
 
   const lyricBlock = () => {

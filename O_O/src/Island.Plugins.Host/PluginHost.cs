@@ -188,6 +188,16 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
         }
     }
 
+    /// <summary>Whether the user has turned this plugin on or off (rather than it being on or off by default).</summary>
+    public bool HasChoice(string pluginId)
+    {
+        lock (_gate)
+        {
+            _enabled ??= LoadEnabled();
+            return _enabled.ContainsKey(pluginId);
+        }
+    }
+
     /// <summary>
     /// Turns a plugin on (it starts, or asks for permission) or off (it stops; its data stays). Turning one on also turns
     /// on the installed plugins it <see cref="PluginManifest.Requires"/>: a usage provider shows nothing without the
