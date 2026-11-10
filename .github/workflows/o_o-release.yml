@@ -202,6 +202,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/o_o-v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: O_O/global.json
+
       - name: Publish the release
         env:
           O_O_SERVICE_TOKEN: ${{ secrets.O_O_SERVICE_TOKEN }}
@@ -220,3 +226,18 @@ jobs:
               "linux-arm64":   "\($gh)/o-o_\($v)_arm64.deb" } }' > release.json
           curl -fsS -X POST "$BASE/api/releases" -H "Authorization: Bearer $O_O_SERVICE_TOKEN" \
             -H "Content-Type: application/json" --data-binary @release.json
+
+      # The plugin catalog (O_O/catalog/plugins): every plugin that is not built in, packed exactly as installing checks it
+      # and uploaded; the service keeps the newest version of each. After the release, so a failure here never holds back
+      # the new version.
+      - name: Publish the plugin catalog
+        env:
+          O_O_SERVICE_TOKEN: ${{ secrets.O_O_SERVICE_TOKEN }}
+          BASE: ${{ vars.O_O_SERVICE_URL || 'https://island.astra-gate.si' }}
+        run: |
+          bash O_O/catalog/pack.sh "$RUNNER_TEMP/catalog"
+          for zip in "$RUNNER_TEMP"/catalog/*.zip; do
+            curl -fsS -X POST "$BASE/api/plugins" -H "Authorization: Bearer $O_O_SERVICE_TOKEN" \
+              -H "Content-Type: application/zip" --data-binary @"$zip" > /dev/null
+            echo "uploaded $(basename "$zip")"
+          done
