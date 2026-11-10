@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Transformation;
@@ -90,6 +91,9 @@ public sealed class SatelliteHost
             IslandPresenter.Post(() => SetAnchor(now));
         }
     }
+
+    /// <summary>A notice was clicked: (satellite key <c>plugin/satellite</c>, notice key). Raised before the view's own handlers.</summary>
+    public event Action<string, string>? NoticeClicked;
 
     /// <summary>Wire to <c>PluginHost.SatelliteUpdated</c>; may be called from any thread.</summary>
     public void OnUpdated(SatelliteSnapshot snapshot) => IslandPresenter.Post(() => Apply(snapshot));
@@ -425,6 +429,13 @@ public sealed class SatelliteHost
             };
             var notice = new Notice { Key = key, Pill = pill, Holder = holder, BadgeHost = badge, BadgeText = badgeText };
             pill.PointerEntered += (_, _) => notice.Hovered = true;
+            pill.AddHandler(InputElement.PointerReleasedEvent, (_, e) =>
+            {
+                if (e.InitialPressMouseButton == Avalonia.Input.MouseButton.Left)
+                {
+                    _host.NoticeClicked?.Invoke(_key, notice.Key);
+                }
+            }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
             pill.PointerExited += (_, _) => notice.Hovered = false;
             return notice;
         }

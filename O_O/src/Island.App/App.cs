@@ -37,6 +37,31 @@ public class App(IIslandPlatform platform) : Application
         new(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "pages.json"));
 
     /// <summary>A page as its plugin's manifest declares it (title, icon, on by default or not).</summary>
+    /// <summary>⌘-click on an activity (09 §2.2): its link in the browser, or its application brought forward or launched.</summary>
+    private static void OpenSource(PluginHost plugins, Island.Plugins.LiveActivityOpen open)
+    {
+        if (open.Url is { } url && Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http")
+        {
+            _ = plugins.Services.OpenBrowser(uri);
+            return;
+        }
+        if (open.App is not { } app || plugins.Services.NotificationListener?.Activate(app) == true)
+        {
+            return;
+        }
+        try
+        {
+            if (OperatingSystem.IsMacOS())
+            {
+                System.Diagnostics.Process.Start("/usr/bin/open", ["-b", app])?.Dispose();
+            }
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // Not installed, or not an application id: nothing to open.
+        }
+    }
+
     public static Island.Core.Pages.PageInfo DescribePage(PluginHost plugins, string pluginId, string pageId, string title)
     {
         var declared = plugins.Packages.FirstOrDefault(p => p.Id == pluginId)?.Manifest.Contributes.Pages
@@ -178,6 +203,14 @@ public class App(IIslandPlatform platform) : Application
             _plugins.PageEnded += (p, g) => IslandPresenter.Post(() => presenter.EndPage(p, g));
             _plugins.ChipUpdated += s => IslandPresenter.Post(() => presenter.UpdateChip(s));
             _plugins.AlertRaised += a => IslandPresenter.Post(() => presenter.ShowAlert(a));
+            // The 2.0 island (docs/design/09-island-v2.md): live activities, alerts, ambient items.
+            presenter.ActivityPreferences = new Island.Core.Activities.ActivityPreferencesStore(
+                Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "activities.json"));
+            _plugins.LiveActivityUpdated += s => IslandPresenter.Post(() => presenter.UpdateLive(s));
+            _plugins.LiveActivityEnded += (_, key) => IslandPresenter.Post(() => presenter.EndLive(key));
+            _plugins.LiveAlertRaised += a => IslandPresenter.Post(() => presenter.RaiseLiveAlert(a));
+            _plugins.AmbientUpdated += a => IslandPresenter.Post(() => presenter.UpdateAmbient(a));
+            presenter.OpenRequested += open => OpenSource(plugins, open);
             // Satellite islands beside the main one (docs/design/08): notices plugins show with island.satellite().
             VNodeRenderer.AppIconResolver = plugins.AppIcon;
             _satellites = new SatelliteHost(platform,
@@ -186,6 +219,24 @@ public class App(IIslandPlatform platform) : Application
             Island.UI.Console.SatellitePanel.Preferences = _satellites.Preferences;
             _plugins.SatelliteUpdated += _satellites.OnUpdated;
             _satellites.Follow(_island);
+            // The second activity is a bubble beside the island (09 §2, 最小); clicking it brings it to the front.
+            string? bubble = null;
+            long bubbleSequence = 0;
+            var satellites = _satellites;
+            presenter.BubbleChanged += s =>
+            {
+                bubble = s?.Key;
+                satellites.OnUpdated(new Island.Plugins.SatelliteSnapshot("o_o", "bubble", s is null ? "" : "bubble",
+                    s is null ? null : s.View.Minimal ?? s.View.Compact.Leading ?? s.View.Compact.Trailing,
+                    TimeSpan.Zero, null, "auto", ++bubbleSequence));
+            };
+            satellites.NoticeClicked += (satellite, _) =>
+            {
+                if (satellite == "o_o/bubble" && bubble is { } key)
+                {
+                    presenter.BringToFront(key);
+                }
+            };
             // Files dropped on the island go to the file shelf (docs 05 §7).
             IslandDropTarget.Attach(window.View, () => plugins.AcceptsFiles, plugins.DropFiles);
             _plugins.PluginLog += e =>

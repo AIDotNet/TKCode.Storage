@@ -1,0 +1,18 @@
+{
+  "id": "com.example.live-demo",
+  "name": "灵动岛示例",
+  "version": "1.0.0",
+  "description": "2.0 岛 API 示例：一个计时活动、一个播放活动、一个环境项和一页主页",
+  "icon": "Sparkles",
+  "main": "main.js",
+  "engines": { "island": "^2.0.0" },
+  "permissions": [],
+  "contributes": {
+    "activities": [
+      { "id": "timer", "title": "专注计时", "priority": "normal", "accent": "timer" },
+      { "id": "playing", "title": "播放中", "priority": "normal", "accent": "music" }
+    ],
+    "ambient": [{ "id": "temp", "title": "温度", "side": "left" }],
+    "home": [{ "id": "demo", "title": "示例" }]
+  }
+}

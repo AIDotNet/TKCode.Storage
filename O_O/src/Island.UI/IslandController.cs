@@ -88,7 +88,46 @@ public sealed class IslandController : IDisposable
                 e.Handled = true;
                 return;
             }
+            // ⌘-click (Ctrl elsewhere): open the first activity's app or link instead (09 §2.2).
+            if ((e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control)) && _presenter?.OpenCurrentSource() == true)
+            {
+                e.Handled = true;
+                return;
+            }
             _states.Click();
+        };
+        // Scrolling on the collapsed island: sideways moves between activities, upwards sets the current one aside.
+        // A trackpad sends many small steps, so they add up to one move per swipe.
+        view.Surface.PointerWheelChanged += (_, e) =>
+        {
+            if (_presenter is null || _states.State == IslandState.Expanded)
+            {
+                return; // the open card or page scrolls its own content
+            }
+            var now = _clock.Elapsed;
+            if (now - _wheelAt > WheelPause)
+            {
+                _wheelX = _wheelY = 0;
+                _wheelMoved = false;
+            }
+            _wheelAt = now;
+            _wheelX += e.Delta.X;
+            _wheelY += e.Delta.Y;
+            e.Handled = true;
+            if (_wheelMoved)
+            {
+                return;
+            }
+            if (Math.Abs(_wheelX) >= WheelStep && Math.Abs(_wheelX) > Math.Abs(_wheelY))
+            {
+                _wheelMoved = true;
+                _presenter.Cycle(_wheelX > 0 ? -1 : 1);
+            }
+            else if (_wheelY >= WheelStep)
+            {
+                _wheelMoved = true;
+                _presenter.SetAsideCurrent();
+            }
         };
         view.Surface.PointerMoved += (_, e) => Drag(e);
         view.Surface.PointerReleased += (_, e) => EndDrag(e);
@@ -124,6 +163,12 @@ public sealed class IslandController : IDisposable
         window.Screens.Changed += (_, _) => Relayout();
         window.ScalingChanged += (_, _) => _bridge?.UpdateScale(window.RenderScaling);
     }
+
+    private static readonly TimeSpan WheelPause = TimeSpan.FromMilliseconds(350);
+    private const double WheelStep = 2;
+    private TimeSpan _wheelAt;
+    private double _wheelX, _wheelY;
+    private bool _wheelMoved;
 
     private IslandAppearance _appearance = new();
     private IslandPlacement? _placementOverride;
@@ -412,6 +457,7 @@ public sealed class IslandController : IDisposable
         {
             return; // a full-screen app is in front: the island stays out of the way
         }
+        _presenter?.OpenHomeNext(); // the hotkey opens home (09 §2.2), whatever activity runs
         _hotkeyHeld = true;
         _hotkeyVisited = false;
         _hotkeyAt = _clock.Elapsed;

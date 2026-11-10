@@ -50,6 +50,19 @@ public static class IslandSnapshot
         {
             presenter.UpdateChip(chip); // shown before we subscribed; later ones arrive in order (sequence numbers)
         }
+        // The 2.0 island (docs/design/09-island-v2.md).
+        host.LiveActivityUpdated += s => Dispatcher.UIThread.Post(() => presenter.UpdateLive(s));
+        host.LiveActivityEnded += (_, k) => Dispatcher.UIThread.Post(() => presenter.EndLive(k));
+        host.AmbientUpdated += a => Dispatcher.UIThread.Post(() => presenter.UpdateAmbient(a));
+        foreach (var live in host.LiveActivities)
+        {
+            presenter.UpdateLive(live);
+        }
+        foreach (var ambient in host.LiveAmbient)
+        {
+            presenter.UpdateAmbient(ambient);
+        }
+
         presenter.SetTabRoom(expanded.Surface.Width - 10 - 200);
         host.ActivityUpdated += s => Dispatcher.UIThread.Post(() => presenter.Update(s));
         host.ActivityEnded += (p, a) => Dispatcher.UIThread.Post(() => presenter.End(p, a));
@@ -90,6 +103,13 @@ public static class IslandSnapshot
         };
         window.Show();
         Pump(settle);
+        if (state == IslandState.Expanded && Environment.GetEnvironmentVariable("O_O_RENDER_HOME") != "1")
+        {
+            // Opened again now that the plugins have started, as a click would: the first activity's card, or home.
+            presenter.OnStateChanged(IslandState.Compact);
+            presenter.OnStateChanged(IslandState.Expanded);
+            Pump(TimeSpan.FromMilliseconds(300));
+        }
         if (Environment.GetEnvironmentVariable("O_O_RENDER_ACTIVITY") is { Length: > 0 } plugin)
         {
             presenter.Pick(plugin); // e.g. com.o_o.ai-usage

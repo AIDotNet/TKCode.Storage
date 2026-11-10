@@ -27,7 +27,7 @@ namespace Island.UI.Plugins;
 /// </list>
 /// Must be used on the UI thread; <see cref="Post"/> marshals plugin events.
 /// </summary>
-public sealed class IslandPresenter
+public sealed partial class IslandPresenter
 {
     // Room the overflow trigger needs when some tabs do not fit.
     private const double OverflowRoom = 64;
@@ -149,6 +149,10 @@ public sealed class IslandPresenter
         }
         else if (was != IslandState.Expanded && state == IslandState.Expanded)
         {
+            if (OpenLive())
+            {
+                return; // the first activity's card (09 §2); home is one click away
+            }
             var visible = VisiblePages();
             var picked = _pickedByUser == _shown ? _pickedByUser : null;
             _shown = SmartHome.Choose(visible, _preferences.Current, picked, _collapsedAt is { } at ? _clock.Elapsed - at : TimeSpan.MaxValue, UrgentPages());
@@ -315,6 +319,10 @@ public sealed class IslandPresenter
             leading = _alertRenderer.Render(alert.Leading, null);
             trailing = _alertRenderer.Render(alert.Trailing, null);
         }
+        else if (LiveCompact() is { } live)
+        {
+            (leading, trailing) = live; // a 2.0 alert or the first live activity (09 §2)
+        }
         else if (_current is { } owner)
         {
             // Update in place only what this renderer drew last time; chips and alerts are other renderers' controls.
@@ -342,7 +350,7 @@ public sealed class IslandPresenter
             leading = ChipRow(left, offered, HorizontalAlignment.Left);
             trailing = ChipRow(right, offered, HorizontalAlignment.Right);
         }
-        _ownerShown = _alert is null && _current is { } shown ? (shown.PluginId, shown.ActivityId) : null;
+        _ownerShown = _alert is null && _alerts.Current is null && _arrangement.Primary is null && _current is { } shown ? (shown.PluginId, shown.ActivityId) : null;
         if (!ReferenceEquals(_view.CompactLeading.Content, leading))
         {
             _view.CompactLeading.Content = leading;
@@ -384,6 +392,10 @@ public sealed class IslandPresenter
         foreach (var (snapshot, info) in _chips.Values.OrderBy(c => c.Info.Key, StringComparer.Ordinal))
         {
             yield return (snapshot.View!, snapshot.PluginId, info);
+        }
+        foreach (var ambient in AmbientChips())
+        {
+            yield return ambient;
         }
         foreach (var (s, _) in _activities.Values.OrderBy(a => a.Order))
         {
@@ -504,6 +516,10 @@ public sealed class IslandPresenter
 
     private void RenderPage(IReadOnlyList<PageInfo> visible)
     {
+        if (_showingCard && _state == IslandState.Expanded)
+        {
+            return; // an activity's card is open; home renders when the user goes there
+        }
         var page = AllPages().FirstOrDefault(p => p.Info.Key == _shown);
         _view.ExpandedContent.Content = _expandedRenderer.Render(page.Snapshot?.View, _view.ExpandedContent.Content as Control);
         // The header says what the page has to say about itself; a page with nothing to say leaves it empty.
