@@ -74,6 +74,8 @@ export const ui = Object.freeze({
   swap: (props, children) => node('swap', props, children),
   /** A brand mark the host knows, drawn in the foreground colour. name: 'claude' | 'codex'. props: size (px) */
   logo: (name, props) => node('logo', { ...props, name: String(name) }),
+  /** A month calendar (Arc Calendar). props: value ('YYYY-MM-DD', the picked day), onChange('YYYY-MM-DD') */
+  calendar: (props) => node('calendar', props),
   /** A page indicator. props: count, index */
   dots: (props) => node('dots', props),
   /** props: tone ('neutral'|'success'|'info'|'warning'|'danger'), small */
@@ -369,6 +371,13 @@ export const oauth = permissions.some((p) => p.startsWith('oauth:')) ? Object.fr
   setLabel: (account, label) => call('oauth.setLabel', { handle: account?.handle ?? String(account), label: String(label) }),
   /** Forgets the account and deletes its tokens. */
   signOut: (account) => call('oauth.signOut', { handle: account?.handle ?? String(account) }),
+}) : undefined;
+
+// ---- notifications (notifications) -------------------------------------------------------------------------
+export const notify = has('notifications') ? Object.freeze({
+  /** A system notification (Notification Center, Windows toast…), titled "<plugin name> · <title>". Use it for things
+   *  the user would want to know while not looking at the island; at most one per 10 seconds and 20 per hour. */
+  show: (options) => call('notify.show', { title: String(options?.title ?? ''), body: String(options?.body ?? '') }),
 }) : undefined;
 
 // ---- shell (shell.openUrl) ------------------------------------------------------------------------------------

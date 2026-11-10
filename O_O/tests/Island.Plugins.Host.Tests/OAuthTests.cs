@@ -115,6 +115,13 @@ public sealed partial class PluginHostTests
         Assert.Contains("code=good", exchange);                 // the forged callback was ignored
         Assert.Contains("code_verifier=", exchange);
         Assert.Contains(provider.Requests, r => r.StartsWith("POST /token") && r.Contains("grant_type=refresh_token") && r.Contains("refresh_token=rt1"));
+
+        // The console lists the account and can sign it out (its tokens go with it).
+        var account = Assert.Single(_host!.GetOAuthAccounts("test.plugin"));
+        Assert.Equal(("google", "me"), (account.Provider, account.Label));
+        _host.SignOut("test.plugin", account.Handle);
+        Assert.Empty(_host.GetOAuthAccounts("test.plugin"));
+        Assert.Null(_secrets.Get("O_O/test.plugin", "oauth:" + account.Handle));
     }
 
     private static int FreePortOf(string url) => new Uri(url).Port;

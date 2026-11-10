@@ -11,7 +11,8 @@
   "main": "main.js",
   "permissions": [
     "clipboard.write",
-    "shell.openUrl"
+    "shell.openUrl",
+    "notifications"
   ],
   "contributes": {
     "pages": [
@@ -51,6 +52,12 @@
           "minimum": 1,
           "maximum": 24,
           "default": 3
+        },
+        "systemNotify": {
+          "type": "boolean",
+          "title": "系统通知",
+          "description": "除了岛上的提醒，也发送一条系统通知（看不到岛时也能知道）。",
+          "default": true
         }
       }
     }
