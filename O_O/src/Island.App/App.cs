@@ -70,6 +70,10 @@ public class App(IIslandPlatform platform) : Application
     }
 
     /// <summary>What the collapsed island shows: which chips, in what order, on which side.</summary>
+    /// <summary>The user's say over activities: order, policies, pinned (岛体 → 活动).</summary>
+    public static Island.Core.Activities.ActivityPreferencesStore Activities { get; } =
+        new(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "activities.json"));
+
     public static Island.Core.Pages.ChipPreferencesStore Chips { get; } =
         new(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "chips.json"));
 
@@ -114,6 +118,8 @@ public class App(IIslandPlatform platform) : Application
             return;
         }
         _console = new Island.UI.Console.ConsoleWindow(_plugins, DataDirectory, Appearance, Pages, Chips) { Hotkeys = _hotkeys };
+        _console.View.ActivityPreferences = Activities;
+        _console.View.TryOnIsland = () => _island?.Preview();
         _console.Closed += (_, _) => _console = null;
         _console.Show();
     }
@@ -193,8 +199,7 @@ public class App(IIslandPlatform platform) : Application
             _plugins.PageUpdated += s => IslandPresenter.Post(() => presenter.UpdatePage(s));
             _plugins.PageEnded += (p, g) => IslandPresenter.Post(() => presenter.EndPage(p, g));
             // The island (docs/design/09-island-v2.md): live activities, alerts, ambient items.
-            presenter.ActivityPreferences = new Island.Core.Activities.ActivityPreferencesStore(
-                Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "activities.json"));
+            presenter.ActivityPreferences = Activities;
             _plugins.LiveActivityUpdated += s => IslandPresenter.Post(() => presenter.UpdateLive(s));
             _plugins.LiveActivityEnded += (_, key) => IslandPresenter.Post(() => presenter.EndLive(key));
             _plugins.LiveAlertRaised += a => IslandPresenter.Post(() => presenter.RaiseLiveAlert(a));

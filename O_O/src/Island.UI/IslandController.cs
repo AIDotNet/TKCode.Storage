@@ -175,10 +175,10 @@ public sealed class IslandController : IDisposable
     }
 
     /// <summary>
-    /// Whether resting the pointer on the island opens it, as in 1.x. Off by default (docs/design/09-island-v2.md §2.2):
-    /// hovering makes the island a little larger and a click opens it.
+    /// Whether resting the pointer on the island opens it, as in 1.x (岛体 → 外观). Off by default
+    /// (docs/design/09-island-v2.md §2.2): hovering makes the island a little larger and a click opens it.
     /// </summary>
-    public bool HoverToExpand { get; set; }
+    private bool HoverToExpand => _appearance.HoverToExpand;
 
     /// <summary>How much the resting island grows under the pointer, in island units.</summary>
     private const double HoverGrow = 4;
@@ -472,13 +472,24 @@ public sealed class IslandController : IDisposable
     /// Opens the island from a global hotkey (docs 04, 快捷键), on <paramref name="page"/> (<c>plugin/page</c>) when
     /// given and shown.
     /// </summary>
-    public void OpenFromHotkey(string? page = null)
+    public void OpenFromHotkey(string? page = null) => Open(page, home: true);
+
+    /// <summary>
+    /// Opens the island as a click would (the first activity's card, or home) and keeps it open a moment: 在岛上试一下
+    /// on the console's 岛体 page.
+    /// </summary>
+    public void Preview() => Open(null, home: false);
+
+    private void Open(string? page, bool home)
     {
         if (_hidden)
         {
             return; // a full-screen app is in front: the island stays out of the way
         }
-        _presenter?.OpenHomeNext(); // the hotkey opens home (09 §2.2), whatever activity runs
+        if (home)
+        {
+            _presenter?.OpenHomeNext(); // the hotkey opens home (09 §2.2), whatever activity runs
+        }
         _hotkeyHeld = true;
         _hotkeyVisited = false;
         _hotkeyAt = _clock.Elapsed;

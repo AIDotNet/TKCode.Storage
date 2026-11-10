@@ -16,6 +16,12 @@ public partial class ConsoleView : UserControl
     private readonly Island.Core.Layout.IslandAppearanceStore? _appearance;
     private readonly Island.Core.Pages.PagePreferencesStore? _pages;
     private readonly Island.Core.Pages.ChipPreferencesStore? _chips;
+
+    /// <summary>The user's say over activities (岛体 → 活动); the island reads the same store.</summary>
+    public Island.Core.Activities.ActivityPreferencesStore? ActivityPreferences { get; set; }
+
+    /// <summary>在岛上试一下 (岛体): opens the real island for a moment; null where there is no island (renders, tests).</summary>
+    public Action? TryOnIsland { get; set; }
     private PluginsPage? _pluginsPage;
 
     /// <summary>Resource key of the brush behind grouped surfaces (cards) on the console pages.</summary>
@@ -99,7 +105,9 @@ public partial class ConsoleView : UserControl
                 _appearance ?? new Island.Core.Layout.IslandAppearanceStore(Path.Combine(_dataDirectory, "..", "island.json")),
                 _pages ?? new Island.Core.Pages.PagePreferencesStore(Path.Combine(_dataDirectory, "..", "pages.json")),
                 _chips ?? new Island.Core.Pages.ChipPreferencesStore(Path.Combine(_dataDirectory, "..", "chips.json")),
-                _plugins),
+                _plugins,
+                ActivityPreferences ?? new Island.Core.Activities.ActivityPreferencesStore(Path.Combine(_dataDirectory, "..", "activities.json")),
+                TryOnIsland),
             "shortcuts" => new HotkeysPage(Hotkeys),
             "about" => new AboutPage(_dataDirectory),
             _ => _pluginsPage ??= new PluginsPage(_plugins),

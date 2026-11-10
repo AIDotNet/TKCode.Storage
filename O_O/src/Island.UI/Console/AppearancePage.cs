@@ -40,7 +40,7 @@ public sealed class AppearancePage : StackPanel
 
     public AppearancePage()
     {
-        Children.Add(PageTitle("外观", "所有窗口默认采用苹果风格。灵动岛本身始终是黑色，以便与刘海融为一体。"));
+        Children.Add(PageTitle("外观", "所有窗口默认采用苹果风格。主题还可以改变灵动岛的表面、圆角、活动的颜色和动效；贴着刘海时岛体保持黑色，与刘海融为一体。"));
         if (_themes is { Themes.Count: > 0 })
         {
             Children.Add(SectionLabel("主题"));
@@ -65,18 +65,26 @@ public sealed class AppearancePage : StackPanel
                 Value = theme.Key,
                 Label = new StackPanel
                 {
-                    Orientation = Orientation.Horizontal,
                     Spacing = 8,
                     Children =
                     {
-                        new Avalonia.Controls.Shapes.Ellipse
+                        MiniIsland(theme),
+                        new StackPanel
                         {
-                            Width = 12,
-                            Height = 12,
-                            VerticalAlignment = VerticalAlignment.Center,
-                            Fill = new SolidColorBrush(theme.Accent ?? AppleTheme.SystemBlue),
+                            Orientation = Orientation.Horizontal,
+                            Spacing = 8,
+                            Children =
+                            {
+                                new Avalonia.Controls.Shapes.Ellipse
+                                {
+                                    Width = 12,
+                                    Height = 12,
+                                    VerticalAlignment = VerticalAlignment.Center,
+                                    Fill = new SolidColorBrush(theme.Accent ?? AppleTheme.SystemBlue),
+                                },
+                                new TextBlock { Text = theme.Title, VerticalAlignment = VerticalAlignment.Center },
+                            },
                         },
-                        new TextBlock { Text = theme.Title, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
                 Description = theme.Description ?? Describe(theme),
@@ -99,6 +107,40 @@ public sealed class AppearancePage : StackPanel
                 Text("主题设定强调色和圆角（有的也设定浅色或深色）。之后仍可在下面单独调整，直到再选一次主题。更多主题在 插件 › 添加插件 里。",
                     ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true),
             },
+        };
+    }
+
+    /// <summary>
+    /// A small island in the theme's island layer (docs/design/09-island-v2.md §4): its surface (moving, if animated),
+    /// its corners, and dots in three of its activity accents.
+    /// </summary>
+    private static Control MiniIsland(ThemeOption theme)
+    {
+        var look = IslandTheme.For(theme.Island);
+        const double height = 26;
+        var dots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        foreach (var accent in new[] { "music", "timer", "message" })
+        {
+            dots.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Width = 7, Height = 7, Fill = new SolidColorBrush(look.Accent(accent) ?? Colors.White) });
+        }
+        var content = new Panel();
+        if (look.Animated is { } animated)
+        {
+            var backdrop = new Island.UI.Controls.AnimatedSurface();
+            backdrop.Show(animated.Preset, animated.Colors, animated.Speed, still: false);
+            content.Children.Add(backdrop);
+        }
+        content.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Width = 8, Height = 8, Fill = Brushes.White, Opacity = 0.85, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0) });
+        content.Children.Add(dots);
+        return new Border
+        {
+            Width = 132,
+            Height = height,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            CornerRadius = new CornerRadius(height / 2 * Math.Min(1, look.CornerScale)),
+            ClipToBounds = true,
+            Background = look.Surface ?? Brushes.Black,
+            Child = content,
         };
     }
 

@@ -25,9 +25,11 @@ public class AppearanceExtrasTests
             Assert.Equal(FullScreenBehavior.Hide, old.FullScreen);
 
             var store = new IslandAppearanceStore(path);
-            store.Set(old with { Display = IslandDisplay.FollowMouse, FullScreen = FullScreenBehavior.Show });
+            Assert.False(old.HoverToExpand);                                  // 2.0: a click opens
+            store.Set(old with { Display = IslandDisplay.FollowMouse, FullScreen = FullScreenBehavior.Show, HoverToExpand = true });
             var back = new IslandAppearanceStore(path).Current;
             Assert.Equal(IslandDisplay.FollowMouse, back.Display);
+            Assert.True(back.HoverToExpand);
             Assert.Equal(FullScreenBehavior.Show, back.FullScreen);
             Assert.Contains("\"followMouse\"", File.ReadAllText(path));
         }

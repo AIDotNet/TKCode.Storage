@@ -21,8 +21,9 @@ using ArcSlider = TKCode.Arc.Slider;
 namespace Island.UI.Console;
 
 /// <summary>
-/// docs/design/07-home-and-layout.md §6, appearance block: the island's shape, docking edge, size and position.
-/// Every change is saved and applied to the island at once.
+/// 岛体 (docs/design/09-island-v2.md §5): collapsible sections on the left — 收起时 (the ambient items), 活动 (order,
+/// policies, pinned), 主页 (the home pages), 外观 (shape, dock, size, hover) — and on the right a preview drawn with the
+/// plugins' real content. Every change is saved and applied to the island at once.
 /// </summary>
 public sealed class IslandPage : StackPanel
 {
@@ -30,13 +31,35 @@ public sealed class IslandPage : StackPanel
     private readonly PagePreferencesStore _pages;
     private readonly PluginHost _plugins;
     private readonly ChipPreferencesStore _chips;
+    private readonly Island.Core.Activities.ActivityPreferencesStore _activities;
+    private readonly IslandPreview _preview;
+    private readonly Border _activityHost = new();
+    private Grid? _columns;
 
-    public IslandPage(IslandAppearanceStore store, PagePreferencesStore pages, ChipPreferencesStore chips, PluginHost plugins)
+    /// <summary>Which sections are open, kept while the app runs (the page is drawn again after every layout).</summary>
+    private static readonly Dictionary<string, bool> s_open = new(StringComparer.Ordinal)
+    {
+        ["collapsed"] = true, ["activities"] = true, ["home"] = false, ["look"] = false,
+    };
+
+    public IslandPage(IslandAppearanceStore store, PagePreferencesStore pages, ChipPreferencesStore chips, PluginHost plugins,
+        Island.Core.Activities.ActivityPreferencesStore activities, Action? tryOnIsland = null)
     {
         _chips = chips;
         _store = store;
         _pages = pages;
         _plugins = plugins;
+        _activities = activities;
+        _preview = new IslandPreview(plugins, pages, chips, activities, tryOnIsland);
+        // The preview stays in view while the settings scroll (two columns only).
+        AttachedToVisualTree += (_, _) =>
+        {
+            if (this.FindAncestorOfType<ScrollViewer>() is { } scroll)
+            {
+                scroll.ScrollChanged += (_, _) => Stick(scroll);
+            }
+        };
+        SizeChanged += (_, _) => Arrange2();
         _layouts = new Island.UI.Layouts.LayoutService(plugins, store, pages, chips);
         // A layout changes the shape, the lists and more: draw the page again from the stores.
         _layouts.Applied += () => Avalonia.Threading.Dispatcher.UIThread.Post(Build);
@@ -49,13 +72,13 @@ public sealed class IslandPage : StackPanel
     private void Build()
     {
         Children.Clear();
+        var look = new StackPanel();
         var store = _store;
         var a = store.Current;
-        Children.Add(PageTitle("岛体", "灵动岛的形态、位置和大小。修改会立即生效。"));
+        Children.Add(PageTitle("岛体", "灵动岛收起和展开时显示什么、外观和位置。修改会立即生效，右侧是用插件当前内容画出的预览。"));
         if (LayoutPresets() is { } presets)
         {
-            Children.Add(SectionLabel("布局"));
-            Children.Add(presets);
+            look.Children.Add(presets);
         }
 
         var shape = new SegmentedControl
@@ -129,7 +152,7 @@ public sealed class IslandPage : StackPanel
             }
         };
 
-        Children.Add(Group(new StackPanel
+        look.Children.Add(Group(new StackPanel
         {
             Spacing = 20,
             Children =
@@ -143,9 +166,10 @@ public sealed class IslandPage : StackPanel
                     v => Update(x => x with { FullScreen = Enum.Parse<FullScreenBehavior>(v) })),
                     Note("其他应用全屏（视频、游戏、演示）时：隐藏岛；或缩成贴边的一条细线，指针移上去仍能展开；退出全屏后自动恢复。")),
                 MinimalField(a),
+                HoverField(a),
             },
         }));
-        Children.Add(Group(new StackPanel
+        look.Children.Add(Group(new StackPanel
         {
             Spacing = 20,
             Children =
@@ -158,10 +182,185 @@ public sealed class IslandPage : StackPanel
             },
         }));
 
-        Children.Add(SectionLabel("页面"));
-        Children.Add(Group(PageList()));
-        Children.Add(SectionLabel("收起时显示"));
-        Children.Add(Group(ChipList()));
+        FillActivities();
+        var settings = new StackPanel
+        {
+            Children =
+            {
+                Section("collapsed", "收起时", "没有活动时，岛的左右两侧显示的小项；有活动时它们让位。", Group(ChipList())),
+                Section("activities", "活动", "正在进行的事（播放、计时、日程……）。最多同时显示两个：第一个在岛上，第二个是旁边的小圆泡。", _activityHost),
+                Section("home", "主页", "没有活动时点岛，或按快捷键打开的带页签的仪表盘。", Group(PageList())),
+                Section("look", "外观", "形态、停靠、大小、位置和展开方式。", look),
+            },
+        };
+        if (_preview.Parent is Panel old)
+        {
+            old.Children.Remove(_preview);
+        }
+        _columns = new Grid();
+        _columns.Children.Add(settings);
+        _columns.Children.Add(_preview);
+        Children.Add(_columns);
+        Arrange2();
+    }
+
+    /// <summary>Two columns (settings, preview) when there is room; otherwise the preview above the settings.</summary>
+    private void Arrange2()
+    {
+        if (_columns is not { Children: [var settings, var preview] })
+        {
+            return;
+        }
+        var wide = Bounds.Width is 0 or >= 820;
+        _columns.ColumnDefinitions = wide ? new ColumnDefinitions("*,24,340") : new ColumnDefinitions("*");
+        _columns.RowDefinitions = wide ? new RowDefinitions("Auto") : new RowDefinitions("Auto,Auto");
+        Grid.SetColumn(settings, 0);
+        Grid.SetRow(settings, wide ? 0 : 1);
+        Grid.SetColumn(preview, wide ? 2 : 0);
+        Grid.SetRow(preview, 0);
+        preview.VerticalAlignment = VerticalAlignment.Top;
+        preview.Margin = wide ? default : new Thickness(0, 0, 0, 16);
+        preview.RenderTransform = null;
+    }
+
+    private void Stick(ScrollViewer scroll)
+    {
+        if (_columns is null || _columns.ColumnDefinitions.Count < 3 || _columns.TranslatePoint(default, this) is not { } top)
+        {
+            return;
+        }
+        var room = Math.Max(0, _columns.Bounds.Height - _preview.Bounds.Height);
+        var y = Math.Clamp(scroll.Offset.Y - top.Y - Bounds.Y + 16, 0, room);
+        _preview.RenderTransform = new Avalonia.Media.TranslateTransform(0, y);
+    }
+
+    /// <summary>A section with a header that opens and closes it.</summary>
+    private static Control Section(string key, string title, string note, Control content)
+    {
+        var open = s_open.GetValueOrDefault(key, true);
+        var chevron = new TKCode.Arc.Icons.Lucide.LucideIcon { Kind = TKCode.Arc.Icons.Lucide.LucideIconKind.ChevronDown, Size = 16, VerticalAlignment = VerticalAlignment.Center };
+        var body = new StackPanel { Spacing = 8, IsVisible = open, Margin = new Thickness(0, 4, 0, 8), Children = { Note(note), content } };
+        chevron.RenderTransform = new Avalonia.Media.RotateTransform(open ? 0 : -90);
+        var header = new ArcButton
+        {
+            Variant = ButtonVariant.Ghost,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(-8, 8, 0, 0),
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children = { chevron, Text(title, ArcDesignTokenKind.TypeLG, ArcDesignTokenKind.Foreground, FontWeight.SemiBold) },
+            },
+        };
+        header.Click += (_, _) =>
+        {
+            body.IsVisible = !body.IsVisible;
+            s_open[key] = body.IsVisible;
+            chevron.RenderTransform = new Avalonia.Media.RotateTransform(body.IsVisible ? 0 : -90);
+        };
+        return new StackPanel { Children = { header, body } };
+    }
+
+    private sealed record ActivityKind(string Kind, string Title, string Plugin);
+
+    private static readonly (string Value, string Label)[] Policies = [("allow", "允许"), ("alertOnly", "只提醒"), ("off", "关闭")];
+
+    /// <summary>
+    /// 活动 (09 §2.1, §5): every activity the enabled plugins declare, dragged into order (it decides between activities
+    /// of the same importance), each allowed, alert-only or off, one of them pinned to the front.
+    /// </summary>
+    private void FillActivities()
+    {
+        var kinds = _plugins.Packages.Where(p => _plugins.IsEnabled(p.Id))
+            .SelectMany(p => p.Manifest.Contributes.Activities.Select(a => new ActivityKind($"{p.Id}/{a.Id}", a.Title ?? a.Id, p.Manifest.Name)))
+            .ToList();
+        var panel = new StackPanel { Spacing = 12 };
+        if (kinds.Count == 0)
+        {
+            panel.Children.Add(Note("启用的插件里还没有活动。"));
+            _activityHost.Child = Group(panel);
+            return;
+        }
+        var prefs = _activities.Current;
+        var order = prefs.Order.Select((k, i) => (k, i)).ToDictionary(x => x.k, x => x.i, StringComparer.Ordinal);
+        var rows = new ObservableCollection<ActivityKind>(kinds
+            .Select((k, i) => (k, i))
+            .OrderBy(x => order.TryGetValue(x.k.Kind, out var r) ? r : int.MaxValue)
+            .ThenBy(x => x.i)
+            .Select(x => x.k));
+        var list = new ReorderableList { Label = "活动", ItemsSource = rows };
+        list.ItemTemplate = new FuncDataTemplate<ActivityKind>((kind, _) => kind is null ? new Panel() : ActivityRow(kind));
+        list.Reordered += (_, _) => _activities.Set(_activities.Current with { Order = [.. rows.Select(r => r.Kind)] });
+        panel.Children.Add(list);
+        panel.Children.Add(Note("拖动调整顺序：同样重要的活动，排在前面的先上岛。「只提醒」的活动不留在岛上，但仍会短暂弹出提醒；「关闭」则都不显示。置顶的活动总是第一个。"));
+        _activityHost.Child = Group(panel);
+    }
+
+    private Control ActivityRow(ActivityKind kind)
+    {
+        var prefs = _activities.Current;
+        var policy = new SegmentedControl { VerticalAlignment = VerticalAlignment.Center };
+        foreach (var (value, label) in Policies)
+        {
+            policy.Items.Add(new SegmentedOption { Value = value, Label = label });
+        }
+        policy.SelectedValue = prefs.PolicyOf(kind.Kind) switch
+        {
+            Island.Core.Activities.ActivityPolicy.AlertOnly => "alertOnly",
+            Island.Core.Activities.ActivityPolicy.Off => "off",
+            _ => "allow",
+        };
+        policy.SelectionChanged += (_, _) =>
+        {
+            var chosen = policy.SelectedValue switch
+            {
+                "alertOnly" => Island.Core.Activities.ActivityPolicy.AlertOnly,
+                "off" => Island.Core.Activities.ActivityPolicy.Off,
+                _ => Island.Core.Activities.ActivityPolicy.Allow,
+            };
+            _activities.Set(_activities.Current.WithPolicy(kind.Kind, chosen));
+        };
+        var pinned = prefs.Pinned == kind.Kind;
+        var pin = new ArcButton
+        {
+            Content = pinned ? "已置顶" : "置顶",
+            Variant = pinned ? ButtonVariant.Secondary : ButtonVariant.Ghost,
+            Size = ControlSize.Small,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        pin.Click += (_, _) =>
+        {
+            _activities.Set(_activities.Current with { Pinned = pinned ? null : kind.Kind });
+            FillActivities(); // one pinned at a time: the other rows change too
+        };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 12 };
+        var titles = new StackPanel
+        {
+            Spacing = 2,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { Text(kind.Title, ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, FontWeight.Medium) },
+        };
+        if (kind.Plugin != kind.Title)
+        {
+            titles.Children.Add(Text(kind.Plugin, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary));
+        }
+        Grid.SetColumn(pin, 1);
+        Grid.SetColumn(policy, 2);
+        grid.Children.Add(titles);
+        grid.Children.Add(pin);
+        grid.Children.Add(policy);
+        return grid;
+    }
+
+    /// <summary>悬停展开: off (default) — hovering makes the island a little larger, a click opens it (09 §2.2).</summary>
+    private Control HoverField(IslandAppearance a)
+    {
+        var toggle = new ArcSwitch { IsChecked = a.HoverToExpand, VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetName(toggle, "悬停展开");
+        toggle.IsCheckedChanged += (_, _) => Update(x => x with { HoverToExpand = toggle.IsChecked == true });
+        return Field("悬停展开", toggle, Note("关闭时（默认）指针移到岛上，岛会稍微变大，点一下才展开；打开后指针停留片刻就展开。全屏时的细线总是悬停展开。"));
     }
 
     /// <summary>The layouts enabled plugins offer, one button each; null when there are none.</summary>

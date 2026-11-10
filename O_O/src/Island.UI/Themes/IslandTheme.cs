@@ -95,6 +95,9 @@ public sealed class IslandTheme
         return DefaultAccents.TryGetValue(accent, out var fallback) ? fallback : null;
     }
 
+    /// <summary>A theme's island layer without applying it (the console's theme cards draw a small island with it).</summary>
+    public static IslandTheme For(IslandThemeSpec? spec) => new(spec, null);
+
     /// <summary>Makes <paramref name="spec"/> (from the plugin in <paramref name="directory"/>) the island's look and publishes its surface brush.</summary>
     public static void Apply(IslandThemeSpec? spec, string? directory = null)
     {

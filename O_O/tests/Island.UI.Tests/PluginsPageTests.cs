@@ -93,3 +93,47 @@ public sealed class PluginsPageTests : IDisposable
     public void Categories_come_from_what_a_plugin_is(string id, string requires, string expected) =>
         Assert.Equal(expected, PluginCategories.Of(id, requires.Length == 0 ? [] : [requires], []));
 }
+
+/// <summary>岛体 → 活动 (docs/design/09-island-v2.md §5): the user's say over activities, saved in the shared store.</summary>
+public sealed class IslandPageActivityTests : IDisposable
+{
+    private readonly string _root = Directory.CreateTempSubdirectory("o_o-islandpage-").FullName;
+
+    public void Dispose() => Directory.Delete(_root, recursive: true);
+
+    [Fact]
+    public void Activities_can_be_turned_alert_only_and_pinned() => Headless.Run(() =>
+    {
+        var dir = Path.Combine(_root, "plugins", "com.example.music");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "plugin.json"), """
+            { "id": "com.example.music", "name": "音乐", "version": "1.0.0", "engines": { "island": "^2.0.0" }, "main": "main.js",
+              "permissions": [], "contributes": { "activities": [{ "id": "playing", "title": "播放中" }, { "id": "timer", "title": "计时" }] } }
+            """);
+        File.WriteAllText(Path.Combine(dir, "main.js"), "export function activate() {}");
+        var data = Path.Combine(_root, "data");
+        Directory.CreateDirectory(data);
+        using var host = new Island.Plugins.Host.PluginHost(new Island.Plugins.Host.PluginServices(data, new Island.Platform.InMemorySecretStore()));
+        host.Discover(Path.Combine(_root, "plugins"), bundled: true);
+        var activities = new Island.Core.Activities.ActivityPreferencesStore(Path.Combine(data, "activities.json"));
+        var page = new Island.UI.Console.IslandPage(
+            new Island.Core.Layout.IslandAppearanceStore(Path.Combine(data, "island.json")),
+            new Island.Core.Pages.PagePreferencesStore(Path.Combine(data, "pages.json")),
+            new Island.Core.Pages.ChipPreferencesStore(Path.Combine(data, "chips.json")),
+            host, activities);
+        var window = new Window { Width = 1200, Height = 900, Content = new ScrollViewer { Content = page } };
+        window.Show();
+
+        var policies = page.GetLogicalDescendants().OfType<TKCode.Arc.SegmentedControl>()
+            .Where(s => s.Items.OfType<TKCode.Arc.SegmentedOption>().Any(o => (o.Value as string) == "alertOnly")).ToList();
+        Assert.Equal(2, policies.Count);
+        policies[0].SelectedValue = "alertOnly";
+        Assert.Equal(Island.Core.Activities.ActivityPolicy.AlertOnly, activities.Current.PolicyOf("com.example.music/playing"));
+
+        var pin = page.GetLogicalDescendants().OfType<TKCode.Arc.Button>().First(b => (b.Content as string) == "置顶");
+        pin.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(TKCode.Arc.Button.ClickEvent));
+        Assert.Equal("com.example.music/playing", activities.Current.Pinned);
+        window.UpdateLayout();                                                 // the list is drawn again
+        Assert.Contains(page.GetLogicalDescendants().OfType<TKCode.Arc.Button>(), b => (b.Content as string) == "已置顶");
+    });
+}
