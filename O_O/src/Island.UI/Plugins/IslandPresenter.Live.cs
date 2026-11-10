@@ -282,7 +282,7 @@ public sealed partial class IslandPresenter
     /// <summary>Ambient items, offered with the chips (the user arranges both in 收起时显示).</summary>
     private IEnumerable<(VNode View, string PluginId, ChipInfo Info)> AmbientChips() =>
         _ambientItems.Values.OrderBy(a => a.Key, StringComparer.Ordinal).Select(a => (a.View!, a.PluginId,
-            new ChipInfo(AmbientChipKey(a.Key), a.AmbientId, EnabledByDefault: true, a.Side == "left" ? ChipSide.Left : ChipSide.Right)));
+            new ChipInfo(AmbientChipKey(a.Key), a.Title ?? a.AmbientId, a.EnabledByDefault, a.Side == "left" ? ChipSide.Left : ChipSide.Right)));
 
     // ---- the expanded island: the activity's card, or home --------------------------------------------------------
 

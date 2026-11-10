@@ -1,11 +1,13 @@
 {
   "id": "com.example.weather",
   "name": "天气（示例）",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "permissions": ["network:api.open-meteo.com"],
   "contributes": {
-    "activities": [{ "id": "now", "title": "天气" }],
+    "ambient": [{ "id": "temp", "title": "温度", "side": "right" }],
+    "home": [{ "id": "now", "title": "天气（示例）", "icon": "CloudSun" }],
     "settings": {
       "properties": {
         "city":      { "type": "string",  "title": "城市", "description": "显示在岛上的名称。", "default": "上海" },

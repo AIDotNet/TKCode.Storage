@@ -206,9 +206,12 @@ public sealed class IslandPage : StackPanel
                     offered.Add((new ChipInfo(ChipSnapshot.ChipKey(package.Id, chip.Id, null), chip.Title ?? chip.Id, chip.Enabled ?? true, side), package.Manifest.Name));
                     continue;
                 }
-                foreach (var live in _plugins.LiveChips.Where(c => c.PluginId == package.Id && c.ChipId == chip.Id).OrderBy(c => c.Title))
+                // One row per instance shown now (1.x chips and 2.0 ambient items alike).
+                var instances = _plugins.LiveChips.Where(c => c.PluginId == package.Id && c.ChipId == chip.Id).Select(c => (c.Key, c.Title))
+                    .Concat(_plugins.LiveAmbient.Where(a => a.PluginId == package.Id && a.AmbientId == chip.Id).Select(a => (a.Key, Title: a.Title ?? a.AmbientId)));
+                foreach (var (key, title) in instances.OrderBy(x => x.Title))
                 {
-                    offered.Add((new ChipInfo(live.Key, live.Title, chip.Enabled ?? true, side), package.Manifest.Name));
+                    offered.Add((new ChipInfo(key, title, chip.Enabled ?? true, side), package.Manifest.Name));
                 }
             }
         }

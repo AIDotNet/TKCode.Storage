@@ -103,7 +103,7 @@ public sealed class PluginContributions
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public IEnumerable<ChipContribution> CollapsedItems =>
-        Chips.Concat(Ambient.Select(a => new ChipContribution { Id = a.Id, Title = a.Title, Enabled = a.Enabled, Side = a.Side }));
+        Chips.Concat(Ambient.Select(a => new ChipContribution { Id = a.Id, Title = a.Title, Enabled = a.Enabled, Side = a.Side, Multiple = a.Multiple }));
 
     /// <summary>Looks for every O_O window (docs/design/03-plugin-system.md §9), chosen on the console's 外观 page.</summary>
     public IReadOnlyList<ThemeContribution> Themes { get => field ?? []; init; }
@@ -395,6 +395,9 @@ public sealed class AmbientContribution
 
     /// <summary>Whether it shows until the user decides otherwise.</summary>
     public bool? Enabled { get; init; }
+
+    /// <summary>One item per instance (one per account): <c>island.ambient(id, instance)</c>.</summary>
+    public bool Multiple { get; init; }
 }
 
 [JsonSourceGenerationOptions(

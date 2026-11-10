@@ -160,8 +160,8 @@ export async function activate() {
     ui.text(value === null ? '—' : `${Math.round(value)}%`, { size: 'sm', weight: 'semibold', tabular: true }),
   ]);
   const renderChips = (top, alerting) => {
-    if (top === null) island.chip('summary').remove();
-    else island.chip('summary').update(chipText(top, alerting));
+    if (top === null) island.ambient('summary').remove();
+    else island.ambient('summary').update(chipText(top, alerting));
     const seen = new Set();
     for (const provider of providers) {
       for (const e of data.get(provider.id)?.accounts ?? []) {
@@ -174,13 +174,13 @@ export async function activate() {
         for (let n = 2; seen.has(instance); n++) instance = `${base}#${n}`;
         seen.add(instance);
         const busiest = Math.max(...windows.map((w) => w.usedPercent));
-        island.chip('account', instance).update(ui.row({ gap: 'xs', align: 'center' }, [
+        island.ambient('account', instance).update(ui.row({ gap: 'xs', align: 'center' }, [
           mark(provider.id, 14),
           ui.text(`${Math.round(busiest)}%`, { size: 'sm', weight: 'semibold', tabular: true }),
         ]), { title: `${provider.title} · ${e.account.label || e.account.handle}` });
       }
     }
-    for (const instance of accountChips) if (!seen.has(instance)) island.chip('account', instance).remove();
+    for (const instance of accountChips) if (!seen.has(instance)) island.ambient('account', instance).remove();
     accountChips.clear();
     for (const instance of seen) accountChips.add(instance);
   };
@@ -206,25 +206,39 @@ export async function activate() {
         ])
       : updated ? ui.text(`更新于${ago(updated)}`, { tone: 'secondary', size: 'sm' }) : null;
     renderChips(top, alerting);
-    if (alerting && !alerted) {
-      island.alert({ leading: ui.icon('TriangleAlert', { tone: 'accent' }), trailing: ui.text(`AI 额度 ${Math.round(top)}%`, { size: 'sm', weight: 'semibold' }) }, { seconds: 5 });
-    }
-    alerted = alerting;
+    // A limit close to running out is a live activity (docs/design/09-island-v2.md), announced once.
     if (alerting) {
-      act ??= island.activity.create('usage', { title: 'AI 用量', priority: 'active', page: 'usage' });
-      act.update({});
+      const spec = {
+        compact: {
+          leading: ui.icon('TriangleAlert', { tone: 'accent', size: 14 }),
+          trailing: ui.text(`${Math.round(top)}%`, { size: 'sm', weight: 'semibold', tabular: true }),
+        },
+        minimal: ui.icon('TriangleAlert', { tone: 'accent', size: 14 }),
+        expanded: {
+          leading: ui.icon('TriangleAlert', { tone: 'accent', size: 24 }),
+          center: ui.stack({ gap: 'xs' }, [
+            ui.text(`AI 额度已用 ${Math.round(top)}%`, { weight: 'semibold' }),
+            ui.text(`超过了提醒阈值 ${alertAt}%，详情在主页的“AI 用量”。`, { tone: 'secondary', size: 'sm', wrap: true }),
+          ]),
+        },
+      };
+      if (act) act.update(spec); else act = island.activity('usage', spec);
+      if (!alerted) {
+        act.alert({ leading: ui.icon('TriangleAlert', { tone: 'accent' }), center: ui.text(`AI 额度 ${Math.round(top)}%`, { size: 'sm', weight: 'semibold' }), seconds: 5 });
+      }
     } else {
       act?.end();
       act = null;
     }
+    alerted = alerting;
     if (providers.length === 0) {
-      island.page('usage').update(ui.stack({ gap: 'sm' }, [
+      island.home.page('usage').update(ui.stack({ gap: 'sm' }, [
         ui.text('还没有可用的 AI 提供商', { weight: 'semibold' }),
         ui.text('在控制台的"插件"页启用 Codex、Claude 等提供商插件后，这里会显示它们的额度。', { tone: 'secondary', wrap: true }),
       ]));
       return;
     }
-    island.page('usage').update(ui.stack({ gap: 'md', align: 'stretch' }, [
+    island.home.page('usage').update(ui.stack({ gap: 'md', align: 'stretch' }, [
         // Provider tabs, and — only when this provider has several — a compact account picker at the far end.
         // The provider is switched with the ‹ › arrows below (its mark says which one is shown), so no tab row here.
         accounts.length > 1

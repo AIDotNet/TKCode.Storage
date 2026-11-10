@@ -141,24 +141,40 @@ export async function activate() {
     const remind = settings.get('remindBefore') * MINUTE;
     const lookahead = settings.get('lookaheadHours') * 60 * MINUTE;
 
-    // Starting soon: one alert, and an activity so opening the island shows the 日程 page.
+    // Starting soon (docs/design/09-island-v2.md): a live activity whose card can join the meeting, and one alert.
     const s = soon(now, remind);
     if (s) {
+      const icon = s.meetingUrl ? 'Video' : 'CalendarClock';
+      const started = now >= s.startMs;
+      const spec = {
+        compact: {
+          leading: ui.icon(icon, { tone: 'accent', size: 14 }),
+          trailing: ui.text(started ? '进行中' : hm(s.startMs), { size: 'sm', weight: 'semibold', tabular: true }),
+        },
+        minimal: ui.icon(icon, { tone: 'accent', size: 14 }),
+        expanded: {
+          leading: ui.icon(icon, { tone: 'accent', size: 24 }),
+          center: ui.stack({ gap: 'xs' }, [
+            ui.text(s.title, { weight: 'semibold', lines: 1 }),
+            ui.text(`${hm(s.startMs)} – ${hm(s.endMs)}${s.location ? ` · ${cut(s.location, 16)}` : ''}`, { tone: 'secondary', size: 'sm' }),
+          ]),
+          trailing: s.meetingUrl ? ui.button('加入', { variant: 'ghost', onClick: () => open(s) }) : undefined,
+        },
+      };
+      if (act) act.update(spec); else act = island.activity('soon', spec);
       const id = `${s.key}|${s.startMs}`;
       if (!alerted.has(id)) {
         alerted.add(id);
         alerted = new Set([...alerted].filter((k) => +k.split('|').pop() > now - DAY));
         storage.set('alerted', [...alerted]);
         const minutes = Math.round((s.startMs - now) / MINUTE);
-        island.alert({
-          leading: ui.icon(s.meetingUrl ? 'Video' : 'CalendarClock'),
-          trailing: ui.text(`${minutes > 0 ? `${minutes} 分钟后` : '现在'} · ${cut(s.title, 10)}`, { size: 'sm', weight: 'semibold' }),
-        }, { seconds: 6 });
+        act.alert({
+          leading: ui.icon(icon),
+          center: ui.text(`${minutes > 0 ? `${minutes} 分钟后` : '现在'} · ${cut(s.title, 10)}`, { size: 'sm', weight: 'semibold' }),
+          seconds: 6,
+        });
         systemNotify(minutes > 0 ? `${minutes} 分钟后开始` : '日程开始', s.title);
       }
-      act ??= island.activity.create('soon', { title: '日程即将开始', page: 'today' });
-      act.setPriority(now >= s.startMs ? 'active' : 'passive');
-      act.update({});
       picked = startOfDay(s.startMs);
       monthOf = monthStart(picked);
     } else if (act) {
@@ -169,12 +185,12 @@ export async function activate() {
     // Collapsed: the next timed event within the lookahead, or the one under way.
     const next = timed().find((e) => e.endMs > now && e.startMs - now <= lookahead);
     if (next) {
-      island.chip('next').update(ui.row({ gap: 'xs', align: 'center' }, [
+      island.ambient('next').update(ui.row({ gap: 'xs', align: 'center' }, [
         ui.icon(next.meetingUrl ? 'Video' : 'Calendar', { tone: 'secondary', size: 14 }),
         ui.text(next.startMs <= now ? cut(next.title, 4) : hm(next.startMs), { size: 'sm', weight: 'semibold', tabular: true }),
       ]));
     } else {
-      island.chip('next').remove();
+      island.ambient('next').remove();
     }
 
     render(now);
@@ -202,7 +218,7 @@ export async function activate() {
       }
       try {
         await clipboard.write({ text: e.meetingUrl });
-        island.alert({ leading: ui.icon('Link'), trailing: ui.text('已复制会议链接', { size: 'sm', weight: 'semibold' }) }, { seconds: 2 });
+        island.alert({ leading: ui.icon('Link'), center: ui.text('已复制会议链接', { size: 'sm', weight: 'semibold' }), seconds: 2 });
         notice = e.meetingUrl;
       } catch (err) {
         notice = err.message;
@@ -336,7 +352,7 @@ export async function activate() {
       body = ui.stack({ gap: 'xs', align: 'stretch' }, shown.slice(page * PER_PAGE, (page + 1) * PER_PAGE).map((e) => row(e, now)));
     }
 
-    island.page('today').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
+    island.home.page('today').update(ui.stack({ gap: 'sm', align: 'stretch' }, [
       ui.row({ gap: 'lg', align: 'start' }, [
         ui.stack({ width: 270 }, [monthGrid(now, today)]),
         ui.stack({ gap: 'sm', align: 'stretch', grow: true }, [

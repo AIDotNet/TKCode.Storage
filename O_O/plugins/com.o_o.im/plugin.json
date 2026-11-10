@@ -1,19 +1,18 @@
 {
   "id": "com.o_o.im",
   "name": "即时消息",
-  "version": "0.1.0",
-  "description": "微信、QQ 的新消息提醒：在岛旁边用独立的小胶囊显示来源应用的图标、消息和未读数",
+  "version": "0.2.0",
+  "description": "微信、QQ 的新消息提醒：岛上短暂显示来源应用的图标和消息，未读数一直留着",
   "icon": "MessageCircle",
   "optional": true,
+  "engines": { "island": "^2.0.0" },
   "main": "main.js",
   "permissions": [
     "notifications.listen:com.tencent.xinWeChat",
     "notifications.listen:com.tencent.qq"
   ],
   "contributes": {
-    "satellites": [
-      { "id": "message", "title": "消息提醒", "side": "auto" }
-    ],
+    "activities": [{ "id": "unread", "title": "未读消息", "priority": "passive", "accent": "message" }],
     "settings": {
       "properties": {
         "seconds": {

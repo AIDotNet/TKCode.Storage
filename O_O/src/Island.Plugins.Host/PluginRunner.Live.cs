@@ -13,7 +13,7 @@ internal sealed partial class PluginRunner
     private const int MaxAlertsPerMinute = 30;
 
     private readonly HashSet<(string Id, string? Instance)> _live = [];
-    private readonly HashSet<string> _ambient = [];
+    private readonly HashSet<(string Id, string? Instance)> _ambient = [];
     private readonly Queue<DateTime> _alertTimes = new();
 
     private static bool IsLiveOp(string op) => op is "live" or "liveEnd" or "liveAlert" or "ambient" or "ambientEnd";
@@ -143,38 +143,51 @@ internal sealed partial class PluginRunner
         {
             throw c.TypeError($"Ambient item '{id}' is not declared in plugin.json (contributes.ambient).");
         }
+        var instance = Arg(ref c, 2) is { Length: > 0 } i ? i : null;
+        if (declared.Multiple != (instance is not null))
+        {
+            throw c.TypeError(declared.Multiple
+                ? $"Ambient item '{id}' is declared multiple: give an instance."
+                : $"Ambient item '{id}' is not declared multiple: give no instance.");
+        }
+        if (instance is { Length: > 64 })
+        {
+            throw c.TypeError("An ambient item instance id is at most 64 characters.");
+        }
         var side = declared.Side == "left" ? "left" : "right";
-        var lastKey = "ambient\u0001" + id;
+        var key = (id, instance);
+        var lastKey = "ambient\u0001" + id + "\u0001" + instance;
         if (end)
         {
             _lastViews.Remove(lastKey);
-            if (_ambient.Remove(id))
+            if (_ambient.Remove(key))
             {
-                _sink.AmbientUpdated(new AmbientSnapshot(Id, id, side, null, ++_sequence));
+                _sink.AmbientUpdated(new AmbientSnapshot(Id, id, side, null, ++_sequence, instance));
             }
             return JsValue.Undefined;
         }
-        if (!_ambient.Contains(id) && _ambient.Count >= MaxAmbient)
+        if (!_ambient.Contains(key) && _ambient.Count >= MaxAmbient)
         {
             throw c.TypeError($"A plugin may show at most {MaxAmbient} ambient items at once.");
         }
-        var args = Arg(ref c, 4);
-        if (_ambient.Contains(id) && Unchanged(lastKey, args))
+        var args = string.Concat(Arg(ref c, 3), "\u0001", Arg(ref c, 4));
+        if (_ambient.Contains(key) && Unchanged(lastKey, args))
         {
             return JsValue.Undefined;
         }
         VNode view;
         try
         {
-            view = VNodeJson.ParseNode(args);
+            view = VNodeJson.ParseNode(Arg(ref c, 4));
         }
         catch (InvalidDataException e)
         {
             throw c.TypeError($"Invalid ambient view: {e.Message}");
         }
-        _ambient.Add(id);
+        _ambient.Add(key);
         _lastViews[lastKey] = args;
-        _sink.AmbientUpdated(new AmbientSnapshot(Id, id, side, view, ++_sequence));
+        var title = Str(Options(ref c), "title") ?? declared.Title ?? id;
+        _sink.AmbientUpdated(new AmbientSnapshot(Id, id, side, view, ++_sequence, instance, title, declared.Enabled ?? true));
         return JsValue.Undefined;
     }
 
@@ -186,10 +199,10 @@ internal sealed partial class PluginRunner
             _sink.LiveActivityEnded(Id, instance is null ? $"{Id}/{id}" : $"{Id}/{id}#{instance}");
         }
         _live.Clear();
-        foreach (var id in _ambient)
+        foreach (var (id, instance) in _ambient)
         {
             var side = _package.Manifest.Contributes.Ambient.FirstOrDefault(a => a.Id == id)?.Side == "left" ? "left" : "right";
-            _sink.AmbientUpdated(new AmbientSnapshot(Id, id, side, null, ++_sequence));
+            _sink.AmbientUpdated(new AmbientSnapshot(Id, id, side, null, ++_sequence, instance));
         }
         _ambient.Clear();
         _alertTimes.Clear();

@@ -66,10 +66,21 @@ public sealed record LiveAlertSnapshot(
     public string Kind => ActivityKey is { } k && k.IndexOf('#') is var i and > 0 ? k[..i] : ActivityKey ?? PluginId;
 }
 
-/// <summary>An ambient item (<c>island.ambient(id)</c>): shown beside the idle island. A null view removes it.</summary>
-public sealed record AmbientSnapshot(string PluginId, string AmbientId, string Side, VNode? View, long Sequence)
+/// <summary>An ambient item (<c>island.ambient(id[, instance])</c>): shown beside the idle island. A null view removes it.</summary>
+/// <param name="Title">What the console calls it: the instance's title (the account), else the declared one.</param>
+/// <param name="EnabledByDefault">Whether it shows until the user decides (declared <c>enabled</c>).</param>
+public sealed record AmbientSnapshot(
+    string PluginId,
+    string AmbientId,
+    string Side,
+    VNode? View,
+    long Sequence,
+    string? Instance = null,
+    string? Title = null,
+    bool EnabledByDefault = true)
 {
-    public string Key => $"{PluginId}/{AmbientId}";
+    /// <summary><c>plugin/id[#instance]</c>: the same key the 1.x chip had, so the user's choices carry over.</summary>
+    public string Key => Instance is null ? $"{PluginId}/{AmbientId}" : $"{PluginId}/{AmbientId}#{Instance}";
 }
 
 /// <summary>Parses the region JSON the 2.0 API sends (09 §3): <c>{ compact: { leading, trailing }, minimal, expanded: { … } }</c>.</summary>

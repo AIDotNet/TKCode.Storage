@@ -1,11 +1,11 @@
 {
   "id": "com.o_o.calendar",
   "name": "日程",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "汇总各日历的日程，会前提醒",
   "icon": "CalendarDays",
   "engines": {
-    "island": "^1.0.0"
+    "island": "^2.0.0"
   },
   "main": "main.js",
   "permissions": [
@@ -14,26 +14,21 @@
     "notifications"
   ],
   "contributes": {
-    "pages": [
+    "home": [
       {
         "id": "today",
         "title": "日程",
         "icon": "CalendarDays"
       }
     ],
-    "chips": [
+    "ambient": [
       {
         "id": "next",
         "title": "下一个日程",
         "side": "right"
       }
     ],
-    "activities": [
-      {
-        "id": "soon",
-        "title": "日程即将开始"
-      }
-    ],
+    "activities": [{ "id": "soon", "title": "日程即将开始", "priority": "high", "accent": "calendar" }],
     "settings": {
       "properties": {
         "remindBefore": {

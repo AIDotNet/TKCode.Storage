@@ -1,7 +1,9 @@
 {
   "id": "com.example.demo-usage",
   "name": "示例用量来源",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "engines": { "island": "^2.0.0" },
+  "requires": ["com.o_o.ai-usage"],
   "main": "main.js",
   "permissions": [],
   "contributes": {

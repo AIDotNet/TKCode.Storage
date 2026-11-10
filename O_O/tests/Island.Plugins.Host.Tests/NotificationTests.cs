@@ -203,14 +203,14 @@ public sealed partial class PluginHostTests
     }
 
     [Fact]
-    public void The_im_plugin_shows_the_source_icon_merges_a_burst_and_keeps_an_unread_capsule()
+    public void The_im_plugin_alerts_with_the_source_icon_merges_a_burst_and_keeps_the_unread_count_as_an_activity()
     {
         var listener = new FakeListener();
         var services = Services with { NotificationListener = listener };
         services.NotificationPrefs.Default = NotificationDisplay.Full;
         CopyPlugin(RepoPlugin("com.o_o.im"), Path.Combine(_root, "com.o_o.im"));
         _host = new PluginHost(services, FastRestart);
-        _host.SatelliteUpdated += _satellites.Enqueue;
+        SubscribeLive(_host);
         _host.PluginStateChanged += (p, s, r) => _states.Enqueue((p, s, r));
         _host.PluginLog += _logs.Enqueue;
         Assert.Empty(_host.Discover(_root, bundled: true));
@@ -220,25 +220,28 @@ public sealed partial class PluginHostTests
         _host.SetGranted("com.o_o.im", [$"notifications.listen:{WeChat}", $"notifications.listen:{Qq}"]);
         WaitFor(() => listener.Watched.Count == 2 ? "ok" : null, "watching WeChat and QQ");
         // activate() ends by reading the platform's unread count (3 for WeChat): the plugin is listening by then. The count is
-        // its own capsule that stays (duration zero), separate from the message capsule.
-        var unread = WaitFor(() => _satellites.LastOrDefault(s => s.Key == "unread" && s.View is not null && Texts(s.View).Contains("3")), "unread capsule from the platform's count");
-        Assert.Equal(TimeSpan.Zero, unread.Duration);
-        Assert.Contains(Nodes(unread.View!), n => n.Type == "appIcon" && n.GetString("appId") == WeChat);
+        // a quiet activity that stays.
+        var unread = WaitFor(() => _host.LiveActivities.FirstOrDefault(a => a.Kind == "com.o_o.im/unread" && Text(a.View.Compact.Trailing) == "3"), "unread count from the platform");
+        Assert.Equal(LivePriority.Passive, unread.Priority);
+        Assert.Equal(WeChat, unread.View.Compact.Leading!.GetString("appId"));
+        Assert.Equal(WeChat, unread.Open!.App);
+        Assert.Contains(Nodes(unread.View.Expanded.Bottom!), n => n.Type == "button" && n.GetString("label") == "打开微信");
 
         listener.Post(WeChat, "老王", "晚上吃什么");
-        var first = WaitFor(() => _satellites.FirstOrDefault(s => s.PluginId == "com.o_o.im" && s.Key == "msg" && s.View is not null), "first notice");
+        var first = WaitFor(() => _liveAlerts.FirstOrDefault(a => a.PluginId == "com.o_o.im"), "first alert");
         Assert.Equal(TimeSpan.FromSeconds(4), first.Duration);
-        Assert.Null(first.Badge);
-        Assert.Contains(Nodes(first.View!), n => n.Type == "appIcon" && n.GetString("appId") == WeChat);
-        Assert.Contains("老王", Texts(first.View!));
-        Assert.Contains("晚上吃什么", Texts(first.View!));
+        Assert.Equal("com.o_o.im/alert", first.Key);
+        Assert.Equal(WeChat, first.View.Leading!.GetString("appId"));
+        Assert.Contains("老王", Texts(first.View.Center!));
+        Assert.Contains("晚上吃什么", Texts(first.View.Center!));
+        Assert.Null(first.View.Trailing);
 
         listener.Post(WeChat, "老王", "在吗");
-        var second = WaitFor(() => _satellites.LastOrDefault(s => s.Badge == 2), "merged notice");
-        Assert.Equal("msg", second.Key);                        // the same notice, replaced in place
-        WaitFor(() => _satellites.LastOrDefault(s => s.Key == "unread" && s.View is not null && Texts(s.View).Contains("5")), "unread capsule (3 + 2)");
+        var second = WaitFor(() => _liveAlerts.LastOrDefault(a => a.View.Trailing is { } t && t.GetString("text") == "2"), "merged alert");
+        Assert.Equal(first.Key, second.Key);                    // the same alert, replaced in place
+        WaitFor(() => _host.LiveActivities.FirstOrDefault(a => a.Kind == "com.o_o.im/unread" && Text(a.View.Compact.Trailing) == "5"), "unread (3 + 2)");
 
         listener.Badge(WeChat, null);                           // the user read them
-        WaitFor(() => _satellites.LastOrDefault(s => s.Key == "unread") is { View: null } ? "ok" : null, "unread capsule removed");
+        WaitFor(() => _host.LiveActivities.Any(a => a.Kind == "com.o_o.im/unread") ? null : "ended", "unread activity ended");
     }
 }

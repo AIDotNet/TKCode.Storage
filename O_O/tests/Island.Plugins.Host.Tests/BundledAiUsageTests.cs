@@ -148,8 +148,8 @@ public sealed partial class PluginHostTests
 
         var claude = Texts(PickProvider("claude", s => Texts(s.View.Expanded).Any(t => t.Contains("还没有获得授权"))).View.Expanded).ToList();
         Assert.Contains("Claude 还没有获得授权", claude);
-        // The collapsed island: the busiest quota as a chip.
-        var chip = WaitFor(() => _chipViews.LastOrDefault(c => c.Key == "com.o_o.ai-usage/summary"), "summary chip");
+        // Beside the idle island: the busiest quota, and an item per account (named after it).
+        var chip = WaitFor(() => _ambientSeen.LastOrDefault(c => c.Key == "com.o_o.ai-usage/summary"), "summary item");
         Assert.Contains("62%", Texts(chip.View).ToList());
     }
 }
@@ -181,32 +181,37 @@ public sealed partial class PluginHostTests
         StartAggregatorWithFake("");
         WaitFor(() => _host!.GetState("com.o_o.ai-usage") == PluginState.Running ? "ok" : null, "aggregator running");
         Thread.Sleep(500);
-        Assert.DoesNotContain(_updates, s => s.PluginId == "com.o_o.ai-usage");
+        Assert.DoesNotContain(_host!.LiveActivities, a => a.PluginId == "com.o_o.ai-usage");
+        Assert.DoesNotContain(_ambientSeen, a => a.PluginId == "com.o_o.ai-usage" && a.View is not null);
         // Its page is there all the same, saying what to do.
         WaitForPage(s => Texts(s.View.Expanded).Contains("还没有可用的 AI 提供商"), "empty page");
     }
 
     [Fact]
-    public void The_aggregator_alerts_once_past_the_threshold_and_then_opens_on_its_page()
+    public void The_aggregator_shows_a_limit_past_the_threshold_as_an_activity_and_alerts_once()
     {
         StartAggregatorWithFake("95");
-        var activity = WaitForUpdate(s => s.PluginId == "com.o_o.ai-usage", "usage activity");
-        Assert.Equal(ActivityPriority.Active, activity.Priority);   // opening the island goes to the usage page
-        Assert.Equal("usage", activity.View.Page);
-        Assert.Null(activity.View.CompactLeading);                   // the chips stay; the alert says it once
-        var alert = WaitFor(() => _alertsSeen.FirstOrDefault(), "alert");
-        Assert.Equal("TriangleAlert", alert.Leading!.GetString("name"));
-        Assert.Contains("95%", Text(alert.Trailing));
+        var activity = WaitFor(() => _host!.LiveActivities.FirstOrDefault(a => a.Kind == "com.o_o.ai-usage/usage"), "limit activity");
+        Assert.Equal(LivePriority.High, activity.Priority);
+        Assert.Equal("95%", Text(activity.View.Compact.Trailing));
+        Assert.Contains("AI 额度已用 95%", Texts(activity.View.Expanded.Center!));
+        var account = WaitFor(() => _ambientSeen.LastOrDefault(a => a.Key == "com.o_o.ai-usage/account#fake:me" && a.View is not null), "account item");
+        Assert.Equal("Fake · me", account.Title);
+        Assert.False(account.EnabledByDefault);                     // per-account items wait to be switched on
+        var alert = WaitFor(() => _liveAlerts.FirstOrDefault(), "alert");
+        Assert.Equal("com.o_o.ai-usage/usage", alert.Kind);
+        Assert.Equal("TriangleAlert", alert.View.Leading!.GetString("name"));
+        Assert.Contains("95%", Text(alert.View.Center));
         Thread.Sleep(300);
-        Assert.Single(_alertsSeen);
+        Assert.Single(_liveAlerts);
 
         _host!.Dispose();
         _updates.Clear();
         Directory.Delete(_root, true);
         Directory.CreateDirectory(_root);
         StartAggregatorWithFake("40");
-        WaitFor(() => _chipViews.LastOrDefault(c => Texts(c.View).Contains("40%")), "chip at 40%");
-        Assert.DoesNotContain(_updates, s => s.PluginId == "com.o_o.ai-usage"); // nothing urgent below the threshold
+        WaitFor(() => _ambientSeen.LastOrDefault(c => Texts(c.View).Contains("40%")), "item at 40%");
+        Assert.DoesNotContain(_host!.LiveActivities, a => a.PluginId == "com.o_o.ai-usage"); // nothing urgent below the threshold
     }
 }
 

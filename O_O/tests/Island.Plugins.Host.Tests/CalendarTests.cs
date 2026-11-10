@@ -326,16 +326,20 @@ public sealed partial class PluginHostTests
         var page = WaitForPage(s => s.PluginId == "com.o_o.calendar" && Nodes(s.View.Expanded).Any(n => n.Type == "item" && Texts(n).Contains("周会")), "events listed");
         var rows = Nodes(page.View.Expanded).Where(n => n.Type == "item").ToList(); // the month's day cells are items too
         Assert.Single(rows, r => Texts(r).Contains("周会"));                                     // merged
-        var activity = WaitForUpdate(s => s.PluginId == "com.o_o.calendar" && s.ActivityId == "soon", "starting-soon activity");
-        Assert.Equal(ActivityPriority.Passive, activity.Priority);
-        Assert.Equal("today", activity.View.Page);
-        var alert = WaitFor(() => _alertsSeen.FirstOrDefault(a => a.PluginId == "com.o_o.calendar"), "alert");
-        Assert.Contains("分钟后 · 周会", Text(alert.Trailing));
-        Assert.Equal("Video", alert.Leading!.GetString("name"));
-        var chip = WaitFor(() => _chipViews.LastOrDefault(c => c.Key == "com.o_o.calendar/next" && c.View is not null), "next chip");
+        var activity = WaitFor(() => _host!.LiveActivities.FirstOrDefault(a => a.Kind == "com.o_o.calendar/soon"), "starting-soon activity");
+        Assert.Equal(LivePriority.High, activity.Priority);
+        Assert.Equal("calendar", activity.Accent);
+        Assert.Matches(@"^\d{2}:\d{2}$", Text(activity.View.Compact.Trailing));            // the start time
+        Assert.Contains("周会", Texts(activity.View.Expanded.Center!));
+        Assert.Equal("加入", activity.View.Expanded.Trailing!.GetString("label"));            // it has a meeting link
+        var alert = WaitFor(() => _liveAlerts.FirstOrDefault(a => a.PluginId == "com.o_o.calendar"), "alert");
+        Assert.Equal("com.o_o.calendar/soon", alert.Kind);                                      // the activity's: its policy applies
+        Assert.Contains("分钟后 · 周会", Text(alert.View.Center));
+        Assert.Equal("Video", alert.View.Leading!.GetString("name"));
+        var chip = WaitFor(() => _ambientSeen.LastOrDefault(c => c.Key == "com.o_o.calendar/next" && c.View is not null), "next item");
         Assert.Matches(@"^\d{2}:\d{2}$", Texts(chip.View).Single());
         Thread.Sleep(300);
-        Assert.Single(_alertsSeen, a => a.PluginId == "com.o_o.calendar");                        // once, not per refresh
+        Assert.Single(_liveAlerts, a => a.PluginId == "com.o_o.calendar");                       // once, not per refresh
 
         // Clicking the meeting opens its link (shell.openUrl, right after the click).
         var clipboard = new FakeClipboard();
@@ -354,15 +358,15 @@ public sealed partial class PluginHostTests
     }
 
     [Fact]
-    public void An_event_under_way_makes_the_activity_active_and_without_sources_the_page_says_what_to_do()
+    public void An_event_under_way_shows_as_under_way_and_without_sources_the_page_says_what_to_do()
     {
         CopyPlugin(RepoPlugin("com.o_o.calendar"), Path.Combine(_root, "com.o_o.calendar"));
         WriteFakeCalendarProvider("test.cal.a", "a",
             "[{ id: 'z', title: '正在进行的长会议', start: new Date(now - 2 * M).toISOString(), end: new Date(now + 60 * M).toISOString(), allDay: false }]");
         StartDiscovered();
-        var activity = WaitForUpdate(s => s.PluginId == "com.o_o.calendar" && s.ActivityId == "soon" && s.Priority == ActivityPriority.Active, "active");
-        Assert.Equal("today", activity.View.Page);
-        var chip = WaitFor(() => _chipViews.LastOrDefault(c => c.Key == "com.o_o.calendar/next" && c.View is not null), "chip");
+        var activity = WaitFor(() => _host!.LiveActivities.FirstOrDefault(a => a.Kind == "com.o_o.calendar/soon" && Text(a.View.Compact.Trailing) == "进行中"), "under way");
+        Assert.Equal(LivePriority.High, activity.Priority);
+        var chip = WaitFor(() => _ambientSeen.LastOrDefault(c => c.Key == "com.o_o.calendar/next" && c.View is not null), "next item");
         Assert.Contains("正在进行…", Texts(chip.View).ToList());
 
         _host!.Dispose();

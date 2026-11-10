@@ -355,18 +355,22 @@ class LiveActivity {
 
 class Ambient {
   #id;
+  #instance;
 
-  constructor(id) { this.#id = id; }
+  constructor(id, instance) { this.#id = id; this.#instance = instance; }
 
-  /** Shows `view` (one small node: an icon and a short text) beside the idle island. */
-  update(view) {
-    host.activity('ambient', this.#id, '', '', serializeNode(`ambient:${this.#id}`, view));
+  /** Shows `view` (one small node: an icon and a short text) beside the idle island.
+   *  options.title names this instance in the console (e.g. the account). */
+  update(view, options) {
+    host.activity('ambient', this.#id, this.#instance,
+      JSON.stringify({ title: options?.title == null ? undefined : String(options.title) }),
+      serializeNode(`ambient:${this.#id}#${this.#instance}`, view));
   }
 
   /** Takes it away. */
   remove() {
-    internal.dropHandlers(`ambient:${this.#id}`);
-    host.activity('ambientEnd', this.#id, '', '', '');
+    internal.dropHandlers(`ambient:${this.#id}#${this.#instance}`);
+    host.activity('ambientEnd', this.#id, this.#instance, '', '');
   }
 }
 const ambients = new Map();
@@ -388,11 +392,12 @@ const island2 = Object.freeze({
    *  { priority, accent, title, open: { app, url }, compact: { leading, trailing }, minimal, expanded: { leading, trailing,
    *  center, bottom } }. options.instance for activities declared multiple. The host decides where it shows. */
   activity: (id, spec, options) => new LiveActivity(String(id), spec, options),
-  /** The ambient item `id` declared in plugin.json (contributes.ambient): shown beside the idle island. */
-  ambient: (id) => {
-    id = String(id);
-    if (!ambients.has(id)) ambients.set(id, new Ambient(id));
-    return ambients.get(id);
+  /** The ambient item `id` declared in plugin.json (contributes.ambient): shown beside the idle island. `instance`
+   *  only for items declared multiple (one per account). */
+  ambient: (id, instance) => {
+    const key = `${id}#${instance ?? ''}`;
+    if (!ambients.has(key)) ambients.set(key, new Ambient(String(id), instance == null ? '' : String(instance)));
+    return ambients.get(key);
   },
   home: Object.freeze({
     /** The home page `id` declared in plugin.json (contributes.home). */
