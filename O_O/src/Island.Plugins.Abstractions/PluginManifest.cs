@@ -53,6 +53,9 @@ public sealed class PluginContributions
     /// <summary>Small items for the collapsed island (docs/design/07-home-and-layout.md §4).</summary>
     public IReadOnlyList<ChipContribution> Chips { get => field ?? []; init; }
 
+    /// <summary>Looks for every O_O window (docs/design/03-plugin-system.md §9), chosen on the console's 外观 page.</summary>
+    public IReadOnlyList<ThemeContribution> Themes { get => field ?? []; init; }
+
     /// <summary>Implementations this plugin offers to other plugins (docs/design/03-plugin-system.md §7.1).</summary>
     public IReadOnlyList<ProviderContribution> Providers { get => field ?? []; init; }
 
@@ -98,6 +101,56 @@ public sealed class ChipContribution
 
     /// <summary>"left" or "right" (default): which side of the island, or which wing beside a notch.</summary>
     public string? Side { get; init; }
+}
+
+/// <summary>
+/// A theme (docs 03 §9): an accent seed, optionally an appearance and a corner scale, applied through Arc's own levers
+/// so every Arc control follows. The island itself stays black (it is the notch's colour).
+/// </summary>
+public sealed class ThemeContribution
+{
+    public required string Id { get; init; }
+    public string? Title { get; init; }
+
+    /// <summary>One line for the console.</summary>
+    public string? Description { get; init; }
+
+    /// <summary>The accent seed, <c>#RRGGBB</c>; Arc derives the whole accent family (and its dark variant) from it.</summary>
+    public string? Accent { get; init; }
+
+    /// <summary><c>system</c>, <c>light</c> or <c>dark</c>; absent: the theme leaves the user's choice alone.</summary>
+    public string? Appearance { get; init; }
+
+    /// <summary>Arc's corner preset scaled (0.2–2; 0.6 is the macOS look); absent: 0.6.</summary>
+    public double? Corners { get; init; }
+
+    /// <summary>Lists what is wrong with the declared themes (unknown appearance, bad colour, duplicate id…).</summary>
+    public static void Validate(IReadOnlyList<ThemeContribution> themes, List<string> problems)
+    {
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var t in themes)
+        {
+            if (string.IsNullOrWhiteSpace(t.Id) || !ids.Add(t.Id))
+            {
+                problems.Add($"theme '{t.Id}': id missing or used twice");
+            }
+            if (t.Accent is not null && !IsHexColor(t.Accent))
+            {
+                problems.Add($"theme '{t.Id}': accent must be #RRGGBB");
+            }
+            if (t.Appearance is not null and not ("system" or "light" or "dark"))
+            {
+                problems.Add($"theme '{t.Id}': appearance must be system, light or dark");
+            }
+            if (t.Corners is { } c && (double.IsNaN(c) || c < 0.2 || c > 2))
+            {
+                problems.Add($"theme '{t.Id}': corners must be between 0.2 and 2");
+            }
+        }
+    }
+
+    private static bool IsHexColor(string s) =>
+        s.Length is 7 or 9 && s[0] == '#' && s.Skip(1).All(Uri.IsHexDigit);
 }
 
 public sealed class ActivityContribution

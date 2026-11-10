@@ -1,0 +1,14 @@
+{
+  "id": "com.o_o.theme.default",
+  "name": "默认主题",
+  "version": "0.1.0",
+  "description": "苹果风格：系统蓝强调色、macOS 比例的圆角，浅色或深色跟随系统",
+  "icon": "Palette",
+  "main": "main.js",
+  "permissions": [],
+  "contributes": {
+    "themes": [
+      { "id": "apple", "title": "苹果", "description": "系统蓝，跟随系统的浅色或深色", "accent": "#007AFF", "corners": 0.6 }
+    ]
+  }
+}

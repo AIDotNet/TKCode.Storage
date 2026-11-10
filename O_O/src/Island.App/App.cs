@@ -177,6 +177,13 @@ public class App(IIslandPlatform platform) : Application
                 _island.Dispose();
             };
             Island.Core.StartupTrace.Mark("plugins discovered");
+            // Themes from theme packs, the light/dark schedule and the wallpaper accent (docs 05 §3).
+            Island.UI.Themes.ThemeService.Start(_plugins,
+                new Island.Core.Themes.ThemePreferencesStore(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "theme.json")),
+                OperatingSystem.IsMacOS() ? new Island.Platform.MacOS.MacWallpaper()
+                : OperatingSystem.IsWindows() ? Island.Platform.Windows.WindowsWallpaper.Create()
+                : OperatingSystem.IsLinux() ? Island.Platform.Linux.LinuxWallpaper.Create()
+                : null);
             _island.SettingsRequested += OpenConsole;
             // Tray icon, hand-off from a second launch, full-screen detection (ShellIntegration.cs).
             ShellIntegration.Install(this, _island, OpenConsole, () => desktop.Shutdown());

@@ -73,6 +73,7 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
                 var manifestProblems = new List<string>();
                 var permissions = PluginPermissions.Parse(manifest.Permissions, manifestProblems);
                 var settings = SettingsSchema.Parse(manifest.Contributes.Settings, manifestProblems);
+                ThemeContribution.Validate(manifest.Contributes.Themes, manifestProblems);
                 foreach (var key in permissions?.HostSettings ?? [])
                 {
                     // network:@key names the site the user types into that setting: it must be a plain text setting.

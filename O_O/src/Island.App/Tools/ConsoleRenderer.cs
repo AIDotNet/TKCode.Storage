@@ -34,6 +34,12 @@ internal static class ConsoleRenderer
         }
         host.Discover(Path.Combine(AppContext.BaseDirectory, "plugins"), bundled: true);
         host.StartAll();
+        // Themes for the 外观 page, with throwaway preferences and every bundled theme pack offered.
+        foreach (var themePack in host.Packages.Where(p => p.Manifest.Contributes.Themes.Count > 0 && !host.IsEnabled(p.Id)))
+        {
+            host.SetEnabled(themePack.Id, true);
+        }
+        Island.UI.Themes.ThemeService.Start(host, new Island.Core.Themes.ThemePreferencesStore(Path.Combine(data, "theme.json")), null);
         Pump(TimeSpan.FromSeconds(2)); // let the plugins start and report their states
 
         var view = new ConsoleView(host, data)

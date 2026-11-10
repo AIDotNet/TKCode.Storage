@@ -1,0 +1,15 @@
+{
+  "id": "com.o_o.theme.glass",
+  "name": "玻璃主题",
+  "version": "0.1.0",
+  "description": "浅色界面配湖蓝强调色，圆角最圆润，与控制台的玻璃质感相配",
+  "icon": "GlassWater",
+  "main": "main.js",
+  "optional": true,
+  "permissions": [],
+  "contributes": {
+    "themes": [
+      { "id": "glass", "title": "玻璃", "description": "浅色 · 湖蓝", "accent": "#32ADE6", "appearance": "light", "corners": 1.0 }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "com.o_o.theme.aurora",
+  "name": "极光主题",
+  "version": "0.1.0",
+  "description": "深色界面配紫罗兰强调色，圆角更柔和",
+  "icon": "Sparkles",
+  "main": "main.js",
+  "optional": true,
+  "permissions": [],
+  "contributes": {
+    "themes": [
+      { "id": "aurora", "title": "极光", "description": "深色 · 紫罗兰", "accent": "#7747FF", "appearance": "dark", "corners": 0.8 }
+    ]
+  }
+}

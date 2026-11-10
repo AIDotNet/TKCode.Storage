@@ -58,6 +58,8 @@
 - 快速切换：岛右键菜单"外观"子菜单 + 命令面板命令；可按时间自动切换（日出/日落，用 `schedule`）。
 - 壁纸取色：Windows `IDesktopWallpaper`、macOS `NSWorkspace.desktopImageURL`、Linux GNOME `org.gnome.desktop.background` → 主色映射到最近的 `ArcAccentPreset`。
 
+> **实现状态（2026-11-10）**：主题包是插件清单里的 `contributes.themes`（`id`、`title`、`description`、`accent` #RRGGBB、`appearance` system/light/dark、`corners` 0.2–2），加载时校验；纯主题包带一个空的 `main.js`。内置 `com.o_o.theme.default`（苹果，默认启用）、`aurora`（极光，深色 · 紫罗兰）、`mono`（黑白）、`glass`（玻璃，浅色 · 湖蓝），后三个在"添加插件"里。选择主题 = 通过 Arc 设定外观（主题有指定时）、强调色和圆角比例；之后仍可单独调整外观和强调色，直到再选一次主题。控制台"外观"页：主题卡片（Arc RadioCards）、外观与强调色、按时间自动切换浅色 / 深色（半小时为单位；手动选择会关闭自动切换）、"从桌面壁纸取强调色"（每 10 分钟看一次；壁纸没有明显颜色时不变）。岛的 ⋯ / 右键菜单新增"外观"子菜单（跟随系统 / 浅色 / 深色 + 已安装的主题）。壁纸：macOS 用 `desktopImageURLForScreen:` 由 AppKit 解码并缩小（支持 HEIC 系统壁纸，本机实测取到 #377EB3）；Windows `SPI_GETDESKWALLPAPER`；Linux GNOME `gsettings`（后两者未实测）。设置存于 `theme.json`。**未做**：主题包覆盖岛自定义 Token / 材质 / 弹簧参数（03 §9 的 `tokens`）、字体、按日出日落切换、命令面板。
+
 ## 4. 待办清单 `com.o_o.todo`
 
 - 数据：`todos(id, title, notes, due, priority, done, order, list_id, created, updated)`。

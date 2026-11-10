@@ -1,0 +1,15 @@
+{
+  "id": "com.o_o.theme.mono",
+  "name": "黑白主题",
+  "version": "0.1.0",
+  "description": "近乎无彩色的中性强调色，方正一些的圆角",
+  "icon": "Contrast",
+  "main": "main.js",
+  "optional": true,
+  "permissions": [],
+  "contributes": {
+    "themes": [
+      { "id": "mono", "title": "黑白", "description": "中性色，跟随系统的浅色或深色", "accent": "#353535", "corners": 0.4 }
+    ]
+  }
+}

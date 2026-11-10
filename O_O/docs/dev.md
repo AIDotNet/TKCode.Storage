@@ -24,6 +24,7 @@ SDK 由 `global.json` 固定为 .NET 10。
 | `O_O_DEBUG_WINDOW_PNG_DELAY=秒` | 上一项的延迟（默认 2 秒），用来截取动画结束后的画面 |
 | `O_O_DEBUG_TRAY_PNG=路径` | 把菜单栏 / 托盘图标渲染成 PNG |
 | `O_O_FAKE_FULLSCREEN=1` | 假装前台有全屏应用，检查"全屏时隐藏" |
+| `O_O_DEBUG_WALLPAPER=1` | 启动时只把"从壁纸取色"会选的颜色打印到 stderr（不应用、不保存） |
 
 命令行：`--probe-fullscreen x y w h` 用当前平台的全屏检测判断给定矩形（调试检测逻辑）；`--pack-plugin <目录> [输出.zip]` 校验并打包插件（见下文"插件"）。
 
