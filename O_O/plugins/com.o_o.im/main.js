@@ -55,12 +55,11 @@ const show = (n) => {
   const who = n.title ?? n.app.name;
   const line = n.body ?? (n.title ? '发来新消息' : '有新消息');
   satellite.show(
+    // One line, like the island it sits beside: sender, then the text cut with "…".
     ui.row({ gap: 'sm', align: 'center' }, [
-      ui.appIcon(app, { size: 22 }),
-      ui.stack({ gap: 'xs', grow: true }, [
-        ui.text(who, { size: 'sm', weight: 'semibold', lines: 1 }),
-        ui.text(count > 1 && !n.body ? `${count} 条新消息` : line, { size: 'xs', tone: 'secondary', lines: 1 }),
-      ]),
+      ui.appIcon(app, { size: 18 }),
+      ui.text(who, { size: 'sm', weight: 'semibold', lines: 1 }),
+      ui.text(count > 1 && !n.body ? `${count} 条新消息` : line, { size: 'xs', tone: 'secondary', lines: 1, grow: true }),
     ]),
     { key: 'msg', seconds, badge: count > 1 ? count : undefined, onClick: () => openApp(app) },
   );

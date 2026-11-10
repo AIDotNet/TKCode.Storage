@@ -43,9 +43,6 @@ public sealed class SatelliteWindow : ArcWindow
 
     public StackPanel Row { get; }
 
-    protected override void OnPointerPressed(Avalonia.Input.PointerPressedEventArgs e) { System.Console.Error.WriteLine($"[zz] satellite window pressed at {e.GetPosition(this)} size={Bounds}"); base.OnPointerPressed(e); } // TEMP
-    protected override void OnPointerReleased(Avalonia.Input.PointerReleasedEventArgs e) { System.Console.Error.WriteLine($"[zz] satellite window released at {e.GetPosition(this)}"); base.OnPointerReleased(e); } // TEMP
-    protected override void OnPointerEntered(Avalonia.Input.PointerEventArgs e) { System.Console.Error.WriteLine("[zz] satellite window entered"); base.OnPointerEntered(e); } // TEMP
 
     public IIslandWindowBridge? Bridge { get; set; }
 }
@@ -305,7 +302,13 @@ public sealed class SatelliteHost
             }
             window.Row.Children.RemoveAll(window.Row.Children.Where(c => !Notices.Any(n => n.Visible && n.Pill == c)).ToList());
 
+            // As tall as the island, unless a notice's content needs more (it would be cut off at the bottom).
             var pillHeight = Math.Max(16, anchor.SurfacePx.Height / Math.Max(0.5, anchor.Scale));
+            foreach (var n in Notices.Where(n => n.Visible))
+            {
+                n.Holder.Measure(new Size(MaxNoticeWidth, double.PositiveInfinity)); // the holder's margin is inside its desired size
+                pillHeight = Math.Max(pillHeight, Math.Ceiling(n.Holder.DesiredSize.Height) + 8);
+            }
             foreach (var n in Notices.Where(n => n.Visible))
             {
                 n.Pill.Height = pillHeight;
