@@ -86,7 +86,7 @@ public sealed partial class PluginHostTests
     private void CopyProviderTo(string pluginId, string realBase, string fakeBase)
     {
         var target = Path.Combine(_root, pluginId);
-        CopyPlugin(Path.Combine(RepoPlugins(), pluginId), target);
+        CopyPlugin(RepoPlugin(pluginId), target);
         var main = Path.Combine(target, "main.js");
         File.WriteAllText(main, File.ReadAllText(main).Replace(realBase, fakeBase));
         var manifest = Path.Combine(target, "plugin.json");
@@ -180,7 +180,7 @@ public sealed partial class PluginHostTests
               ] }
               """
             : null);
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.calendar"), Path.Combine(_root, "com.o_o.calendar"));
+        CopyPlugin(RepoPlugin("com.o_o.calendar"), Path.Combine(_root, "com.o_o.calendar"));
         CopyProviderTo("com.o_o.cal.google", "https://www.googleapis.com", api.Url);
         StartOAuthHost(OAuthServices(api));
         SetSettings("com.o_o.cal.google", new() { ["clientId"] = "cid.apps.googleusercontent.com", ["clientSecret"] = "shh" });

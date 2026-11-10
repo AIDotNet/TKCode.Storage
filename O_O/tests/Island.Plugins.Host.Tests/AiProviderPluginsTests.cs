@@ -79,7 +79,7 @@ public sealed partial class PluginHostTests
         string? baseUrl = null, params string[] realBases)
     {
         var dir = Path.Combine(_root, pluginId);
-        CopyPlugin(Path.Combine(RepoPlugins(), pluginId), dir);
+        CopyPlugin(RepoPlugin(pluginId), dir);
         if (baseUrl is not null)
         {
             var main = Path.Combine(dir, "main.js");

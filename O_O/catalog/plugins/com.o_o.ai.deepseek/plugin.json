@@ -1,0 +1,58 @@
+{
+  "id": "com.o_o.ai.deepseek",
+  "name": "DeepSeek 余额",
+  "version": "0.1.0",
+  "description": "用 API Key 查询 DeepSeek 余额",
+  "icon": "Wallet",
+  "main": "main.js",
+  "permissions": [
+    "network:api.deepseek.com"
+  ],
+  "contributes": {
+    "providers": [
+      {
+        "interface": "ai-usage",
+        "id": "deepseek",
+        "title": "DeepSeek"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "key1": {
+          "type": "string",
+          "format": "password",
+          "title": "API Key",
+          "description": "在 platform.deepseek.com 的“API keys”页创建。只保存在系统钥匙串里，只发送给 api.deepseek.com。"
+        },
+        "name1": {
+          "type": "string",
+          "title": "名称",
+          "description": "可选，用来区分多个 Key（如“工作”“个人”）。",
+          "default": ""
+        },
+        "key2": {
+          "type": "string",
+          "format": "password",
+          "title": "API Key 2",
+          "description": "可选：第二个账户的 Key。"
+        },
+        "name2": {
+          "type": "string",
+          "title": "名称 2",
+          "default": ""
+        },
+        "key3": {
+          "type": "string",
+          "format": "password",
+          "title": "API Key 3",
+          "description": "可选：第三个账户的 Key。"
+        },
+        "name3": {
+          "type": "string",
+          "title": "名称 3",
+          "default": ""
+        }
+      }
+    }
+  }
+}

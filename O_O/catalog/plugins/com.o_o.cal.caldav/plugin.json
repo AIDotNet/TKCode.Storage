@@ -1,0 +1,67 @@
+{
+  "id": "com.o_o.cal.caldav",
+  "name": "CalDAV 日历",
+  "version": "0.1.0",
+  "description": "CalDAV 日历来源：企业微信、iCloud、Nextcloud 等",
+  "icon": "CalendarSync",
+  "engines": {
+    "island": "^1.0.0"
+  },
+  "main": "main.js",
+  "requires": [
+    "com.o_o.calendar"
+  ],
+  "permissions": [
+    "network:@serverUrl"
+  ],
+  "contributes": {
+    "providers": [
+      {
+        "interface": "calendar",
+        "id": "caldav",
+        "title": "CalDAV"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "preset": {
+          "type": "string",
+          "title": "服务",
+          "description": "只用于提示服务器地址。企业微信：https://caldav.wecom.work（在企业微信\"日历设置 › 同步至其他日历\"取得用户名和密码）；iCloud：https://caldav.icloud.com（使用 App 专用密码）；Nextcloud：https://你的域名/remote.php/dav；飞书：https://caldav.feishu.cn。",
+          "enum": [
+            "自定义",
+            "企业微信",
+            "iCloud",
+            "Nextcloud",
+            "飞书"
+          ],
+          "default": "自定义"
+        },
+        "serverUrl": {
+          "type": "string",
+          "format": "url",
+          "title": "服务器地址",
+          "description": "CalDAV 服务器地址，例如 https://caldav.wecom.work。O_O 只会把请求发往这个地址。",
+          "default": ""
+        },
+        "username": {
+          "type": "string",
+          "title": "用户名",
+          "default": ""
+        },
+        "password": {
+          "type": "string",
+          "format": "password",
+          "title": "密码",
+          "description": "通常是服务提供的同步密码或 App 专用密码。只保存在系统钥匙串里，只发送给上面的服务器。"
+        },
+        "name": {
+          "type": "string",
+          "title": "名称",
+          "description": "可选，在日程里区分来源（如\"工作\"）。",
+          "default": ""
+        }
+      }
+    }
+  }
+}

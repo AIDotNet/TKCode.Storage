@@ -107,6 +107,16 @@ public class App(IIslandPlatform platform) : Application
         : OperatingSystem.IsLinux() ? new Island.Platform.Linux.LinuxClipboard()
         : new Island.Platform.NullClipboardPlatform();
 
+    /// <summary>"O_O 有新版本 0.1.1001" on the island for a few seconds.</summary>
+    private static Island.Plugins.AlertSnapshot UpdateAlert(string version) => new(
+        "o_o",
+        new Island.Plugins.VNode("icon", null, new Dictionary<string, object> { ["name"] = "CircleArrowUp", ["tone"] = "accent" },
+            new Dictionary<string, int>(), []),
+        new Island.Plugins.VNode("text", null, new Dictionary<string, object> { ["text"] = $"O_O 有新版本 {version}", ["size"] = "sm", ["weight"] = "semibold" },
+            new Dictionary<string, int>(), []),
+        TimeSpan.FromSeconds(8),
+        0);
+
     public override void Initialize() => Resources.MergedDictionaries.Add(new IslandResources());
 
     public override void OnFrameworkInitializationCompleted()
@@ -212,6 +222,13 @@ public class App(IIslandPlatform platform) : Application
             _island.Show();
             Island.Core.StartupTrace.Mark("island shown");
             _plugins.StartAll();
+            // Update check (docs/design/08-updates-and-catalog.md): a newer O_O is announced once on the island; the
+            // download is offered on the console's 关于 page.
+            var updates = new Island.UI.Services.UpdateService(Path.GetDirectoryName(AppSettings.DefaultPath)!,
+                latest => presenter.ShowAlert(UpdateAlert(latest.Version)));
+            Island.UI.Services.UpdateService.Shared = updates;
+            updates.Start();
+            desktop.Exit += (_, _) => updates.Dispose();
             if (desktop.Args?.Contains("--console") == true)
             {
                 OpenConsole();

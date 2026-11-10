@@ -1,0 +1,67 @@
+{
+  "id": "com.o_o.cal.ics",
+  "name": "日历订阅（ICS）",
+  "version": "0.1.0",
+  "description": "订阅 ICS 日历链接",
+  "icon": "Link",
+  "engines": {
+    "island": "^1.0.0"
+  },
+  "main": "main.js",
+  "requires": [
+    "com.o_o.calendar"
+  ],
+  "permissions": [
+    "network:@url1",
+    "network:@url2",
+    "network:@url3"
+  ],
+  "contributes": {
+    "providers": [
+      {
+        "interface": "calendar",
+        "id": "ics",
+        "title": "日历订阅"
+      }
+    ],
+    "settings": {
+      "properties": {
+        "url1": {
+          "type": "string",
+          "format": "url",
+          "title": "订阅链接",
+          "description": "日历的 .ics 订阅地址（如 Outlook、Google、飞书、节假日日历提供的\"公开地址\"）。webcal:// 开头的请改成 https://。O_O 只会访问这里填写的地址。",
+          "default": ""
+        },
+        "name1": {
+          "type": "string",
+          "title": "名称",
+          "description": "可选；不填时使用日历自带的名称。",
+          "default": ""
+        },
+        "url2": {
+          "type": "string",
+          "format": "url",
+          "title": "订阅链接 2",
+          "default": ""
+        },
+        "name2": {
+          "type": "string",
+          "title": "名称 2",
+          "default": ""
+        },
+        "url3": {
+          "type": "string",
+          "format": "url",
+          "title": "订阅链接 3",
+          "default": ""
+        },
+        "name3": {
+          "type": "string",
+          "title": "名称 3",
+          "default": ""
+        }
+      }
+    }
+  }
+}

@@ -6,7 +6,7 @@ public sealed partial class PluginHostTests
     [Fact]
     public void The_system_monitor_draws_gauges_once_the_host_reports_figures()
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.monitor"), Path.Combine(_root, "com.o_o.monitor"));
+        CopyPlugin(RepoPlugin("com.o_o.monitor"), Path.Combine(_root, "com.o_o.monitor"));
         StartWith(null, Services);
         // Memory is known from the first sample on macOS and Linux; the CPU needs a second one a few seconds later.
         var page = WaitForPage(s => s.PluginId == "com.o_o.monitor" && Nodes(s.View.Expanded).Any(n => n.Type == "gauge"), "a gauge");
@@ -30,7 +30,7 @@ public sealed partial class PluginHostTests
     [Fact]
     public void Focus_statistics_count_the_days_and_the_streak()
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.focus"), Path.Combine(_root, "com.o_o.focus"));
+        CopyPlugin(RepoPlugin("com.o_o.focus"), Path.Combine(_root, "com.o_o.focus"));
         string Day(int back) => DateTime.Today.AddDays(-back).ToString("yyyy-MM-dd");
         SeedStorage("com.o_o.focus", $$"""{ "days": { "{{Day(0)}}": 3, "{{Day(1)}}": 2, "{{Day(2)}}": 1, "{{Day(5)}}": 4 } }""");
         StartWith(null, Services);

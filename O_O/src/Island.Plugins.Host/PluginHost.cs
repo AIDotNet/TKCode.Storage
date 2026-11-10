@@ -75,6 +75,7 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
                 var settings = SettingsSchema.Parse(manifest.Contributes.Settings, manifestProblems);
                 ThemeContribution.Validate(manifest.Contributes.Themes, manifestProblems);
                 LayoutContribution.Validate(manifest.Contributes.Layouts, manifestProblems);
+                manifest.ValidateTargets(manifestProblems);
                 foreach (var key in permissions?.HostSettings ?? [])
                 {
                     // network:@key names the site the user types into that setting: it must be a plain text setting.
@@ -92,6 +93,10 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
                 if (!File.Exists(package.EntryPath))
                 {
                     problems.Add($"{manifest.Id}: entry '{manifest.Main}' not found.");
+                }
+                else if (!manifest.RunsOn(PluginManifest.CurrentPlatform))
+                {
+                    // Made for another system (e.g. macOS only): not offered here at all. Not a problem with the plugin.
                 }
                 else if (_packages.All(p => p.Id != manifest.Id))
                 {
@@ -204,6 +209,10 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
                 if (_packages.FirstOrDefault(p => p.Id == manifest.Id) is { Bundled: true })
                 {
                     throw new InvalidDataException($"'{manifest.Id}' 是内置插件的 id，不能被替换。");
+                }
+                if (!manifest.RunsOn(PluginManifest.CurrentPlatform))
+                {
+                    throw new InvalidDataException($"这个插件只支持 {string.Join("、", manifest.Platforms)}，不能装在这台电脑上。");
                 }
                 if (_runners.TryRemove(manifest.Id, out var old))
                 {

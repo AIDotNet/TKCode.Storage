@@ -52,7 +52,7 @@ public sealed partial class PluginHostTests
     [Fact]
     public void The_bundled_theme_packs_are_valid_and_only_the_default_is_on()
     {
-        foreach (var dir in Directory.GetDirectories(RepoPlugins(), "com.o_o.theme.*"))
+        foreach (var dir in Directory.GetDirectories(Path.Combine(RepoRoot(), "plugins"), "com.o_o.theme.*"))
         {
             Assert.Empty(PluginPackages.Validate(dir, out var manifest));
             Assert.NotEmpty(manifest!.Contributes.Themes);
@@ -78,7 +78,7 @@ public sealed partial class PluginHostTests
         Assert.Contains("chip side must be left or right", problem);
         Assert.Contains("used twice", problem);
 
-        Assert.Empty(PluginPackages.Validate(Path.Combine(RepoPlugins(), "com.o_o.layout.presets"), out var manifest));
+        Assert.Empty(PluginPackages.Validate(RepoPlugin("com.o_o.layout.presets"), out var manifest));
         Assert.Equal(3, manifest!.Contributes.Layouts.Count);
     }
 }

@@ -70,7 +70,9 @@ dotnet build src/Island.App && src/Island.App/bin/Debug/net10.0/O_O --render-ico
 
 ## 插件
 
-第一方插件在 `plugins/`，构建时复制到输出目录。用户插件放在 `~/Library/Application Support/O_O/plugins/<id>/`（Windows `%APPDATA%\O_O\plugins`），同 id 时覆盖内置插件。
+内置插件在 `plugins/`，构建时复制到输出目录；插件目录里的第一方插件在 `catalog/plugins/`，不进安装包，用
+`catalog/pack.sh` 打包后由 O_O 服务提供（见 `docs/design/08-updates-and-catalog.md`）。本机调试服务：
+`O_O_SERVICE_URL=http://localhost:5080`（版本检测与插件目录都改用它；只有本机地址允许 http）。用户插件放在 `~/Library/Application Support/O_O/plugins/<id>/`（Windows `%APPDATA%\O_O\plugins`），同 id 时覆盖内置插件。
 
 
 插件以 `.zip` 安装（控制台 → 插件 → 添加插件）。打包：`O_O --pack-plugin <插件目录> [输出.zip]`（开发时：`dotnet run --project src/Island.App -- --pack-plugin <目录>`），会按安装时的规则校验清单、权限、设置与入口文件，并排除 `.git`、`node_modules` 等。编写插件的完整指南见 Claude Code 技能 `.claude/skills/o_o-plugin/SKILL.md`（附最小模板）。

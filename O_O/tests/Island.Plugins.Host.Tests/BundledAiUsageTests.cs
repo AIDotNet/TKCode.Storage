@@ -3,17 +3,31 @@ namespace Island.Plugins.Host.Tests;
 /// <summary>The shipped AI usage plugins (plugins/com.o_o.ai-*), end to end, without touching the network.</summary>
 public sealed partial class PluginHostTests
 {
-    private static string RepoPlugins()
+    /// <summary>The repository's O_O folder (where plugins/ and catalog/plugins/ live).</summary>
+    private static string RepoRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, "plugins", "com.o_o.ai-usage");
-            if (Directory.Exists(candidate))
+            if (Directory.Exists(Path.Combine(dir.FullName, "plugins", "com.o_o.ai-usage")))
             {
-                return Path.GetDirectoryName(candidate)!;
+                return dir.FullName;
             }
         }
         throw new DirectoryNotFoundException("plugins/ not found above the test output directory.");
+    }
+
+    /// <summary>A first-party plugin's source: built in (plugins/) or from the O_O plugin catalog (catalog/plugins/).</summary>
+    private static string RepoPlugin(string id)
+    {
+        foreach (var folder in new[] { "plugins", Path.Combine("catalog", "plugins") })
+        {
+            var candidate = Path.Combine(RepoRoot(), folder, id);
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+        throw new DirectoryNotFoundException($"{id} is neither in plugins/ nor in catalog/plugins/.");
     }
 
     private static void CopyPlugin(string from, string to)
@@ -100,10 +114,9 @@ public sealed partial class PluginHostTests
     [Fact]
     public void The_aggregator_shows_providers_errors_and_providers_waiting_for_consent()
     {
-        var repo = RepoPlugins();
         foreach (var id in new[] { "com.o_o.ai-usage", "com.o_o.ai.codex", "com.o_o.ai.claude" })
         {
-            CopyPlugin(Path.Combine(repo, id), Path.Combine(_root, id));
+            CopyPlugin(RepoPlugin(id), Path.Combine(_root, id));
         }
         WritePluginWithManifest("test.fakeai",
             """, "contributes": { "providers": [{ "interface": "ai-usage", "id": "fake", "title": "Fake" }] }""", "", """
@@ -145,7 +158,7 @@ public sealed partial class PluginHostTests
 {
     private void StartAggregatorWithFake(string usedPercent)
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.ai-usage"), Path.Combine(_root, "com.o_o.ai-usage"));
+        CopyPlugin(RepoPlugin("com.o_o.ai-usage"), Path.Combine(_root, "com.o_o.ai-usage"));
         if (usedPercent.Length > 0)
         {
             WritePluginWithManifest("test.fakeai",
@@ -231,7 +244,7 @@ public sealed partial class PluginHostTests
 
         foreach (var id in new[] { "com.o_o.ai-usage", "com.o_o.ai.claude" })
         {
-            CopyPlugin(Path.Combine(RepoPlugins(), id), Path.Combine(_root, id));
+            CopyPlugin(RepoPlugin(id), Path.Combine(_root, id));
         }
         StartWith(null, services);
         WaitFor(() => _host!.GetState("com.o_o.ai.claude") == PluginState.AwaitingConsent ? "ok" : null, "consent");
@@ -256,7 +269,7 @@ public sealed partial class PluginHostTests
     [Fact]
     public void A_balance_provider_shows_its_amount_and_accounts_can_be_switched()
     {
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.ai-usage"), Path.Combine(_root, "com.o_o.ai-usage"));
+        CopyPlugin(RepoPlugin("com.o_o.ai-usage"), Path.Combine(_root, "com.o_o.ai-usage"));
         WritePluginWithManifest("test.fakeai",
             """, "contributes": { "providers": [{ "interface": "ai-usage", "id": "quota", "title": "Quota" }, { "interface": "ai-usage", "id": "money", "title": "Money" }] }""", "", """
             import { island } from '@island/api';

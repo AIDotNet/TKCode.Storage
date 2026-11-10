@@ -45,6 +45,7 @@ public static class PluginPackages
         _ = SettingsSchema.Parse(manifest.Contributes.Settings, manifestProblems);
         ThemeContribution.Validate(manifest.Contributes.Themes, manifestProblems);
         LayoutContribution.Validate(manifest.Contributes.Layouts, manifestProblems);
+        manifest.ValidateTargets(manifestProblems);
         problems.AddRange(manifestProblems);
         var main = Path.GetFullPath(Path.Combine(directory, manifest.Main));
         if (!main.StartsWith(Path.GetFullPath(directory), StringComparison.Ordinal) || !File.Exists(main))

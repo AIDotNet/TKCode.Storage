@@ -411,7 +411,7 @@ public sealed partial class PluginHostTests
     public void The_mail_plugin_shows_unread_mail_and_announces_new_mail_once()
     {
         using var imap = new FakeImapServer();
-        CopyPlugin(Path.Combine(RepoPlugins(), "com.o_o.mail"), Path.Combine(_root, "com.o_o.mail"));
+        CopyPlugin(RepoPlugin("com.o_o.mail"), Path.Combine(_root, "com.o_o.mail"));
         StartWith(null, Services with { ImapConnect = imap.Connect });
         SetSetting("com.o_o.mail", "password1", JsonSerializer.Serialize(imap.Password));
         SetSetting("com.o_o.mail", "user1", "\"me@qq.com\"");                       // preset1 defaults to QQ 邮箱
