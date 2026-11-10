@@ -56,7 +56,8 @@ public sealed class MacCalendar : ICalendarPlatform
             if (p.ExitCode != 0 || !output.StartsWith('{'))
             {
                 var message = (await stderr).Trim();
-                return System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string> { ["error"] = "failed", ["message"] = message });
+                // JsonObject, not JsonSerializer: reflection-based serialization throws in the AOT build.
+                return new System.Text.Json.Nodes.JsonObject { ["error"] = "failed", ["message"] = message }.ToJsonString();
             }
             return output;
         }

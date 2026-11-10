@@ -23,6 +23,8 @@ namespace Island.UI.Plugins;
 /// <param name="Extra">Props that are not plain values: charts take their data as one JSON string (<c>data</c>).</param>
 internal sealed record ArcControlSpec(
     string Name,
+    // On the parameter too: that is what makes the trimmer keep each typeof(...) control's constructor and properties.
+    [param: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)]
     [property: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)]
     Type Type,
     string[] Props,
