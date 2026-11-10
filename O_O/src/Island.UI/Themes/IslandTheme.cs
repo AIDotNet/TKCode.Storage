@@ -56,6 +56,12 @@ public sealed class IslandTheme
     /// <summary>The surface away from a notch; null: the default black.</summary>
     public IBrush? Surface => SurfaceOf(_spec?.Surface);
 
+    /// <summary>An animated surface: its preset, colours and speed; null when the surface does not move.</summary>
+    public (string Preset, IReadOnlyList<Color> Colors, double Speed)? Animated =>
+        _spec?.Surface is { Material: "animated", Animation: { } preset, Colors: { Count: >= 2 } colors } s
+            ? (preset, [.. colors.Select(Color.Parse)], s.Speed ?? 1)
+            : null;
+
     /// <summary>How much the island's corners are scaled (1: as designed).</summary>
     public double CornerScale => _spec?.Shape?.Radius ?? 1;
 
@@ -132,6 +138,9 @@ public sealed class IslandTheme
                 }
                 return brush;
             }
+            case "animated" when s.Colors is { Count: >= 1 } colors:
+                // The plain colour behind the animation (and of the bubble, which does not animate).
+                return new SolidColorBrush(Color.Parse(colors[0]));
             case "translucent":
             {
                 var c = Color.Parse(s.Color ?? "#000000");

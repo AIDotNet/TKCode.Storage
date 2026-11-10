@@ -10,6 +10,8 @@
     <!-- The shell only: every piece of content comes from plugins: pages when expanded, activities when compact (docs 07). -->
     <ui:IslandSurface x:Name="Surface" HorizontalAlignment="Left" VerticalAlignment="Top">
         <Panel>
+            <!-- A theme's animated surface, behind everything and clipped to the island (docs/design/09-island-v2.md §4). -->
+            <ui:AnimatedSurface x:Name="Backdrop" IsVisible="False" />
             <!-- Compact: content only in the wings either side of the notch; the middle column is the notch. -->
             <ui:IslandStatePanel x:Name="CompactPanel" HorizontalAlignment="Center" VerticalAlignment="Top">
                 <Grid x:Name="CompactGrid" ColumnDefinitions="*,Auto,*">

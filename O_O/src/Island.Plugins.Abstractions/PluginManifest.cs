@@ -142,7 +142,8 @@ public sealed class IslandThemeSpec
     public IslandSoundsSpec? Sounds { get; init; }
     public IslandLayoutSpec? Layout { get; init; }
 
-    public static readonly IReadOnlySet<string> Materials = new HashSet<string>(StringComparer.Ordinal) { "solid", "gradient", "translucent" };
+    public static readonly IReadOnlySet<string> Materials = new HashSet<string>(StringComparer.Ordinal) { "solid", "gradient", "translucent", "animated" };
+    public static readonly IReadOnlySet<string> Animations = new HashSet<string>(StringComparer.Ordinal) { "aurora", "pulse", "waves" };
     public static readonly IReadOnlySet<string> Springs = new HashSet<string>(StringComparer.Ordinal) { "calm", "default", "snappy", "bouncy" };
     public static readonly IReadOnlySet<string> Splits = new HashSet<string>(StringComparer.Ordinal) { "slide", "droplet" };
     public static readonly IReadOnlySet<string> MascotKinds = new HashSet<string>(StringComparer.Ordinal) { "classic", "pixel", "ghost", "cube" };
@@ -161,7 +162,7 @@ public sealed class IslandThemeSpec
         {
             if (surface.Material is { } m && !Materials.Contains(m))
             {
-                problems.Add($"{where}: island.surface.material must be solid, gradient or translucent");
+                problems.Add($"{where}: island.surface.material must be solid, gradient, translucent or animated");
             }
             if (surface.Color is { } c && !ThemeContribution.IsHexColor(c))
             {
@@ -171,9 +172,21 @@ public sealed class IslandThemeSpec
             {
                 problems.Add($"{where}: island.surface.colors must be 2 to 4 colours #RRGGBB");
             }
-            if (surface.Material == "gradient" && surface.Colors is null)
+            if (surface.Material is "gradient" or "animated" && surface.Colors is null)
             {
-                problems.Add($"{where}: a gradient surface needs island.surface.colors");
+                problems.Add($"{where}: a {surface.Material} surface needs island.surface.colors");
+            }
+            if (surface.Material == "animated" && (surface.Animation is null || !Animations.Contains(surface.Animation)))
+            {
+                problems.Add($"{where}: an animated surface needs island.surface.animation: aurora, pulse or waves");
+            }
+            if (surface.Material == "animated" && surface.Colors is { Count: > 3 })
+            {
+                problems.Add($"{where}: an animated surface takes 2 or 3 colours");
+            }
+            if (surface.Speed is { } speed && (double.IsNaN(speed) || speed < 0.2 || speed > 2))
+            {
+                problems.Add($"{where}: island.surface.speed must be between 0.2 and 2");
             }
             if (surface.Opacity is { } o && (double.IsNaN(o) || o < 0.5 || o > 1))
             {
@@ -238,7 +251,7 @@ public sealed class IslandThemeSpec
 /// <summary>The island's surface away from a notch: one colour, a gradient, or a see-through tint.</summary>
 public sealed class IslandSurfaceSpec
 {
-    /// <summary>solid (default), gradient or translucent.</summary>
+    /// <summary>solid (default), gradient, translucent or animated.</summary>
     public string? Material { get; init; }
 
     /// <summary>The colour of a solid or translucent surface, #RRGGBB (default black).</summary>
@@ -252,6 +265,12 @@ public sealed class IslandSurfaceSpec
 
     /// <summary>How opaque a translucent surface is, 0.5–1 (default 0.85).</summary>
     public double? Opacity { get; init; }
+
+    /// <summary>An animated surface's preset: aurora, pulse or waves (drawn by the host; themes ship no shader code).</summary>
+    public string? Animation { get; init; }
+
+    /// <summary>How fast an animated surface moves, 0.2–2 (default 1).</summary>
+    public double? Speed { get; init; }
 }
 
 public sealed class IslandShapeSpec

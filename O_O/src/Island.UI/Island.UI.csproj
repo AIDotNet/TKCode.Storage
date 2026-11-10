@@ -10,6 +10,8 @@
   <ItemGroup>
     <!-- Arc is built against this exact Avalonia version; keep every Avalonia package on it. -->
     <PackageReference Include="Avalonia" Version="12.1.4" />
+    <!-- Animated island surfaces draw with Skia shaders (Controls/AnimatedSurface.cs). -->
+    <PackageReference Include="Avalonia.Skia" Version="12.1.4" />
     <PackageReference Include="TKCode.Arc" Version="1.0.0" />
     <PackageReference Include="TKCode.Arc.Blocks" Version="1.0.0" />
     <PackageReference Include="TKCode.Arc.Icons.Lucide" Version="1.0.0" />

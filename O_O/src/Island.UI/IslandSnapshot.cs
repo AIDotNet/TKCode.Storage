@@ -74,6 +74,10 @@ public static class IslandSnapshot
             c = new Island.Core.Layout.Corners(Math.Min(c.TopLeft * k, most), Math.Min(c.TopRight * k, most), Math.Min(c.BottomRight * k, most), Math.Min(c.BottomLeft * k, most));
         }
         view.Surface.CornerRadius = new CornerRadius(c.TopLeft, c.TopRight, c.BottomRight, c.BottomLeft);
+        if (Island.UI.Themes.IslandTheme.Current.Animated is { } animated)
+        {
+            view.Backdrop.Show(animated.Preset, animated.Colors, animated.Speed, still: true); // a picture: one frame
+        }
         view.Surface.Shoulder = frame.Shoulder;
         view.CompactPanel.Width = compact.Surface.Width;
         view.CompactPanel.Height = compact.Surface.Height;

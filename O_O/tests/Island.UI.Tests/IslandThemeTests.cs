@@ -120,4 +120,27 @@ public sealed class IslandThemeTests
             Assert.Equal(2, Grid.GetRowSpan(lead));                    // the large leading region beside everything else
         }
     });
+
+    [Theory]
+    [InlineData("aurora")]
+    [InlineData("pulse")]
+    [InlineData("waves")]
+    public void The_animated_surface_presets_compile(string preset) =>
+        Assert.Null(Island.UI.Controls.AnimatedSurface.CompileErrors(preset));
+
+    [Fact]
+    public void An_animated_surface_has_its_first_colour_as_the_plain_surface() => Headless.Run(() =>
+    {
+        IslandTheme.Apply(new IslandThemeSpec { Surface = new IslandSurfaceSpec { Material = "animated", Animation = "aurora", Colors = ["#101030", "#402060"], Speed = 0.5 } });
+        try
+        {
+            var animated = IslandTheme.Current.Animated!.Value;
+            Assert.Equal(("aurora", 0.5), (animated.Preset, animated.Speed));
+            Assert.Equal(Color.Parse("#101030"), Assert.IsType<SolidColorBrush>(IslandTheme.Current.Surface).Color);
+        }
+        finally
+        {
+            IslandTheme.Apply(null);
+        }
+    });
 }

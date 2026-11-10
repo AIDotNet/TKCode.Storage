@@ -801,6 +801,16 @@ public sealed class IslandController : IDisposable
 
     private bool _themedMotion;
 
+    /// <summary>The theme's animated surface, if any: not around a notch, a still frame with reduced motion.</summary>
+    private void ShowBackdrop(bool atNotch)
+    {
+        var backdrop = _window.View.Backdrop;
+        var animated = Island.UI.Themes.IslandTheme.Current.Animated;
+        backdrop.Suppressed = atNotch;
+        backdrop.Show(animated?.Preset, animated?.Colors ?? [], animated?.Speed ?? 1,
+            still: !_window.View.Surface.Classes.Contains(":motion-full"));
+    }
+
     private void ApplyLayout(bool animate)
     {
         if (_topology is null || _screen is null)
@@ -900,6 +910,7 @@ public sealed class IslandController : IDisposable
         // surface and corner scale apply (docs/design/09-island-v2.md §4).
         var atNotch = frame.NotchGap > 0 || widthFrame.NotchGap > 0;
         surface.Classes.Set("notch", atNotch);
+        ShowBackdrop(atNotch);
         var c = frame.Corners;
         if (!atNotch && Island.UI.Themes.IslandTheme.Current.CornerScale is var k and not 1)
         {

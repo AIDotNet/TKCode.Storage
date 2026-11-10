@@ -18,7 +18,14 @@
           "content": { "accents": { "music": "#C77DFF", "timer": "#FFB86B", "calendar": "#7AA2FF", "message": "#6EE7B7", "reminder": "#FFB86B", "warning": "#FFD166" } },
           "motion": { "spring": "calm", "split": "droplet" },
           "mascot": { "kind": "ghost", "color": "#9D7BFF" },
-          "sounds": { "alert": "sounds/chime.wav" } } }
+          "sounds": { "alert": "sounds/chime.wav" } } },
+      { "id": "aurora-live", "title": "流动极光", "description": "深色 · 紫罗兰，岛体上有缓缓流动的极光", "accent": "#7747FF", "appearance": "dark", "corners": 0.8,
+        "tokens": { "IslandSecondaryBrush": "#B3A6F5", "IslandDividerBrush": "#2A2342", "IslandCardBrush": "#1F1833", "IslandCardHoverBrush": "#2E2450" },
+        "island": {
+          "surface": { "material": "animated", "animation": "aurora", "colors": ["#120A26", "#3A1C71", "#0E6E8C"], "speed": 0.6 },
+          "shape": { "radius": 1.15 },
+          "content": { "accents": { "music": "#C77DFF", "timer": "#FFB86B", "calendar": "#7AA2FF", "message": "#6EE7B7", "reminder": "#FFB86B", "warning": "#FFD166" } },
+          "motion": { "spring": "calm", "split": "droplet" } } }
     ]
   }
 }
