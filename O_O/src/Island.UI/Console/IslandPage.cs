@@ -36,8 +36,26 @@ public sealed class IslandPage : StackPanel
         _store = store;
         _pages = pages;
         _plugins = plugins;
+        _layouts = new Island.UI.Layouts.LayoutService(plugins, store, pages, chips);
+        // A layout changes the shape, the lists and more: draw the page again from the stores.
+        _layouts.Applied += () => Avalonia.Threading.Dispatcher.UIThread.Post(Build);
+        Build();
+    }
+
+    private readonly Island.UI.Layouts.LayoutService _layouts;
+
+    /// <summary>Draws the whole page from the stores' current values.</summary>
+    private void Build()
+    {
+        Children.Clear();
+        var store = _store;
         var a = store.Current;
         Children.Add(PageTitle("岛体", "灵动岛的形态、位置和大小。修改会立即生效。"));
+        if (LayoutPresets() is { } presets)
+        {
+            Children.Add(SectionLabel("布局"));
+            Children.Add(presets);
+        }
 
         var shape = new SegmentedControl
         {
@@ -143,6 +161,30 @@ public sealed class IslandPage : StackPanel
         Children.Add(Group(PageList()));
         Children.Add(SectionLabel("收起时显示"));
         Children.Add(Group(ChipList()));
+    }
+
+    /// <summary>The layouts enabled plugins offer, one button each; null when there are none.</summary>
+    private Control? LayoutPresets()
+    {
+        var options = _layouts.Layouts;
+        if (options.Count == 0)
+        {
+            return null;
+        }
+        var wrap = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var option in options)
+        {
+            var button = new TKCode.Arc.Button { Content = option.Title, Variant = TKCode.Arc.ButtonVariant.Secondary, Margin = new Thickness(0, 0, 8, 8) };
+            ToolTip.SetTip(button, option.Description is null ? option.Plugin : $"{option.Description}（{option.Plugin}）");
+            var key = option.Key;
+            button.Click += (_, _) => _layouts.Apply(key);
+            wrap.Children.Add(button);
+        }
+        return Group(new StackPanel
+        {
+            Spacing = 8,
+            Children = { wrap, Note("插件提供的整套岛布局：形态、停靠、大小、页面和小项一次设好。应用后仍可以在下面逐项修改。") },
+        });
     }
 
     /// <summary>

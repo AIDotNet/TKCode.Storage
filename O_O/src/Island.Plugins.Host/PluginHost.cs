@@ -91,6 +91,7 @@ public sealed class PluginHost : IDisposable, IPluginRunnerSink
                 if (!File.Exists(package.EntryPath))
                 {
                     problems.Add($"{manifest.Id}: entry '{manifest.Main}' not found.");
+                LayoutContribution.Validate(manifest.Contributes.Layouts, manifestProblems);
                 }
                 else if (_packages.All(p => p.Id != manifest.Id))
                 {

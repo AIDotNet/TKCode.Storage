@@ -59,4 +59,26 @@ public sealed partial class PluginHostTests
             Assert.Equal(manifest.Id != "com.o_o.theme.default", manifest.Optional);
         }
     }
+
+    [Fact]
+    public void Layout_presets_are_checked_and_the_bundled_one_is_valid()
+    {
+        WritePluginWithManifest("com.example.badlayout", """
+            , "contributes": { "layouts": [
+              { "id": "x", "shape": "round", "dock": "bottom", "scale": 3, "pages": ["nopluginkey"], "chips": [{ "key": "a/b", "side": "middle" }] },
+              { "id": "x" }
+            ] }
+            """, "", "export function activate() {}");
+        _host = new PluginHost(Services, FastRestart);
+        var problem = Assert.Single(_host.Discover(_root, bundled: true));
+        Assert.Contains("shape must be capsule or notch", problem);
+        Assert.Contains("dock must be top, left or right", problem);
+        Assert.Contains("scale must be between 0.8 and 1.4", problem);
+        Assert.Contains("pages are written plugin/page", problem);
+        Assert.Contains("chip side must be left or right", problem);
+        Assert.Contains("used twice", problem);
+
+        Assert.Empty(PluginPackages.Validate(Path.Combine(RepoPlugins(), "com.o_o.layout.presets"), out var manifest));
+        Assert.Equal(3, manifest!.Contributes.Layouts.Count);
+    }
 }

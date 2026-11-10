@@ -1,0 +1,51 @@
+{
+  "id": "com.o_o.layout.presets",
+  "name": "岛布局预设",
+  "version": "0.1.0",
+  "description": "几套现成的岛布局：简洁、专注、工作台",
+  "icon": "LayoutDashboard",
+  "main": "main.js",
+  "optional": true,
+  "permissions": [],
+  "contributes": {
+    "layouts": [
+      {
+        "id": "calm",
+        "title": "简洁",
+        "description": "胶囊 · 收起时只显示时间",
+        "shape": "capsule",
+        "dock": "top",
+        "scale": 1.0,
+        "minimal": true
+      },
+      {
+        "id": "focus",
+        "title": "专注",
+        "description": "只留专注、待办和日程",
+        "minimal": false,
+        "exclusive": true,
+        "pages": ["com.o_o.focus/timer", "com.o_o.todo/list", "com.o_o.calendar/today"],
+        "home": "com.o_o.focus/timer",
+        "chips": [
+          { "key": "com.o_o.focus/remaining", "side": "left" },
+          { "key": "com.o_o.calendar/next", "side": "right" },
+          { "key": "com.o_o.todo/count", "side": "right" }
+        ]
+      },
+      {
+        "id": "desk",
+        "title": "工作台",
+        "description": "日程、待办、GitHub、系统监控和天气",
+        "minimal": false,
+        "pages": ["com.o_o.calendar/today", "com.o_o.todo/list", "com.o_o.github/inbox", "com.o_o.monitor/stats", "com.o_o.weather/now"],
+        "home": "com.o_o.calendar/today",
+        "chips": [
+          { "key": "com.o_o.calendar/next", "side": "left" },
+          { "key": "com.o_o.weather/temp", "side": "left" },
+          { "key": "com.o_o.github/unread", "side": "right" },
+          { "key": "com.o_o.monitor/cpu", "side": "right" }
+        ]
+      }
+    ]
+  }
+}

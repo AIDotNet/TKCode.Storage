@@ -56,6 +56,9 @@ public sealed class PluginContributions
     /// <summary>Looks for every O_O window (docs/design/03-plugin-system.md §9), chosen on the console's 外观 page.</summary>
     public IReadOnlyList<ThemeContribution> Themes { get => field ?? []; init; }
 
+    /// <summary>Island layouts the user can apply on the console's 岛体 page: shape, dock, size, pages and chips in one go.</summary>
+    public IReadOnlyList<LayoutContribution> Layouts { get => field ?? []; init; }
+
     /// <summary>Implementations this plugin offers to other plugins (docs/design/03-plugin-system.md §7.1).</summary>
     public IReadOnlyList<ProviderContribution> Providers { get => field ?? []; init; }
 
@@ -189,5 +192,88 @@ public sealed class ActivityContribution
 [JsonSerializable(typeof(PluginManifest))]
 [JsonSerializable(typeof(string))]
 internal sealed partial class PluginJsonContext : JsonSerializerContext
+/// <summary>
+/// A layout preset for the island (docs/design/07-home-and-layout.md): what the user gets when applying it. Everything is
+/// optional; what is absent is left as the user has it. Applying never hides the pages or chips the preset does not
+/// mention unless <see cref="Exclusive"/> is set.
+/// </summary>
+public sealed class LayoutContribution
+{
+    public required string Id { get; init; }
+    public string? Title { get; init; }
+    public string? Description { get; init; }
+
+    /// <summary><c>capsule</c> or <c>notch</c>.</summary>
+    public string? Shape { get; init; }
+
+    /// <summary><c>top</c>, <c>left</c> or <c>right</c>.</summary>
+    public string? Dock { get; init; }
+
+    /// <summary>0.8–1.4.</summary>
+    public double? Scale { get; init; }
+
+    /// <summary>极简模式: collapsed, only the time and alerts.</summary>
+    public bool? Minimal { get; init; }
+
+    /// <summary>Pages in this order, first ones leading, by key <c>plugin/page</c>; all of them are switched on.</summary>
+    public IReadOnlyList<string> Pages { get => field ?? []; init; }
+
+    /// <summary>The page the island opens on when nothing is going on (<c>plugin/page</c>).</summary>
+    public string? Home { get; init; }
+
+    /// <summary>Chips in this order, on the given side, by key <c>plugin/chip</c>; all of them are switched on.</summary>
+    public IReadOnlyList<LayoutChip> Chips { get => field ?? []; init; }
+
+    /// <summary>Switch off the pages and chips this layout does not list.</summary>
+    public bool Exclusive { get; init; }
+
+    public static void Validate(IReadOnlyList<LayoutContribution> layouts, List<string> problems)
+    {
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var l in layouts)
+        {
+            if (string.IsNullOrWhiteSpace(l.Id) || !ids.Add(l.Id))
+            {
+                problems.Add($"layout '{l.Id}': id missing or used twice");
+            }
+            if (l.Shape is not null and not ("capsule" or "notch"))
+            {
+                problems.Add($"layout '{l.Id}': shape must be capsule or notch");
+            }
+            if (l.Dock is not null and not ("top" or "left" or "right"))
+            {
+                problems.Add($"layout '{l.Id}': dock must be top, left or right");
+            }
+            if (l.Scale is { } s && (double.IsNaN(s) || s < 0.8 || s > 1.4))
+            {
+                problems.Add($"layout '{l.Id}': scale must be between 0.8 and 1.4");
+            }
+            if (l.Pages.Any(k => !k.Contains('/', StringComparison.Ordinal)) || l.Home is { } h && !h.Contains('/', StringComparison.Ordinal))
+            {
+                problems.Add($"layout '{l.Id}': pages are written plugin/page");
+            }
+            foreach (var chip in l.Chips)
+            {
+                if (chip.Key is null || !chip.Key.Contains('/', StringComparison.Ordinal))
+                {
+                    problems.Add($"layout '{l.Id}': chips are written plugin/chip");
+                }
+                if (chip.Side is not null and not ("left" or "right"))
+                {
+                    problems.Add($"layout '{l.Id}': chip side must be left or right");
+                }
+            }
+        }
+    }
+}
+
+public sealed class LayoutChip
+{
+    public required string Key { get; init; }
+
+    /// <summary><c>left</c> or <c>right</c>; absent: the chip's own default.</summary>
+    public string? Side { get; init; }
+}
+
 {
 }
