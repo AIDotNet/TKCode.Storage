@@ -16,7 +16,7 @@ namespace Island.UI.Themes;
 /// <summary>A theme an enabled plugin offers (docs/design/03-plugin-system.md §9).</summary>
 /// <param name="Key"><c>plugin/theme</c>.</param>
 public sealed record ThemeOption(string Key, string Title, string? Description, string Plugin, Color? Accent,
-    ArcAppearance? Appearance, double? Corners);
+    ArcAppearance? Appearance, double? Corners, IReadOnlyDictionary<string, Color>? Tokens = null);
 
 /// <summary>
 /// Themes for every O_O window (docs/design/05-builtin-plugins.md §3): theme packs from plugins, chosen in the
@@ -61,6 +61,7 @@ public sealed class ThemeService
         {
             ArcTheme.Apply(t => t.Corners(ArcCornerStyle.Scale(corners)));
         }
+        ApplyTokens(service.Selected?.Tokens);
         service.Evaluate();
         service._timer.Start();
         ThemeMenu.Refresh();
@@ -111,7 +112,35 @@ public sealed class ThemeService
             t.Accent(_store.Current.WallpaperAccent && _wallpaperAccent is { } fromWallpaper ? fromWallpaper : theme.Accent ?? AppleTheme.SystemBlue);
             t.Corners(ArcCornerStyle.Scale(theme.Corners ?? 0.6));
         });
+        ApplyTokens(theme.Tokens);
         Changed?.Invoke();
+    }
+
+    private static readonly HashSet<string> OverriddenTokens = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The theme's island colours replace the defaults in the application's resources; tokens a previous theme set and
+    /// this one does not are removed again, which brings back the defaults of the island's resource dictionary.
+    /// </summary>
+    private static void ApplyTokens(IReadOnlyDictionary<string, Color>? tokens)
+    {
+        if (Application.Current?.Resources is not { } resources)
+        {
+            return;
+        }
+        foreach (var key in OverriddenTokens.Where(k => tokens?.ContainsKey(k) != true).ToList())
+        {
+            resources.Remove(key);
+            OverriddenTokens.Remove(key);
+        }
+        foreach (var (key, color) in tokens ?? new Dictionary<string, Color>())
+        {
+            if (ThemeContribution.TokenKeys.Contains(key))
+            {
+                resources[key] = new SolidColorBrush(color);
+                OverriddenTokens.Add(key);
+            }
+        }
     }
 
     /// <summary>Light, dark or following the system, by hand (this turns the schedule off).</summary>
@@ -236,5 +265,6 @@ public sealed class ThemeService
         package.Manifest.Name,
         t.Accent is { } a && Color.TryParse(a, out var color) ? color : null,
         t.Appearance switch { "light" => ArcAppearance.Light, "dark" => ArcAppearance.Dark, "system" => ArcAppearance.System, _ => null },
-        t.Corners);
+        t.Corners,
+        t.Tokens?.Where(kv => Color.TryParse(kv.Value, out _)).ToDictionary(kv => kv.Key, kv => Color.Parse(kv.Value)));
 }

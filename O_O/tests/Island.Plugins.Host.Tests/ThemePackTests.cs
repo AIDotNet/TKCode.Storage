@@ -29,6 +29,27 @@ public sealed partial class PluginHostTests
     }
 
     [Fact]
+    public void Theme_tokens_may_recolour_the_island_but_not_the_notch()
+    {
+        WritePluginWithManifest("com.example.tokens", """
+            , "contributes": { "themes": [
+              { "id": "ok", "tokens": { "IslandSecondaryBrush": "#B8A9FF", "IslandCardBrush": "#221A3A" } }
+            ] }
+            """, "", "export function activate() {}");
+        WritePluginWithManifest("com.example.badtokens", """
+            , "contributes": { "themes": [
+              { "id": "bad", "tokens": { "IslandNotchSurfaceBrush": "#FFFFFF", "IslandForegroundBrush": "white" } }
+            ] }
+            """, "", "export function activate() {}");
+        _host = new PluginHost(Services, FastRestart);
+        var problem = Assert.Single(_host.Discover(_root, bundled: true));
+        Assert.Contains("token 'IslandNotchSurfaceBrush' cannot be overridden", problem);
+        Assert.Contains("token 'IslandForegroundBrush' must be #RRGGBB", problem);
+        var theme = Assert.Single(_host.Packages).Manifest.Contributes.Themes.Single();
+        Assert.Equal("#B8A9FF", theme.Tokens!["IslandSecondaryBrush"]);
+    }
+
+    [Fact]
     public void The_bundled_theme_packs_are_valid_and_only_the_default_is_on()
     {
         foreach (var dir in Directory.GetDirectories(RepoPlugins(), "com.o_o.theme.*"))

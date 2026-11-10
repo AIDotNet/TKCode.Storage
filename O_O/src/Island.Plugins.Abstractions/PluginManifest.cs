@@ -124,6 +124,18 @@ public sealed class ThemeContribution
     /// <summary>Arc's corner preset scaled (0.2–2; 0.6 is the macOS look); absent: 0.6.</summary>
     public double? Corners { get; init; }
 
+    /// <summary>
+    /// The island's own colours, by token key → <c>#RRGGBB</c> (or <c>#AARRGGBB</c>). Only the keys in
+    /// <see cref="TokenKeys"/>; the notch's black surface cannot be overridden.
+    /// </summary>
+    public Dictionary<string, string>? Tokens { get; init; }
+
+    /// <summary>The island colour tokens a theme may override.</summary>
+    public static readonly IReadOnlySet<string> TokenKeys = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "IslandForegroundBrush", "IslandSecondaryBrush", "IslandDividerBrush", "IslandCardBrush", "IslandCardHoverBrush",
+    };
+
     /// <summary>Lists what is wrong with the declared themes (unknown appearance, bad colour, duplicate id…).</summary>
     public static void Validate(IReadOnlyList<ThemeContribution> themes, List<string> problems)
     {
@@ -145,6 +157,17 @@ public sealed class ThemeContribution
             if (t.Corners is { } c && (double.IsNaN(c) || c < 0.2 || c > 2))
             {
                 problems.Add($"theme '{t.Id}': corners must be between 0.2 and 2");
+            }
+            foreach (var (key, value) in t.Tokens ?? [])
+            {
+                if (!TokenKeys.Contains(key))
+                {
+                    problems.Add($"theme '{t.Id}': token '{key}' cannot be overridden (allowed: {string.Join(", ", TokenKeys.Order(StringComparer.Ordinal))})");
+                }
+                else if (!IsHexColor(value))
+                {
+                    problems.Add($"theme '{t.Id}': token '{key}' must be #RRGGBB");
+                }
             }
         }
     }
