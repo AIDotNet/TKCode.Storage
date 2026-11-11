@@ -117,7 +117,7 @@
 
 ## 3.11 实现状态（M3 第一部分）
 
-已实现 `src/Island.UI/Console`：`ArcWindow` + `Sidebar`，页面有**插件**（状态徽章、授权提示、逐项权限开关、自动设置表单）、**外观**（浅色 / 深色 / 跟随系统、强调色）、**关于**（版本、数据目录）。macOS 使用系统红绿灯；Windows / Linux 在标题栏左侧绘制红绿灯样式的窗口按钮（`TrafficLights`）。从岛展开后的"设置"按钮打开，开发时也可用 `O_O --console` 启动即打开。
+已实现 `src/Island.UI/Console`：`ArcWindow` + `Sidebar`，页面有**插件**（状态徽章、授权提示、逐项权限开关、自动设置表单）、**外观**（浅色 / 深色 / 跟随系统、强调色）、**关于**（版本、数据目录——可更改，数据在重启时迁移，见 `Island.Core.Storage.DataLocation`）。macOS 使用系统红绿灯；Windows / Linux 在标题栏左侧绘制红绿灯样式的窗口按钮（`TrafficLights`）。从岛展开后的"设置"按钮打开，开发时也可用 `O_O --console` 启动即打开。
 
 自动表单的实际映射：枚举 → `Select`，密码 → `PasswordField`，其余字符串 → `Input`，数字 → `NumberField`，布尔 → `Switch`。（下表中的 `RadioGroup`、`ColorPicker`、`ShortcutRecorder` 等映射尚未实现。）
 

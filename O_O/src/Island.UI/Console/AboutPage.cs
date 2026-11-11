@@ -42,16 +42,101 @@ public sealed class AboutPage : StackPanel
                 Text("选择控制台侧栏和这里显示的吉祥物，以及它的颜色。", ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true),
             },
         }));
-        Children.Add(Group(new StackPanel
+        Children.Add(Group(DataDirectoryPanel(dataDirectory)));
+    }
+
+    /// <summary>
+    /// 数据目录: where O_O keeps its data, and (where the app allows it) moving it to another folder. A move asks first,
+    /// then restarts O_O, which copies the data over before using it (Island.Core.Storage.DataLocation).
+    /// </summary>
+    private StackPanel DataDirectoryPanel(string pluginDataDirectory)
+    {
+        var service = Island.UI.Services.DataDirectoryService.Shared;
+        var panel = new StackPanel { Spacing = 6 };
+        panel.Children.Add(Text("数据目录", ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, FontWeight.Medium));
+        panel.Children.Add(Text(service?.Current ?? pluginDataDirectory, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true));
+        panel.Children.Add(Text("插件、插件的存储与设置、授权记录和偏好都在这里；密钥保存在系统钥匙串中。", ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true));
+        if (service is null)
         {
-            Spacing = 6,
-            Children =
+            return panel;
+        }
+        if (service.Notice is { } notice)
+        {
+            panel.Children.Add(Text(notice, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.Foreground, wrap: true));
+        }
+
+        var status = Text("", ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.Foreground, wrap: true);
+        status.IsVisible = false;
+        var actions = new WrapPanel { ItemSpacing = 8, LineSpacing = 8, Margin = new Thickness(0, 6, 0, 0) };
+        var confirm = new StackPanel { Spacing = 8, IsVisible = false, Margin = new Thickness(0, 6, 0, 0) };
+        var confirmText = Text("", ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.Foreground, wrap: true);
+        var move = new TKCode.Arc.Button { Content = "移动并重启", Size = ControlSize.Small, Variant = ButtonVariant.Primary };
+        var cancel = new TKCode.Arc.Button { Content = "取消", Size = ControlSize.Small, Variant = ButtonVariant.Secondary };
+        confirm.Children.Add(confirmText);
+        confirm.Children.Add(new WrapPanel { ItemSpacing = 8, Children = { move, cancel } });
+        string? chosen = null;
+
+        void Show(string? problem)
+        {
+            status.Text = problem ?? "";
+            status.IsVisible = problem is not null;
+        }
+        void Ask(string folder)
+        {
+            chosen = folder;
+            Show(null);
+            confirmText.Text = $"把数据移动到 {folder}（已有其他文件时放在其中新建的 O_O 文件夹里）。O_O 会重新启动，移动完成前请勿关闭。";
+            confirm.IsVisible = true;
+            actions.IsVisible = false;
+        }
+        void Reset()
+        {
+            chosen = null;
+            confirm.IsVisible = false;
+            actions.IsVisible = true;
+        }
+
+        var change = new TKCode.Arc.Button { Content = "更改…", Size = ControlSize.Small, Variant = ButtonVariant.Secondary };
+        change.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(this)?.StorageProvider is not { CanPickFolder: true } storage)
             {
-                Text("数据目录", ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, FontWeight.Medium),
-                Text(dataDirectory, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true),
-                Text("插件的存储、设置和授权记录都在这里；密钥保存在系统钥匙串中。", ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, wrap: true),
-            },
-        }));
+                Show("这个平台不能选择文件夹。");
+                return;
+            }
+            var folders = await storage.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
+            {
+                Title = "选择新的数据目录",
+                AllowMultiple = false,
+            });
+            if (folders is [var folder] && Avalonia.Platform.Storage.StorageProviderExtensions.TryGetLocalPath(folder) is { } path)
+            {
+                Ask(path);
+            }
+        };
+        actions.Children.Add(change);
+        if (!string.Equals(service.Current, service.Default, StringComparison.Ordinal))
+        {
+            var reset = new TKCode.Arc.Button { Content = "恢复默认", Size = ControlSize.Small, Variant = ButtonVariant.Secondary };
+            reset.Click += (_, _) => Ask(service.Default);
+            actions.Children.Add(reset);
+        }
+        move.Click += (_, _) =>
+        {
+            if (chosen is null)
+            {
+                return;
+            }
+            var problem = service.MoveAndRestart(chosen);
+            Reset();
+            Show(problem);
+        };
+        cancel.Click += (_, _) => Reset();
+
+        panel.Children.Add(actions);
+        panel.Children.Add(confirm);
+        panel.Children.Add(status);
+        return panel;
     }
 
     /// <summary>

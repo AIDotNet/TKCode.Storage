@@ -30,11 +30,11 @@ public class App(IIslandPlatform platform) : Application
 
     /// <summary>The island's shape, size and position, shared by the island and the console's 岛体 page.</summary>
     public static IslandAppearanceStore Appearance { get; } =
-        new(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "island.json"));
+        new(Path.Combine(AppSettings.DataRoot, "island.json"));
 
     /// <summary>Which pages the expanded island shows, in what order, and which is home.</summary>
     public static Island.Core.Pages.PagePreferencesStore Pages { get; } =
-        new(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "pages.json"));
+        new(Path.Combine(AppSettings.DataRoot, "pages.json"));
 
     /// <summary>A page as its plugin's manifest declares it (title, icon, on by default or not).</summary>
     /// <summary>⌘-click on an activity (09 §2.2): its link in the browser, or its application brought forward or launched.</summary>
@@ -72,12 +72,12 @@ public class App(IIslandPlatform platform) : Application
     /// <summary>What the collapsed island shows: which chips, in what order, on which side.</summary>
     /// <summary>The user's say over activities: order, policies, pinned (岛体 → 活动).</summary>
     public static Island.Core.Activities.ActivityPreferencesStore Activities { get; } =
-        new(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "activities.json"));
+        new(Path.Combine(AppSettings.DataRoot, "activities.json"));
 
     public static Island.Core.Pages.ChipPreferencesStore Chips { get; } =
-        new(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "chips.json"));
+        new(Path.Combine(AppSettings.DataRoot, "chips.json"));
 
-    public static string DataDirectory => Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "plugin-data");
+    public static string DataDirectory => Path.Combine(AppSettings.DataRoot, "plugin-data");
 
     // The XAML previewer needs a parameterless constructor.
     public App() : this(new NullIslandPlatform())
@@ -101,7 +101,7 @@ public class App(IIslandPlatform platform) : Application
     /// <summary>User plugins first (they override bundled ones with the same id), then the bundled ones.</summary>
     public static IReadOnlyList<string> PluginDirectories { get; } =
     [
-        Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "plugins"),
+        Path.Combine(AppSettings.DataRoot, "plugins"),
         BundledPluginDirectory,
     ];
 
@@ -173,7 +173,7 @@ public class App(IIslandPlatform platform) : Application
                 Secrets: platform.Secrets)
             {
                 Clipboard = new Island.UI.Services.ClipboardService(window, clipboardPlatform,
-                    Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "clipboard-images")),
+                    Path.Combine(AppSettings.DataRoot, "clipboard-images")),
                 UserPluginDirectory = PluginDirectories[0],
                 SystemCalendar = OperatingSystem.IsMacOS() ? new Island.Platform.MacOS.MacCalendar() : null,
                 // Other apps' notifications for the notifications.listen permission (docs/design/08).
@@ -217,7 +217,7 @@ public class App(IIslandPlatform platform) : Application
             // The satellite window beside the island: the second activity's bubble.
             VNodeRenderer.AppIconResolver = plugins.AppIcon;
             _satellites = new SatelliteHost(platform,
-                new SatellitePreferencesStore(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "satellites.json")),
+                new SatellitePreferencesStore(Path.Combine(AppSettings.DataRoot, "satellites.json")),
                 (pid, handler, payload) => plugins.Dispatch(pid, handler, payload));
             _satellites.Follow(_island);
             // The second activity is a bubble beside the island (09 §2, 最小); clicking it brings it to the front.
@@ -275,7 +275,7 @@ public class App(IIslandPlatform platform) : Application
             Island.Core.StartupTrace.Mark("plugins discovered");
             // Themes from theme packs, the light/dark schedule and the wallpaper accent (docs 05 §3).
             Island.UI.Themes.ThemeService.Start(_plugins,
-                new Island.Core.Themes.ThemePreferencesStore(Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "theme.json")),
+                new Island.Core.Themes.ThemePreferencesStore(Path.Combine(AppSettings.DataRoot, "theme.json")),
                 OperatingSystem.IsMacOS() ? new Island.Platform.MacOS.MacWallpaper()
                 : OperatingSystem.IsWindows() ? Island.Platform.Windows.WindowsWallpaper.Create()
                 : OperatingSystem.IsLinux() ? Island.Platform.Linux.LinuxWallpaper.Create()
@@ -283,7 +283,7 @@ public class App(IIslandPlatform platform) : Application
             _island.SettingsRequested += OpenConsole;
             // Tray icon, hand-off from a second launch, full-screen detection (ShellIntegration.cs).
             ShellIntegration.Install(this, _island, OpenConsole, () => desktop.Shutdown());
-            _hotkeys = ShellIntegration.InstallHotkeys(_island, OpenConsole, Path.GetDirectoryName(AppSettings.DefaultPath)!);
+            _hotkeys = ShellIntegration.InstallHotkeys(_island, OpenConsole, AppSettings.DataRoot);
             _island.Show();
             Island.Core.StartupTrace.Mark("island shown");
             _plugins.StartAll();
@@ -309,9 +309,17 @@ public class App(IIslandPlatform platform) : Application
             }
             // Update check (docs/design/08-updates-and-catalog.md): a newer O_O is announced once on the island; the
             // download is offered on the console's 关于 page.
-            var updates = new Island.UI.Services.UpdateService(Path.GetDirectoryName(AppSettings.DefaultPath)!,
+            var updates = new Island.UI.Services.UpdateService(AppSettings.DefaultRoot,
                 (latest, ready) => presenter.RaiseLiveAlert(UpdateAlert(latest.Version, ready)));
             Island.UI.Services.UpdateService.Shared = updates;
+            // 关于 → 数据目录: where the data is, and moving it (the move happens as O_O starts again).
+            Island.UI.Services.DataDirectoryService.Shared = new()
+            {
+                Current = AppSettings.DataRoot,
+                Default = AppSettings.DefaultRoot,
+                Notice = DataDirectorySetup.Notice,
+                MoveAndRestart = DataDirectorySetup.MoveAndRestart,
+            };
             updates.Start();
             desktop.Exit += (_, _) =>
             {

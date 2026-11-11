@@ -19,6 +19,7 @@ SDK 由 `global.json` 固定为 .NET 10。
 | `O_O_PLACEMENT=Attached` | 强制放置模式（覆盖"岛体"设置）：`Auto` / `Attached` / `Floating` / `BelowMenuBar` / `Capsule` |
 | `O_O_STATE=Expanded` | 启动后保持展开 |
 | `O_O_DEMO=1` | 每 2 秒在 展开 → 紧凑 → 空闲 → 紧凑 间循环，用于截图与检查动画 |
+| `O_O_SETTINGS_DIR=目录` | 代替默认的应用数据文件夹（`settings.json`、实例锁和默认数据目录都在这里）；开发时用一个临时目录，不碰真实数据 |
 | `O_O_INSTANCE=名称` | 单实例锁用的名字；开发时另起一个互不影响的实例（否则第二次启动会交给已运行的 O_O 并退出） |
 | `O_O_DEBUG_WINDOW_PNG=路径` | 启动后把岛窗口（含模板）离屏渲染成 PNG，检查透明与形状 |
 | `O_O_DEBUG_WINDOW_PNG_DELAY=秒` | 上一项的延迟（默认 2 秒），用来截取动画结束后的画面 |

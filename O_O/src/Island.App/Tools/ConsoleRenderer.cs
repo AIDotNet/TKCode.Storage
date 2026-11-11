@@ -42,6 +42,11 @@ internal static class ConsoleRenderer
         Island.UI.Themes.ThemeService.Start(host, new Island.Core.Themes.ThemePreferencesStore(Path.Combine(data, "theme.json")), null);
         Pump(TimeSpan.FromSeconds(2)); // let the plugins start and report their states
 
+        // 关于 → 数据目录 with its buttons; moving does nothing here.
+        Island.UI.Services.DataDirectoryService.Shared = new()
+        {
+            Current = data, Default = Path.GetTempPath(), MoveAndRestart = _ => "离屏渲染时不移动数据。",
+        };
         var view = new ConsoleView(host, data)
         {
             // The 快捷键 page with the defaults, registering nothing on this machine.

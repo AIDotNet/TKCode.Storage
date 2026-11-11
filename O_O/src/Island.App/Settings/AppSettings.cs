@@ -23,10 +23,14 @@ public sealed class AppSettings
     public static AppSettings Current => s_current ??= Load(Store);
 
     // DefaultPath comes before Store: static properties are initialized in the order they are written.
-    /// <summary>The desktop settings file: <c>&lt;application data&gt;/Island.App/settings.json</c>.</summary>
+    /// <summary>The desktop settings file: <c>&lt;application data&gt;/O_O/settings.json</c>.
+    /// <c>O_O_SETTINGS_DIR</c> replaces that folder, for development (a run that leaves the real data alone).</summary>
     public static string DefaultPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.DoNotVerify),
-        "O_O",
+        Environment.GetEnvironmentVariable("O_O_SETTINGS_DIR") is { Length: > 0 } dir
+            ? Path.GetFullPath(dir)
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.DoNotVerify),
+                "O_O"),
         "settings.json");
 
     /// <summary>
@@ -34,6 +38,21 @@ public sealed class AppSettings
     /// before the app is built (a browser host keeps them in the page's local storage, tests in memory).
     /// </summary>
     public static ISettingsStore Store { get; set; } = new FileSettingsStore(DefaultPath);
+
+    /// <summary>The default folder: holds the settings file, and the data too unless it was moved (<see cref="DataDirectory"/>).</summary>
+    public static string DefaultRoot => Path.GetDirectoryName(DefaultPath)!;
+
+    /// <summary>
+    /// Where O_O keeps its data this run (plugin data, user plugins, preferences): the folder the user chose, or
+    /// <see cref="DefaultRoot"/>. Settled by <see cref="Program"/> before the app starts (see Island.Core.Storage.DataLocation).
+    /// </summary>
+    public static string DataRoot { get; set; } = DefaultRoot;
+
+    /// <summary>The data directory the user chose (when installing, or on the About page), or null for <see cref="DefaultRoot"/>.</summary>
+    public string? DataDirectory { get; set; }
+
+    /// <summary>A data directory to move the data to at the next start, or null. Set on the About page.</summary>
+    public string? PendingDataDirectory { get; set; }
 
     /// <summary>Light, dark, or following the system.</summary>
     public ArcAppearance Appearance { get; set; } = ArcAppearance.System;
@@ -77,8 +96,11 @@ public sealed class AppSettings
         {
             return;
         }
-        _store.Write(JsonSerializer.Serialize(this, AppSettingsJsonContext.Default.AppSettings));
+        Write();
     }
+
+    /// <summary>Writes the settings without asking Avalonia anything: usable before the app is built.</summary>
+    internal void Write() => _store.Write(JsonSerializer.Serialize(this, AppSettingsJsonContext.Default.AppSettings));
 
     /// <summary>The start-up theme: the saved appearance and accent (Program.cs passes this to <c>WithTheme</c>).</summary>
     public void ApplyTheme(ArcThemeBuilder theme)

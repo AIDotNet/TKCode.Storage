@@ -90,9 +90,14 @@ internal static class Program
             Console.WriteLine(ShellIntegration.CreateFullScreenDetector().IsFullScreen(rect, 1) ? "fullscreen" : "not fullscreen");
             return;
         }
-        // One O_O per user: a second launch brings the running one forward (its console) and exits.
-        var dataDirectory = Path.GetDirectoryName(Settings.AppSettings.DefaultPath)!;
-        using var instance = SingleInstance.TryAcquire(dataDirectory);
+        // Started again by the About page (moving the data): wait for the old O_O to quit and let go of its lock.
+        if (args is ["--after", var previous, ..] && int.TryParse(previous, out var pid))
+        {
+            WaitForExit(pid);
+        }
+        // One O_O per user: a second launch brings the running one forward (its console) and exits. The lock stays in
+        // the default folder, wherever the data is.
+        using var instance = SingleInstance.TryAcquire(Settings.AppSettings.DefaultRoot);
         if (instance is null)
         {
             if (!SingleInstance.ActivateRunning())
@@ -102,7 +107,21 @@ internal static class Program
             return;
         }
         instance.Listen(() => SecondLaunch?.Invoke());
+        Settings.DataDirectorySetup.Settle(Settings.AppSettings.Current);
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
+
+    private static void WaitForExit(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            process.WaitForExit(TimeSpan.FromSeconds(30));
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // Already gone.
+        }
     }
 
     /// <summary>Raised on a background thread when another launch asked this instance to come forward.</summary>

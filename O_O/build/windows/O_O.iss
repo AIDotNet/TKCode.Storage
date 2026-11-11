@@ -50,3 +50,81 @@ Name: "{userstartup}\O_O"; Filename: "{app}\O_O.exe"; Tasks: startup
 
 [Run]
 Filename: "{app}\O_O.exe"; Description: "启动 O_O"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// 数据目录 (GitHub issue #1): a fresh install may keep O_O's data elsewhere than %APPDATA%\O_O, e.g. on another drive.
+// The choice goes into settings.json, which always stays in %APPDATA%\O_O; later O_O moves the data itself
+// (控制台 → 关于 → 数据目录). Updates and reinstalls keep the existing settings and skip the page.
+var
+  DataDirPage: TInputDirWizardPage;
+
+function DefaultDataDir: String;
+begin
+  Result := ExpandConstant('{userappdata}\O_O');
+end;
+
+function SettingsFile: String;
+begin
+  Result := DefaultDataDir + '\settings.json';
+end;
+
+procedure InitializeWizard;
+begin
+  DataDirPage := CreateInputDirPage(wpSelectDir, '选择数据目录', 'O_O 把插件、插件数据和偏好保存在哪里？',
+    '默认保存在当前用户的应用数据文件夹。可以改到其他磁盘；以后也能在 O_O 的“控制台 → 关于 → 数据目录”中更改，数据会一起迁移。',
+    False, 'O_O');
+  DataDirPage.Add('');
+  DataDirPage.Values[0] := DefaultDataDir;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = DataDirPage.ID) and FileExists(SettingsFile);
+end;
+
+function IsEmptyDir(Dir: String): Boolean;
+var
+  Rec: TFindRec;
+begin
+  Result := True;
+  if FindFirst(AddBackslash(Dir) + '*', Rec) then
+  try
+    repeat
+      if (Rec.Name <> '.') and (Rec.Name <> '..') then
+      begin
+        Result := False;
+        Exit;
+      end;
+    until not FindNext(Rec);
+  finally
+    FindClose(Rec);
+  end;
+end;
+
+function JsonEscape(S: String): String;
+begin
+  Result := S;
+  StringChangeEx(Result, '\', '\\', True);
+  StringChangeEx(Result, '"', '\"', True);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Dir: String;
+  Lines: TArrayOfString;
+begin
+  if (CurStep <> ssPostInstall) or FileExists(SettingsFile) then
+    Exit;
+  Dir := RemoveBackslashUnlessRoot(Trim(DataDirPage.Values[0]));
+  if (Dir = '') or (CompareText(Dir, DefaultDataDir) = 0) then
+    Exit;
+  // Like the app: a folder that already holds other files gets an O_O folder inside it.
+  if DirExists(Dir) and not IsEmptyDir(Dir) then
+    Dir := AddBackslash(Dir) + 'O_O';
+  if not ForceDirectories(Dir) then
+    Exit;
+  ForceDirectories(DefaultDataDir);
+  SetArrayLength(Lines, 1);
+  Lines[0] := '{ "DataDirectory": "' + JsonEscape(Dir) + '" }';
+  SaveStringsToUTF8File(SettingsFile, Lines, False);
+end;
