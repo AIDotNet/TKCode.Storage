@@ -101,9 +101,10 @@ export function activate() {
     t.doneAt = t.done ? new Date().toISOString() : undefined;
     save();
     render();
+    checkDue(); // the due-time activity must follow at once, or it keeps showing a task that is already done
   };
   const star = (t) => { t.high = !t.high; save(); render(); };
-  const remove = (t) => { tasks = tasks.filter((x) => x !== t); save(); render(); };
+  const remove = (t) => { tasks = tasks.filter((x) => x !== t); save(); render(); checkDue(); };
   const focusOn = (t) => {
     island.providers.call('focus', 'focus', 'start', { id: t.id, title: t.title })
       .catch((e) => { notice = `无法开始专注：${e.message}`; render(); });
@@ -213,7 +214,7 @@ export function activate() {
           ui.text(t.title, { weight: 'semibold', lines: 1 }),
           ui.text(when, { tone: 'secondary', size: 'sm' }),
         ]),
-        trailing: ui.button('完成', { variant: 'ghost', onClick: () => toggle(t) }),
+        trailing: ui.button('完成', { variant: 'ghost', onClick: () => { if (!t.done) toggle(t); } }),
       },
     };
     if (dueAct) dueAct.update(spec); else dueAct = island.activity('due', spec);
