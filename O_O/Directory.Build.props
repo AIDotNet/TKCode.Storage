@@ -6,6 +6,6 @@
     <LangVersion>latest</LangVersion>
     <IsAotCompatible Condition="'$(IsTestProject)' != 'true'">true</IsAotCompatible>
     <!-- O_O's version: major.minor.build, e.g. 0.1.1000 (docs/design/08-updates-and-catalog.md). CI passes -p:Version. -->
-    <Version>0.2.1</Version>
+    <Version>0.2.2</Version>
   </PropertyGroup>
 </Project>
