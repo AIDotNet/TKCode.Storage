@@ -28,6 +28,7 @@ public sealed class SpectrumBars : TemplatedControl
 
     private const double BarWidth = 3, Gap = 2, Height_ = 16, Rest = 0.16;
     private static readonly TimeSpan RealTimeout = TimeSpan.FromMilliseconds(700);
+    private const long MinFrameMs = 30; // a little under 1/30 s, so a 60 Hz display draws every second frame
 
     private float[] _shown = new float[5];
     private volatile float[]? _real;
@@ -154,6 +155,12 @@ public sealed class SpectrumBars : TemplatedControl
             return;
         }
         var now = Environment.TickCount64;
+        // About 30 frames a second: the display may ask for 60 or 120, and every drawn frame repaints the island window.
+        if (now - _lastFrame < MinFrameMs)
+        {
+            TopLevel.GetTopLevel(this)?.RequestAnimationFrame(OnFrame);
+            return;
+        }
         // The app may start (or the permission be given) after the island showed: look again every few seconds.
         if (Active && _listening is null && Source is { Length: > 0 } && now - _lastTry > 3000)
         {

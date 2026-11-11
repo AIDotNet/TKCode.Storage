@@ -362,6 +362,7 @@ public sealed class IslandController : IDisposable
             new Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = FadeDuration },
         ];
         view.Opacity = hide ? 0 : 1;
+        PaceMotion();
         // Hidden for a full-screen app the island takes no pointer: there is nothing to sample until it comes back.
         if (hide)
         {
@@ -818,8 +819,23 @@ public sealed class IslandController : IDisposable
         var backdrop = _window.View.Backdrop;
         var animated = Island.UI.Themes.IslandTheme.Current.Animated;
         backdrop.Suppressed = atNotch;
+        PaceMotion();
         backdrop.Show(animated?.Preset, animated?.Colors ?? [], animated?.Speed ?? 1,
             still: !_window.View.Surface.Classes.Contains(":motion-full"));
+    }
+
+    // Whatever moves on the island repaints the whole window (it is the expanded size) on every step: the mascot and
+    // other Arc loops at the display's rate, the theme's surface at 30 a second. Collapsed, the motion is small and slow,
+    // so fewer steps look the same; hidden for a full-screen app, the surface stops.
+    private const double CollapsedFrameRate = 24;
+
+    private void PaceMotion()
+    {
+        var collapsed = _states.State != IslandState.Expanded;
+        // Hidden, the view is only transparent (Arc's loops still run): once a second is enough to keep their phase.
+        TKCode.Arc.Motion.ArcMotion.SetMaxFrameRate(_window.View, _hidden ? 1 : collapsed ? CollapsedFrameRate : 0);
+        _window.View.Backdrop.Calm = collapsed;
+        _window.View.Backdrop.Paused = _hidden;
     }
 
     private void ApplyLayout(bool animate)

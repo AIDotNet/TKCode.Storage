@@ -80,6 +80,23 @@ public sealed class LivePresenterTests
     });
 
     [Fact]
+    public void Compact_text_is_not_clipped_so_a_trailing_percent_sign_paints_whole() => Headless.Run(() =>
+    {
+        var (presenter, view) = Make();
+        presenter.UpdateAmbient(new AmbientSnapshot("test.plugin", "usage", "left", Text("0%"), ++s_sequence));
+        presenter.UpdateLive(Live("music", LivePriority.Normal, "43%"));
+        presenter.EndLive("test.plugin/music");
+        var chip = Assert.Single(TextBlocks(view.CompactLeading.Content as Control), t => t.Text == "0%");
+        Assert.False(chip.ClipToBounds);
+
+        presenter.UpdateLive(Live("music", LivePriority.Normal, "43%"));
+        Assert.All(TextBlocks(view.CompactTrailing.Content as Control), t => Assert.False(t.ClipToBounds));
+    });
+
+    private static IEnumerable<TextBlock> TextBlocks(Control? c) =>
+        c is null ? [] : c.GetSelfAndLogicalDescendants().OfType<TextBlock>();
+
+    [Fact]
     public void Opening_shows_the_activity_card_and_home_is_one_click_away() => Headless.Run(() =>
     {
         var (presenter, view) = Make();

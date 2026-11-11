@@ -25,10 +25,10 @@
     <ItemGroup>
         <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
         <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.5" />
-        <PackageReference Include="TKCode.Arc" Version="1.1.0-preview.1" />
-        <PackageReference Include="TKCode.Arc.Fonts" Version="1.1.0-preview.1" />
-        <PackageReference Include="TKCode.Arc.Icons.Lucide" Version="1.1.0-preview.1" />
-        <PackageReference Include="TKCode.Arc.Special" Version="1.1.0-preview.1" />
+        <PackageReference Include="TKCode.Arc" Version="1.1.0-preview.3" />
+        <PackageReference Include="TKCode.Arc.Fonts" Version="1.1.0-preview.3" />
+        <PackageReference Include="TKCode.Arc.Icons.Lucide" Version="1.1.0-preview.3" />
+        <PackageReference Include="TKCode.Arc.Special" Version="1.1.0-preview.3" />
     </ItemGroup>
 
     <ItemGroup>

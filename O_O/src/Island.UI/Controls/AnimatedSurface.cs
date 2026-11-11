@@ -12,8 +12,8 @@ namespace Island.UI.Controls;
 /// <summary>
 /// A theme's animated surface (docs/design/09-island-v2.md §4): one of a few built-in shader presets, drawn behind the
 /// island's content and clipped to its shape by <see cref="ContinuousBorder"/>. Themes choose a preset and its colours;
-/// they ship no shader code. At most 30 frames a second, only while it can be seen; a still frame with reduced motion;
-/// nothing around a real notch (<see cref="Suppressed"/>).
+/// they ship no shader code. At most 30 frames a second (<see cref="Calm"/>: fewer), only while it can be seen and is
+/// not <see cref="Paused"/>; a still frame with reduced motion; nothing around a real notch (<see cref="Suppressed"/>).
 /// </summary>
 public sealed class AnimatedSurface : Control
 {
@@ -21,6 +21,9 @@ public sealed class AnimatedSurface : Control
     public static readonly IReadOnlySet<string> Presets = new HashSet<string>(StringComparer.Ordinal) { "aurora", "pulse", "waves" };
 
     private static readonly TimeSpan Frame = TimeSpan.FromMilliseconds(1000.0 / 30);
+    // Every frame redraws and presents the whole island window, however small the collapsed shape is. The presets move
+    // slowly enough that half the rate reads the same on the small collapsed island.
+    private static readonly TimeSpan CalmFrame = TimeSpan.FromMilliseconds(1000.0 / 15);
     private static readonly Dictionary<string, SKRuntimeEffect?> Effects = new(StringComparer.Ordinal);
 
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
@@ -30,6 +33,7 @@ public sealed class AnimatedSurface : Control
     private double _speed = 1;
     private bool _suppressed;
     private bool _still;
+    private bool _paused;
 
     public AnimatedSurface()
     {
@@ -74,9 +78,27 @@ public sealed class AnimatedSurface : Control
         }
     }
 
+    /// <summary>Half the frame rate: the island is collapsed.</summary>
+    public bool Calm
+    {
+        get => _timer.Interval == CalmFrame;
+        set => _timer.Interval = value ? CalmFrame : Frame;
+    }
+
+    /// <summary>Keeps the current frame without animating: the island is hidden (a full-screen app).</summary>
+    public bool Paused
+    {
+        get => _paused;
+        set
+        {
+            _paused = value;
+            UpdateTimer();
+        }
+    }
+
     private void UpdateTimer()
     {
-        var run = _preset is not null && !_still && IsVisible && TopLevel.GetTopLevel(this) is not null;
+        var run = _preset is not null && !_still && !_paused && IsVisible && TopLevel.GetTopLevel(this) is not null;
         if (run && !_timer.IsEnabled)
         {
             _timer.Start();

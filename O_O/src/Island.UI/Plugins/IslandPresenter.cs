@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Island.Core.Pages;
@@ -229,6 +230,8 @@ public sealed partial class IslandPresenter
             leading = ChipRow(left, offered, HorizontalAlignment.Left);
             trailing = ChipRow(right, offered, HorizontalAlignment.Right);
         }
+        Unclip(leading);
+        Unclip(trailing);
         if (!ReferenceEquals(_view.CompactLeading.Content, leading))
         {
             _view.CompactLeading.Content = leading;
@@ -359,18 +362,33 @@ public sealed partial class IslandPresenter
             {
                 continue;
             }
-            // A chip is small (docs 07 §4): at most 96 pt (an icon and five CJK characters), and never wrapped. Not clipped either: the trailing glyph of
-            // a value such as "43%" was being cut at the chip's edge.
+            // A chip is small (docs 07 §4): at most 96 pt (an icon and five CJK characters), and never wrapped.
             if (control.Parent is Panel old)
             {
                 old.Children.Remove(control);
             }
             control.MaxWidth = 96;
-            control.ClipToBounds = false;
             control.VerticalAlignment = VerticalAlignment.Center;
             row.Children.Add(control);
         }
         return row.Children.Count == 0 ? null : row;
+    }
+
+    /// <summary>
+    /// The collapsed content paints its glyphs whole. A text block clips to its layout box by default, and a semibold
+    /// "%" overhangs its advance: the trailing glyph of "0%" at the island's right end was being cut. Unclipping the
+    /// chip alone was not enough; the text inside it was doing the clipping.
+    /// </summary>
+    private static void Unclip(Control? content)
+    {
+        if (content is null)
+        {
+            return;
+        }
+        foreach (var c in content.GetSelfAndLogicalDescendants().OfType<TextBlock>())
+        {
+            c.ClipToBounds = false;
+        }
     }
 
     private void RenderPage(IReadOnlyList<PageInfo> visible)

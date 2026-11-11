@@ -120,8 +120,26 @@ public class App(IIslandPlatform platform) : Application
         _console = new Island.UI.Console.ConsoleWindow(_plugins, DataDirectory, Appearance, Pages, Chips) { Hotkeys = _hotkeys };
         _console.View.ActivityPreferences = Activities;
         _console.View.TryOnIsland = () => _island?.Preview();
-        _console.Closed += (_, _) => _console = null;
+        _console.Closed += (_, _) =>
+        {
+            var closed = new WeakReference(_console);
+            _console = null;
+            // Once the window's last frame is gone, give its pages and images back right away instead of whenever the
+            // next collection happens to run (the island alone allocates too little to trigger one soon).
+            Avalonia.Threading.DispatcherTimer.RunOnce(() => ReleaseConsoleMemory(closed), TimeSpan.FromSeconds(2));
+        };
         _console.Show();
+    }
+
+    private static void ReleaseConsoleMemory(WeakReference closed)
+    {
+        System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+        if (Environment.GetEnvironmentVariable("O_O_DEBUG") == "1")
+        {
+            System.Console.Error.WriteLine($"[memory] console closed: window collected={!closed.IsAlive} " +
+                $"managed={GC.GetTotalMemory(false) / (1024 * 1024)} MB");
+        }
     }
 
     /// <summary>The native clipboard support for this OS (docs 05 §8).</summary>
